@@ -1,3 +1,15 @@
+Mnemosyne
+Copyright 2023-2026 Chris Mattmann and contributors
+
+Mnemosyne is a continuation of Apache OODT, which the Apache Software
+Foundation retired to the Apache Attic in April 2023. Mnemosyne is not
+endorsed by, affiliated with, or a product of the Apache Software Foundation.
+
+The attribution below is retained from the original work as required by
+section 4(d) of the Apache License, Version 2.0.
+
+---
+
 Apache OODT
 Copyright 2010-2019 The Apache Software Foundation
 

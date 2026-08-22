@@ -46,12 +46,12 @@ the License.
     <docker.image.name/>
     <docker.working.dir>${project.basedir}</docker.working.dir>
   </properties>
-  <distributionManagement>
-    <site>
-      <id>www.yourcompany.com</id>
-      <url>scp://www.yourcompany.com/www/docs/project/</url>
-    </site>
-  </distributionManagement>
+  <!--
+    No distributionManagement. The previous block was the RADiX template
+    placeholder (scp://www.yourcompany.com/) and was never configured.
+    Publishing to Maven Central is handled by the release plugin configuration
+    rather than a site deployment target.
+  -->
 
   <!-- All dependencies should be listed in core/pom.xml and be ordered alphabetically by package and artifact.
        Once the dependency is in the core pom, it can then be used in other modules without the version tags.
@@ -978,27 +978,10 @@ mm
       <timezone>+5:30</timezone>
     </developer>
   </developers>
-  <mailingLists>
-    <mailingList>
-      <name>dev</name>
-      <subscribe>dev-subscribe@oodt.apache.org</subscribe>
-      <unsubscribe>dev-unsubscribe@oodt.apache.org</unsubscribe>
-      <post>dev@oodt.apache.org</post>
-      <archive>http://mail-archives.apache.org/mod_mbox/oodt-dev/</archive>
-    </mailingList>
-    <mailingList>
-      <name>commits</name>
-      <subscribe>commits-subscribe@oodt.apache.org</subscribe>
-      <unsubscribe>commits-unsubscribe@oodt.apache.org</unsubscribe>
-      <archive>http://mail-archives.apache.org/mod_mbox/oodt-commits/</archive>
-    </mailingList>
-    <mailingList>
-      <name>private</name>
-      <subscribe>private-subscribe@oodt.apache.org</subscribe>
-      <unsubscribe>private-unsubscribe@oodt.apache.org</unsubscribe>
-      <post>private@oodt.apache.org</post>
-    </mailingList>
-  </mailingLists>
+  <!--
+    The dev@ and commits@ oodt.apache.org lists were decommissioned when the
+    Apache project moved to the Attic. Discussion happens on GitHub.
+  -->
   <scm>
     <!--<connection>scm:svn:https://svn.apache.org/repos/asf/oodt/trunk/core</connection>
     <developerConnection>scm:svn:https://svn.apache.org/repos/asf/oodt/trunk/core</developerConnection>
@@ -1006,8 +989,8 @@ mm
     <tag>0.13-SNAPSHOT</tag>
   </scm>
   <issueManagement>
-    <system>JIRA</system>
-    <url>https://issues.apache.org/jira/browse/OODT</url>
+    <system>GitHub</system>
+    <url>https://github.com/chrismattmann/mnemosyne/issues</url>
   </issueManagement>
   <profiles>
     <profile>
