@@ -1,234 +1,179 @@
-# Welcome to Apache OODT  <http://oodt.apache.org/>
+# Mnemosyne
 
-Apache Object Oriented Data Technology (OODT) is the smart way to integrate and archive your processes, your data, and its metadata. OODT allows you to:
+**Mnemosyne** is data pipeline and catalog middleware: it ingests data, runs it
+through processing stages, and remembers everything about every product it
+produces — where it came from, what generated it, and what it became.
 
-- Generate Data
-- Process Data
-- Manage Your Data
-- Distribute Your Data
-- Analyze Your Data
-Allowing for the integration of data, computation, visualization and other components.
+It is the continuation of **Apache OODT** (Object Oriented Data Technology),
+which the Apache Software Foundation
+[retired to the Attic in April 2023](https://attic.apache.org/projects/oodt.html).
 
-OODT also allows for remote execution of jobs on scalable computational infrastructures so that computational and data-
-intensive processing can be integrated into OODT’s data processing pipelines using cloud computing and high-performance 
-computing environments.
+```xml
+<dependency>
+  <groupId>ai.mattmann.mnemosyne</groupId>
+  <artifactId>cas-filemgr</artifactId>
+  <version>1.11.0</version>
+</dependency>
+```
 
-![Overview of OODT Main Components](http://oodt.apache.org/img/oodt-diag.png "OODT Component Overview")
+## Why the name
 
+Mnemosyne is the Titaness of memory and the mother of the Muses. Stripped to
+essentials, that is what this software is. It is not primarily a scheduler or a
+workflow engine — those are means. What it actually gives you is an unbroken
+record: every data product, its lineage, the configuration that produced it, and
+the ability to reproduce it years later. Provenance is the product.
 
-## Why OODT?
-Traditional processing pipelines are commonly made up of custom UNIX shell scripts and fragile custom written glue code.
-Apache OODT uses structured XML-based capturing of the processing pipeline that can be understood and modified by 
-non-programmers to create, edit, manage and provision workflow and task execution.
+That was the point at NASA JPL, where OODT was built to process data for
+missions whose results had to remain defensible for decades. It is still the
+point now.
 
-It is being used on a number of successful projects at NASA's Jet Propulsion Laboratory/California 
-Institute of Technology, and many other research institutions and universities, 
-specifically those part of the:
+## Heritage
 
-- **National Cancer Institute's (NCI's) Early Detection Research Network (EDRN)
-  project** - over 40+ institutions all performing research into discovering
-  biomarkers which are early indicators of disease.
-- **NASA's Planetary Data System (PDS)** - NASA's planetary data archive, a
-  repository and registry for all planetary data collected over the past 30+
-  years.
-- Various Earth Science data processing missions, including
-  **Seawinds/QuickSCAT**, the **Orbiting Carbon Observatory**, the **NPP Sounder PEATE
-  project**, and the **Soil Moisture Active Passive (SMAP) mission**.
-- [**Apache DRAT**](https://github.com/apache/drat) - A distributed release audit tool written on top of OODT's 
-capabilities.
+OODT was created at NASA's Jet Propulsion Laboratory and became, in 2010, the
+first NASA project ever contributed to the Apache Software Foundation. It was an
+Apache Top Level Project until April 2023, and it ran real science:
 
-OODT is a Top Level project of the Apache Software Foundation
-<http://www.apache.org/>.
+- **NASA's Orbiting Carbon Observatory** and other Earth science missions,
+  including **Seawinds/QuickSCAT**, **NPP Sounder PEATE**, and **Soil Moisture
+  Active Passive (SMAP)**
+- **NASA's Planetary Data System (PDS)** — the planetary data archive holding
+  30+ years of collected data
+- The **National Cancer Institute's Early Detection Research Network (EDRN)** —
+  40+ institutions researching early biomarkers of disease
+- **Apache DRAT**, a distributed release audit tool built on top of it
 
-***
+The ASF retired the project because its community had wound down, not because
+the software stopped working. `apache/oodt` has not moved since September 2019.
+This repository carries that history forward, and continues it.
 
-# Getting Started
+**Apache OODT is the legacy name.** If you arrived here searching for Apache
+OODT, you are in the right place — this is the maintained descendant.
 
-## Useful Resources
-- [*OODT Wiki*](https://cwiki.apache.org/confluence/display/OODT/Home)
-- [*Apache OODT platform: Use metadata as a first class citizen* by Tom Barber](https://jaxenter.com/tom-barber-nasa-interview-apache-oodt-127821.html)
-- [RADiX Powered By OODT](https://cwiki.apache.org/confluence/display/OODT/RADiX+Powered+By+OODT)
-- [*A Look into the Apache OODT Ecosystem* by Chris Mattmann](https://www.slideshare.net/chrismattmann/a-look-into-the-apache-oodt-ecosystem)
+## What changed, and what did not
 
-## Build from scratch
+Mnemosyne is a rename plus continued maintenance, not a rewrite. The code is the
+same lineage, several hundred commits further along.
 
-OODT is primarily written in Java, with some components available in Python.
-It requires Java 8 and uses the Maven 3 <http://maven.apache.org/> build
-system.  To build the Java components of OODT, use the following command in
-this directory:
+| | Apache OODT | Mnemosyne |
+|---|---|---|
+| Maven groupId | `org.apache.oodt` | `ai.mattmann.mnemosyne` |
+| Version | `1.10-SNAPSHOT` | `1.11.0` |
+| Java packages | `org.apache.oodt.*` | **unchanged** |
+| artifactIds | `cas-filemgr`, … | **unchanged** |
+| RPC transport | XML-RPC | Avro |
+| Runtime | Java 8 | JDK 21 |
 
-    mvn clean install
+**Java package names deliberately did not change.** Package names are
+namespaces, not endorsements. Renaming them would ripple into every downstream
+consumer's Spring policy XML and launcher scripts, where a fully-qualified class
+name is a string with no compiler to check it — one downstream project alone
+names 247 distinct classes from configuration. The cost is real and the benefit
+is cosmetic.
 
-For the Python components, see the **agility** subdirectory.
+`cas-*` artifactIds are also unchanged. "Catalog and Archive Service" is an
+accurate description and carries fifteen years of citations.
 
-## RADiX Powered By OODT
+### Migrating from Apache OODT
 
-OODT isn’t an out of the box solution, but we do try to make it as easy as possible. For that, OODT provides the RADIX build system which will compile a fully operational OODT platform ready for development and deployment. Building the RADIX distribution is as simple as running the following commands:
+Change the coordinates. Nothing else.
+
+```diff
+-<groupId>org.apache.oodt</groupId>
++<groupId>ai.mattmann.mnemosyne</groupId>
+-<version>1.10-SNAPSHOT</version>
++<version>1.11.0</version>
+```
+
+Your `filemgr.properties`, policy XML, PGE configs, and launcher scripts do not
+change, because they reference Java class names rather than Maven coordinates.
+
+One thing to know if you are coming from a working OODT install: the 2020
+`org.apache.oodt:cas-*:1.10-SNAPSHOT` build published to Apache snapshots
+predates the JDK 21 and Avro work here. If your build resolved that artifact,
+you were running the older code. A fixed release version removes the ambiguity.
+
+## Components
+
+| Module | Role |
+|---|---|
+| **File Manager** | Catalogs products and their metadata; the system of record |
+| **Workflow Manager** | Orchestrates processing stages and their conditions |
+| **Resource Manager** | Dispatches jobs across compute nodes |
+| **Crawler** | Ingests products and triggers post-ingest workflows |
+| **PGE** | Wraps arbitrary executables as pipeline stages |
+| **CAS Metadata / CLI / Commons** | Shared metadata, command-line, and utility layers |
+
+Pipelines are described in structured XML rather than accreted shell glue, so
+they can be read, reviewed, and changed by people who did not write them.
+
+## Build
+
+Mnemosyne is primarily Java, with some Python components under `agility/`. It
+builds with Maven 3 and runs on **JDK 21**.
 
 ```bash
-export JAVA_HOME=/usr/lib/jvm… (adjust for your own JAVA_HOME)
-curl -s "https://git-wip-us.apache.org/repos/asf?p=oodt.git;a=blob_plain;f=mvn/archetypes/radix/src/main/resources/bin/radix;hb=HEAD" | bash
- 
-mv oodt oodt-src; cd oodt-src; mvn install
-mkdir ../oodt; tar -xvf distribution/target/oodt-distribution-0.1-bin.tar.gz -C ../oodt
-cd ../oodt; ./bin/oodt start
-./resmgr/bin/batch_stub 2001
+mvn clean install
 ```
-Navigate to http://localhost:8080/opsui, you should see the default OPSUI system which provides system oversight and interrogation
 
-***
+To skip tests and javadoc for a faster local install:
 
-# Contributing
+```bash
+mvn clean install -DskipTests -Dmaven.javadoc.skip=true
+```
 
-To contribute a patch, follow these instructions.
+All source files are UTF-8. If you generate the site, set
+`MAVEN_OPTS="-Dfile.encoding=UTF-8 -Xmx1g"` — documentation generation is
+memory-hungry.
 
-1. File JIRA issue for your fix at https://issues.apache.org/jira/browse/OODT.
-you will get issue id OODT-xxx where xxx is the issue ID.
+## RADiX
 
-2. [Fork the repo](http://help.github.com/fork-a-repo) on which you're working, clone your forked repo to your local computer, and set up the upstream remote:
-    ```
-    git clone https://github.com/<YourGitHubUserName>/oodt.git
-    git remote add upstream https://github.com/apache/oodt.git
-    ```
-3. Go into oodt directory
-    ```
-    cd oodt
-    ```
-4. Checkout out a new local branch based on your master and update it to the latest.The convention is to name the branch after the current JIRA issue, e.g. OODT-xxx where xxx is the issue ID.
-    ```
-    git checkout -b OODT-xxx
-    ```
-5. Do the changes to the relavant files and keep your code clean. If you find another bug, you want to fix while being in a new branch, please fix it in a separated branch instead.
+RADiX generates a complete, deployable Mnemosyne stack — File Manager, Workflow
+Manager, Resource Manager, Crawler, Solr, and Tomcat, wired together — as a
+starting point for a new pipeline. The archetypes live in `mvn/archetypes/` and
+generate projects against the current coordinates.
 
-6. Add relevant files to the staging  area.
-    ```
-    git add <files>
-    ```
-7. For every commit please write a short (max 72 characters) summary of the change. Use markdown syntax for simple styling. Please include any JIRA issue numbers in your summary.
-    ```
-    git commit -m “[OODT-xxx] Put change summary here ”
-    ```
-    **NEVER leave the commit message blank!** Provide a detailed, clear, and complete description of your commit!
+[Apache DRAT](https://github.com/apache/drat) and
+[BigTranslate](https://github.com/chrismattmann/bigtranslate) are both RADiX
+projects, and are the best worked examples of what a real deployment looks like.
 
-8. Before submitting a pull request, update your branch to the latest code.
-    ```
-    git checkout master
-    git pull --rebase upstream master
-    git checkout OODT-xxx
-    git rebase -i master
-    ```
-9. Push the code to your forked repository
-    ```
-    git push origin OODT-xxx
-    ```
-10. In order to make a pull request,
-  * Navigate to the OODT repository you just pushed to (e.g. https://github.com/your-user-name/oodt)
-  * Click "Pull Request".
-  * Write your branch name in the branch field (this is filled with "master" by default)
-  * Click "Update Commit Range".
-  * Ensure the changesets you introduced are included in the "Commits" tab.
-  * Ensure that the "Files Changed" incorporate all of your changes.
-  * Fill in some details about your potential patch including a meaningful title.
-  * Click "Send pull request".
-## Issue Tracker
+## Contributing
 
-If you encounter errors in OODT or want to suggest an improvement or a new
-feature, please visit the OODT issue tracker 
-https://issues.apache.org/jira/browse/OODT.  There you can also find the
-latest information on known issues and recent bug fixes and enhancements.
+Issues and pull requests here on GitHub:
+<https://github.com/chrismattmann/mnemosyne>
 
-## Documentation
+The Apache JIRA, `dev@oodt.apache.org` mailing list, Confluence wiki, and
+`git-wip-us.apache.org` are all retired along with the Apache project and are no
+longer monitored. Please do not file there.
 
-You can find an enormous amount of useful documentation/resources related to OODT in 
-[**OODT Confluence Wiki**](https://cwiki.apache.org/confluence/display/OODT/Home).
+## License
 
-You can build a local copy of the OODT documentation including JavaDocs using
-the following Maven 2 command in the OODT source directory:
+Apache License 2.0. See [LICENSE.txt](LICENSE.txt) and [NOTICE.txt](NOTICE.txt).
 
-    mvn site
+Collective work: Copyright 2010-2023 The Apache Software Foundation, and
+subsequent contributors. Mnemosyne is an independent continuation and is not
+endorsed by, affiliated with, or a product of the Apache Software Foundation.
+"Apache", "Apache OODT", and the Apache feather logo are trademarks of the
+Apache Software Foundation, used here only to describe this project's origin.
 
-You can then open the OODT Documentation in a web browser:
+Mnemosyne includes subcomponents with separate copyright notices and license
+terms; see LICENSE.txt.
 
-    ./target/site/index.html
+## Export control
 
-Note: all OODT source files are encoded with UTF-8.  You must set your
-MAVEN_OPTS environment variable to include "-Dfile.encoding=UTF-8" in order to
-properly generate the web site and other artifacts from source.
+This distribution includes cryptographic software. The country in which you
+reside may restrict the import, possession, use, or re-export of encryption
+software. Check your country's laws before using it. See
+<https://www.wassenaar.org/> for more information.
 
-Note: generating the documentation requires enormous amounts of memory.  More
-than likely you'll need to add to the MAVEN_OPTS environment variable in order
-to set the Java heap maximum size with "-Xmx512m" or larger before attempting
-to run "mvn site".
+The U.S. Department of Commerce, Bureau of Industry and Security (BIS) has
+classified this software as Export Commodity Control Number (ECCN) 5D002.C.1,
+which includes information security software using or performing cryptographic
+functions with asymmetric algorithms. The form and manner of this distribution
+makes it eligible for export under the License Exception ENC Technology Software
+Unrestricted (TSU) exception (see BIS Export Administration Regulations, Section
+740.13) for both object code and source code.
 
-***
-
-# License (see also LICENSE.txt)
-
-Collective work: Copyright 2010-2012 The Apache Software Foundation.
-
-Licensed to the Apache Software Foundation (ASF) under one or more
-contributor license agreements.  See the NOTICE file distributed with
-this work for additional information regarding copyright ownership.
-The ASF licenses this file to You under the Apache License, Version 2.0
-(the "License"); you may not use this file except in compliance with
-the License.  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-
-Apache OODT includes a number of subcomponents with separate copyright
-notices and license terms. Your use of these subcomponents is subject to
-the terms and conditions of the licenses listed in the LICENSE.txt file.
-
-***
-
-# Export control
-
-This distribution includes cryptographic software.  The country in which you
-currently reside may have restrictions on the import, possession, use, and/or
-re-export to another country, of encryption software.  BEFORE using any
-encryption software, please check your country's laws, regulations and
-policies concerning the import, possession, or use, and re-export of
-encryption software, to see if this is permitted.  See
-<http://www.wassenaar.org/> for more information.
-
-The U.S.  Government Department of Commerce, Bureau of Industry and Security
-(BIS), has classified this software as Export Commodity Control Number (ECCN)
-5D002.C.1, which includes information security software using or performing
-cryptographic functions with asymmetric algorithms.  The form and manner of
-this Apache Software Foundation distribution makes it eligible for export
-under the License Exception ENC Technology Software Unrestricted (TSU)
-exception (see the BIS Export Administration Regulations, Section 740.13) for
-both object code and source code.
-
-The following provides more details on the included cryptographic software:
-
-    Apache OODT uses Apache Tika which uses the Bouncy Castle generic
-    encryption libraries for extracting text content and metadata from
-    encrypted PDF files.  See http://www.bouncycastle.org/ for more details on
-    Bouncy Castle.
-
-***
-
-# Mailing Lists
-
-Discussion about OODT takes place on the following mailing lists:
-
-    dev@oodt.apache.org    - About using OODT and developing OODT
-
-Notification on all code changes are sent to the following mailing list:
-
-    commits@oodt.apache.org
-
-The mailing lists are open to anyone and publicly archived.
-
-You can subscribe the mailing lists by sending a message to
-<LIST>-subscribe@oodt.apache.org (for example
-dev-subscribe@oodt...).  To unsubscribe, send a message to
-<LIST>-unsubscribe@oodt.apache.org.  For more instructions, send a
-message to <LIST>-help@oodt.apache.org.
+Mnemosyne uses Apache Tika, which uses the Bouncy Castle generic encryption
+libraries to extract text and metadata from encrypted PDF files. See
+<https://www.bouncycastle.org/> for details.

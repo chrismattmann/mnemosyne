@@ -17,17 +17,17 @@ the License.
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
   <modelVersion>4.0.0</modelVersion>
-  <parent>
-    <groupId>org.apache</groupId>
-    <artifactId>apache</artifactId>
-    <version>21</version>
-    <relativePath />
-  </parent>
-  <groupId>org.apache.oodt</groupId>
+  <!--
+    Mnemosyne is the continuation of Apache OODT, which the ASF retired to the
+    Attic in April 2023. The org.apache:apache parent configures ASF release
+    staging and Nexus, none of which applies here, so it is not inherited and
+    the four plugin versions it used to supply are pinned below.
+  -->
+  <groupId>ai.mattmann.mnemosyne</groupId>
   <artifactId>oodt-core</artifactId>
-  <version>1.10-SNAPSHOT</version>
+  <version>1.11.0</version>
   <packaging>pom</packaging>
-  <name>OODT Core</name>
+  <name>Mnemosyne Core</name>
   <properties>
     <organizationLogo>http://www.apache.org/images/feather.gif</organizationLogo>
     <logo>/images/${project.artifactId}.jpg</logo>
@@ -46,12 +46,12 @@ the License.
     <docker.image.name/>
     <docker.working.dir>${project.basedir}</docker.working.dir>
   </properties>
-  <distributionManagement>
-    <site>
-      <id>www.yourcompany.com</id>
-      <url>scp://www.yourcompany.com/www/docs/project/</url>
-    </site>
-  </distributionManagement>
+  <!--
+    No distributionManagement. The previous block was the RADiX template
+    placeholder (scp://www.yourcompany.com/) and was never configured.
+    Publishing to Maven Central is handled by the release plugin configuration
+    rather than a site deployment target.
+  -->
 
   <!-- All dependencies should be listed in core/pom.xml and be ordered alphabetically by package and artifact.
        Once the dependency is in the core pom, it can then be used in other modules without the version tags.
@@ -353,101 +353,101 @@ the License.
       </dependency>
 
       <dependency>
-        <groupId>org.apache.oodt</groupId>
+        <groupId>ai.mattmann.mnemosyne</groupId>
         <artifactId>cas-cli</artifactId>
         <version>${project.parent.version}</version>
       </dependency>
       <dependency>
-        <groupId>org.apache.oodt</groupId>
+        <groupId>ai.mattmann.mnemosyne</groupId>
         <artifactId>cas-crawler</artifactId>
         <version>${project.parent.version}</version>
       </dependency>
       <dependency>
-        <groupId>org.apache.oodt</groupId>
+        <groupId>ai.mattmann.mnemosyne</groupId>
         <artifactId>cas-filemgr</artifactId>
         <version>${project.parent.version}</version>
       </dependency>
       <dependency>
-        <groupId>org.apache.oodt</groupId>
+        <groupId>ai.mattmann.mnemosyne</groupId>
         <artifactId>cas-metadata</artifactId>
         <version>${project.parent.version}</version>
       </dependency>
       <dependency>
-        <groupId>org.apache.oodt</groupId>
+        <groupId>ai.mattmann.mnemosyne</groupId>
         <artifactId>cas-product</artifactId>
         <version>${project.parent.version}</version>
         <type>war</type>
       </dependency>
       <dependency>
-        <groupId>org.apache.oodt</groupId>
+        <groupId>ai.mattmann.mnemosyne</groupId>
         <artifactId>workflow-services</artifactId>
         <version>${project.parent.version}</version>
         <type>war</type>
       </dependency>
       <dependency>
-        <groupId>org.apache.oodt</groupId>
+        <groupId>ai.mattmann.mnemosyne</groupId>
         <artifactId>cas-resource</artifactId>
         <version>${project.parent.version}</version>
       </dependency>
       <dependency>
-        <groupId>org.apache.oodt</groupId>
+        <groupId>ai.mattmann.mnemosyne</groupId>
         <artifactId>cas-workflow</artifactId>
         <version>${project.parent.version}</version>
       </dependency>
       <dependency>
-        <groupId>org.apache.oodt</groupId>
+        <groupId>ai.mattmann.mnemosyne</groupId>
         <artifactId>curator-services</artifactId>
         <version>${project.parent.version}</version>
         <type>war</type>
       </dependency>
       <dependency>
-        <groupId>org.apache.oodt</groupId>
+        <groupId>ai.mattmann.mnemosyne</groupId>
         <artifactId>oodt-commons</artifactId>
         <version>${project.parent.version}</version>
       </dependency>
       <dependency>
-        <groupId>org.apache.oodt</groupId>
+        <groupId>ai.mattmann.mnemosyne</groupId>
         <artifactId>oodt-conf</artifactId>
         <version>${project.parent.version}</version>
       </dependency>
       <dependency>
-        <groupId>org.apache.oodt</groupId>
+        <groupId>ai.mattmann.mnemosyne</groupId>
         <artifactId>oodt-product</artifactId>
         <version>${project.parent.version}</version>
       </dependency>
       <dependency>
-        <groupId>org.apache.oodt</groupId>
+        <groupId>ai.mattmann.mnemosyne</groupId>
         <artifactId>oodt-profile</artifactId>
         <version>${project.parent.version}</version>
       </dependency>
       <dependency>
-        <groupId>org.apache.oodt</groupId>
+        <groupId>ai.mattmann.mnemosyne</groupId>
         <artifactId>oodt-reactjs-opsui</artifactId>
         <version>${project.parent.version}</version>
         <type>pom</type>
       </dependency>
       <dependency>
-        <groupId>org.apache.oodt</groupId>
+        <groupId>ai.mattmann.mnemosyne</groupId>
         <artifactId>curator-sso</artifactId>
         <version>${project.parent.version}</version>
       </dependency>
       <dependency>
-        <groupId>org.apache.oodt</groupId>
+        <groupId>ai.mattmann.mnemosyne</groupId>
         <artifactId>oodt-webapp-components</artifactId>
         <version>${project.parent.version}</version>
       </dependency>
       <dependency>
-        <groupId>org.apache.oodt</groupId>
+        <groupId>ai.mattmann.mnemosyne</groupId>
         <artifactId>pcs-core</artifactId>
         <version>${project.parent.version}</version>
       </dependency>
       <dependency>
-        <groupId>org.apache.oodt</groupId>
+        <groupId>ai.mattmann.mnemosyne</groupId>
         <artifactId>pcs-input</artifactId>
         <version>${project.parent.version}</version>
       </dependency>
       <dependency>
-        <groupId>org.apache.oodt</groupId>
+        <groupId>ai.mattmann.mnemosyne</groupId>
         <artifactId>pcs-opsui</artifactId>
         <version>${project.parent.version}</version>
       </dependency>
@@ -649,6 +649,7 @@ mm
       </plugin>
       <plugin>
         <artifactId>maven-jar-plugin</artifactId>
+        <version>3.4.2</version>
         <configuration>
           <archive>
             <index>true</index>
@@ -661,6 +662,7 @@ mm
       </plugin>
       <plugin>
         <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.5.3</version>
         <configuration>
           <includes>
             <include>**/*Test*.java</include>
@@ -772,11 +774,11 @@ mm
       </plugin>
     </plugins>
   </reporting>
-  <url>http://oodt.apache.org/</url>
+  <url>https://github.com/chrismattmann/mnemosyne</url>
   <inceptionYear>1999</inceptionYear>
   <organization>
-    <name>Apache OODT</name>
-    <url>http://oodt.apache.org/</url>
+    <name>Mnemosyne</name>
+    <url>https://github.com/chrismattmann/mnemosyne</url>
   </organization>
   <licenses>
     <license>
@@ -976,27 +978,10 @@ mm
       <timezone>+5:30</timezone>
     </developer>
   </developers>
-  <mailingLists>
-    <mailingList>
-      <name>dev</name>
-      <subscribe>dev-subscribe@oodt.apache.org</subscribe>
-      <unsubscribe>dev-unsubscribe@oodt.apache.org</unsubscribe>
-      <post>dev@oodt.apache.org</post>
-      <archive>http://mail-archives.apache.org/mod_mbox/oodt-dev/</archive>
-    </mailingList>
-    <mailingList>
-      <name>commits</name>
-      <subscribe>commits-subscribe@oodt.apache.org</subscribe>
-      <unsubscribe>commits-unsubscribe@oodt.apache.org</unsubscribe>
-      <archive>http://mail-archives.apache.org/mod_mbox/oodt-commits/</archive>
-    </mailingList>
-    <mailingList>
-      <name>private</name>
-      <subscribe>private-subscribe@oodt.apache.org</subscribe>
-      <unsubscribe>private-unsubscribe@oodt.apache.org</unsubscribe>
-      <post>private@oodt.apache.org</post>
-    </mailingList>
-  </mailingLists>
+  <!--
+    The dev@ and commits@ oodt.apache.org lists were decommissioned when the
+    Apache project moved to the Attic. Discussion happens on GitHub.
+  -->
   <scm>
     <!--<connection>scm:svn:https://svn.apache.org/repos/asf/oodt/trunk/core</connection>
     <developerConnection>scm:svn:https://svn.apache.org/repos/asf/oodt/trunk/core</developerConnection>
@@ -1004,8 +989,8 @@ mm
     <tag>0.13-SNAPSHOT</tag>
   </scm>
   <issueManagement>
-    <system>JIRA</system>
-    <url>https://issues.apache.org/jira/browse/OODT</url>
+    <system>GitHub</system>
+    <url>https://github.com/chrismattmann/mnemosyne/issues</url>
   </issueManagement>
   <profiles>
     <profile>
@@ -1050,6 +1035,7 @@ mm
           <plugin>
             <groupId>org.codehaus.mojo</groupId>
             <artifactId>rat-maven-plugin</artifactId>
+            <version>1.0-alpha-3</version>
             <executions>
               <execution>
                 <goals>
