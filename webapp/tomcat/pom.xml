@@ -19,9 +19,9 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
-        <groupId>org.apache.oodt</groupId>
+        <groupId>ai.mattmann.mnemosyne</groupId>
         <artifactId>oodt-core</artifactId>
-        <version>1.10-SNAPSHOT</version>
+        <version>1.11.0</version>
         <relativePath>../../core/pom.xml</relativePath>
     </parent>
     <artifactId>oodt-webapps</artifactId>
@@ -36,12 +36,12 @@
     
     <dependencies>
         <dependency>
-            <groupId>org.apache.oodt</groupId>
+            <groupId>ai.mattmann.mnemosyne</groupId>
             <artifactId>cas-product</artifactId>
             <type>war</type>
         </dependency>
         <dependency>
-            <groupId>org.apache.oodt</groupId>
+            <groupId>ai.mattmann.mnemosyne</groupId>
             <artifactId>workflow-services</artifactId>
             <type>war</type>
         </dependency>
@@ -63,7 +63,7 @@
                         <configuration>
                             <artifactItems>
                                 <artifactItem>
-                                    <groupId>org.apache.oodt</groupId>
+                                    <groupId>ai.mattmann.mnemosyne</groupId>
                                     <artifactId>cas-product</artifactId>
                                     <version>${project.version}</version>
                                     <type>war</type>
@@ -72,7 +72,7 @@
                                     <includes>*/policy/**</includes>
                                 </artifactItem>
                                 <artifactItem>
-                                    <groupId>org.apache.oodt</groupId>
+                                    <groupId>ai.mattmann.mnemosyne</groupId>
                                     <artifactId>workflow-services</artifactId>
                                     <version>${project.version}</version>
                                     <type>war</type>

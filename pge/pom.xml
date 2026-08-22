@@ -2,9 +2,9 @@
 
   <modelVersion>4.0.0</modelVersion>
   <parent>
-    <groupId>org.apache.oodt</groupId>
+    <groupId>ai.mattmann.mnemosyne</groupId>
     <artifactId>oodt-core</artifactId>
-    <version>1.10-SNAPSHOT</version>
+    <version>1.11.0</version>
     <relativePath>../core/pom.xml</relativePath>
   </parent>
   <artifactId>cas-pge</artifactId>
@@ -35,23 +35,23 @@
       <artifactId>saxon-dom</artifactId>
     </dependency>
     <dependency>
-      <groupId>org.apache.oodt</groupId>
+      <groupId>ai.mattmann.mnemosyne</groupId>
       <artifactId>cas-crawler</artifactId>
     </dependency>
     <dependency>
-      <groupId>org.apache.oodt</groupId>
+      <groupId>ai.mattmann.mnemosyne</groupId>
       <artifactId>cas-filemgr</artifactId>
     </dependency>
     <dependency>
-      <groupId>org.apache.oodt</groupId>
+      <groupId>ai.mattmann.mnemosyne</groupId>
       <artifactId>cas-metadata</artifactId>
     </dependency>
     <dependency>
-      <groupId>org.apache.oodt</groupId>
+      <groupId>ai.mattmann.mnemosyne</groupId>
       <artifactId>cas-workflow</artifactId>
     </dependency>
     <dependency>
-      <groupId>org.apache.oodt</groupId>
+      <groupId>ai.mattmann.mnemosyne</groupId>
       <artifactId>oodt-commons</artifactId>
     </dependency>
     <dependency>

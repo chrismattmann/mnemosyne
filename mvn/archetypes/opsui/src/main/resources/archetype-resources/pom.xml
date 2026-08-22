@@ -51,7 +51,7 @@ the License.
         <configuration>
           <overlays>
             <overlay>
-              <groupId>org.apache.oodt</groupId>
+              <groupId>ai.mattmann.mnemosyne</groupId>
               <artifactId>pcs-opsui</artifactId>
             </overlay>
           </overlays>
@@ -62,7 +62,7 @@ the License.
 
   <dependencies>
     <dependency>
-      <groupId>org.apache.oodt</groupId>
+      <groupId>ai.mattmann.mnemosyne</groupId>
       <artifactId>pcs-opsui</artifactId>
       <version>0.10</version>
       <type>war</type>
