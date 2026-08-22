@@ -29,6 +29,7 @@ the License.
   <packaging>pom</packaging>
   <name>Mnemosyne Core</name>
   <properties>
+    <maven.enforcer.plugin.version>3.5.0</maven.enforcer.plugin.version>
     <organizationLogo>http://www.apache.org/images/feather.gif</organizationLogo>
     <logo>/images/${project.artifactId}.jpg</logo>
     <xdocVersion>${project.version}</xdocVersion>
@@ -638,6 +639,43 @@ onmqmUUnqrovqvommmmmUUnqrovqvommmmmUU1mXZebUUn
 mm
 ]]></license>
         </configuration>
+      </plugin>
+      <!--
+        Mnemosyne keeps its Java packages as org.apache.oodt.*, so its classes
+        share fully-qualified names with the retired org.apache.oodt artifacts
+        still published on Maven Central. Maven treats those as unrelated
+        artifacts because the groupIds differ, so dependency mediation will not
+        collapse them: pull in both and the classpath silently carries two
+        copies of every class. This turns that into a build failure.
+      -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-enforcer-plugin</artifactId>
+        <version>${maven.enforcer.plugin.version}</version>
+        <executions>
+          <execution>
+            <id>enforce-no-retired-oodt</id>
+            <goals>
+              <goal>enforce</goal>
+            </goals>
+            <configuration>
+              <rules>
+                <bannedDependencies>
+                  <excludes>
+                    <exclude>org.apache.oodt:*</exclude>
+                  </excludes>
+                  <message>
+                    org.apache.oodt artifacts are the retired Apache OODT
+                    release line, superseded by ai.mattmann.mnemosyne. Both on
+                    one classpath means duplicate org.apache.oodt.* classes,
+                    resolved by classpath order rather than by Maven.
+                  </message>
+                </bannedDependencies>
+              </rules>
+              <fail>true</fail>
+            </configuration>
+          </execution>
+        </executions>
       </plugin>
       <plugin>
         <artifactId>maven-compiler-plugin</artifactId>

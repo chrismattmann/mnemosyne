@@ -93,6 +93,52 @@ One thing to know if you are coming from a working OODT install: the 2020
 predates the JDK 21 and Avro work here. If your build resolved that artifact,
 you were running the older code. A fixed release version removes the ambiguity.
 
+### Do not keep both on the classpath
+
+Mnemosyne keeps its Java packages as `org.apache.oodt.*`, so its classes share
+fully-qualified names with the retired `org.apache.oodt` artifacts still
+published on Maven Central — 249 of `cas-filemgr`'s classes, for instance, are
+name-identical between `org.apache.oodt:cas-filemgr:1.9.1` and
+`ai.mattmann.mnemosyne:cas-filemgr:1.11.0`.
+
+Because the groupIds differ, **Maven treats them as unrelated artifacts and will
+not collapse them.** If both reach one classpath, every duplicated class is
+resolved by classpath order rather than by dependency mediation, and the failure
+that follows looks nothing like its cause.
+
+Mnemosyne's own build bans the retired coordinates outright. Consumers should do
+the same, which turns a silent runtime hazard into a loud build failure:
+
+```xml
+<plugin>
+  <groupId>org.apache.maven.plugins</groupId>
+  <artifactId>maven-enforcer-plugin</artifactId>
+  <version>3.5.0</version>
+  <executions>
+    <execution>
+      <id>enforce-no-retired-oodt</id>
+      <goals><goal>enforce</goal></goals>
+      <configuration>
+        <rules>
+          <bannedDependencies>
+            <excludes>
+              <exclude>org.apache.oodt:*</exclude>
+            </excludes>
+          </bannedDependencies>
+        </rules>
+      </configuration>
+    </execution>
+  </executions>
+</plugin>
+```
+
+If a transitive dependency drags the old artifacts in, exclude them there rather
+than relaxing the rule.
+
+The usual fix for this — publishing a `<relocation>` POM under the old
+coordinates — is unavailable, since that requires owning the `org.apache.oodt`
+groupId on Maven Central.
+
 ## Components
 
 | Module | Role |
