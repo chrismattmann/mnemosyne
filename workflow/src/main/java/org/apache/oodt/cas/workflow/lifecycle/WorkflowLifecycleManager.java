@@ -154,21 +154,48 @@ public class WorkflowLifecycleManager {
      *         WorkflowLifecycleManager.
      */
     public WorkflowLifecycle getDefaultLifecycle() {
-        WorkflowLifecycle defaultLifecycle = null;
-
         if (this.lifecycles != null && this.lifecycles.size() > 0) {
             for (Object lifecycle1 : this.lifecycles) {
                 WorkflowLifecycle lifecycle = (WorkflowLifecycle) lifecycle1;
 
-                if (lifecycle.getName().equals(
-                    WorkflowLifecycle.DEFAULT_LIFECYCLE)) {
-                    defaultLifecycle = lifecycle;
+                // The first match wins. Lifecycles read from an imported file
+                // come after the importing file's own, so a file that imports
+                // a shared set can still name its own default.
+                if (lifecycle.isDefaultLifecycle()) {
+                    return lifecycle;
                 }
             }
-
         }
 
-        return defaultLifecycle;
+        return null;
+    }
+
+    /**
+     * Gets a {@link WorkflowLifecycle} by name.
+     *
+     * @param name
+     *          The lifecycle name as declared in the lifecycle file.
+     * @return The named lifecycle, or null if no lifecycle carries that name.
+     */
+    public WorkflowLifecycle getLifecycleByName(String name) {
+        if (name == null || this.lifecycles == null) {
+            return null;
+        }
+        for (Object lifecycle1 : this.lifecycles) {
+            WorkflowLifecycle lifecycle = (WorkflowLifecycle) lifecycle1;
+            if (name.equals(lifecycle.getName())) {
+                return lifecycle;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * @return every {@link WorkflowLifecycle} this manager read, in the order
+     *         they were declared.
+     */
+    public List getLifecycles() {
+        return this.lifecycles;
     }
 
     /**
@@ -182,25 +209,20 @@ public class WorkflowLifecycleManager {
      *         {@link Workflow} model.
      */
     public WorkflowLifecycle getLifecycleForWorkflow(Workflow workflow) {
-        WorkflowLifecycle defaultLifecycle = null;
-
-        if (this.lifecycles != null && this.lifecycles.size() > 0) {
-            for (Object lifecycle1 : this.lifecycles) {
-                WorkflowLifecycle lifecycle = (WorkflowLifecycle) lifecycle1;
-                if (lifecycle.getWorkflowId().equals(workflow.getId())) {
-                    return lifecycle;
-                }
-
-                if (lifecycle.getName().equals(
-                    WorkflowLifecycle.DEFAULT_LIFECYCLE)) {
-                    defaultLifecycle = lifecycle;
-                }
-            }
-
-            return defaultLifecycle;
-        } else {
+        if (workflow == null || this.lifecycles == null
+                || this.lifecycles.isEmpty()) {
             return null;
         }
+
+        for (Object lifecycle1 : this.lifecycles) {
+            WorkflowLifecycle lifecycle = (WorkflowLifecycle) lifecycle1;
+            if (lifecycle.getWorkflowId() != null
+                    && lifecycle.getWorkflowId().equals(workflow.getId())) {
+                return lifecycle;
+            }
+        }
+
+        return getDefaultLifecycle();
     }
 
     /**

@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+Licensed to the Apache Software Foundation (ASF) under one or more contributor
+license agreements.  See the NOTICE.txt file distributed with this work for
+additional information regarding copyright ownership.  The ASF licenses this
+file to you under the Apache License, Version 2.0 (the "License"); you may not
+use this file except in compliance with the License.  You may obtain a copy of
+the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+License for the specific language governing permissions and limitations under
+the License.
+-->
+<!--
+  Lifecycles meant to be imported by other lifecycle files.
+
+  A lifecycle bound to a workflow id is used by that workflow instead of the
+  default. The form has been documented in the shipped example files for years
+  but never worked: the reader looked for these elements inside <default>
+  rather than beside it, and never read the workflowId attribute, so every
+  lifecycle it built claimed to belong to no workflow and could not be picked.
+
+  Keeping these in their own file is what the "split the lifecycle XML into
+  several files" idea was really after. Splitting by concern - one file of
+  states, one of stages, one mapping states to stages - would mostly restate
+  the containment that already exists here, since a stage holds its states.
+  Splitting by lifecycle gives the thing that was actually wanted, which is a
+  set of lifecycle definitions several deployments can share.
+-->
+<cas:workflowlifecycles xmlns:cas="http://oodt.jpl.nasa.gov/1.0/cas">
+
+  <!--
+    A short lifecycle for a workflow that has nothing to wait on: it loads,
+    it runs, it is done. Used only by the workflow whose id matches.
+  -->
+  <lifecycle name="immediate" workflowId="urn:oodt:ImmediateWorkflow">
+    <stage name="initial">
+      <status name="Null">
+        <description>Uninitialized State</description>
+        <next state="Loaded"/>
+      </status>
+      <status name="Loaded">
+        <description>Loading Complete</description>
+        <next state="Executing"/>
+      </status>
+    </stage>
+    <stage name="running" priority="10">
+      <status name="Executing">
+        <description>Currently being executed</description>
+        <next state="Success"/>
+      </status>
+    </stage>
+    <stage name="done">
+      <status name="Success">
+        <description>Successfully Completed</description>
+      </status>
+      <status name="Failure">
+        <description>Execution Failed</description>
+      </status>
+    </stage>
+  </lifecycle>
+
+  <!--
+    A lifecycle can also be marked default with an attribute rather than by
+    being wrapped in the magic <default> element, which is what lets a file
+    like this one stand on its own. The importing file declares its own
+    default, and a local declaration wins over an imported one, so this is
+    the default only for a deployment that points at this file directly.
+  -->
+  <lifecycle name="minimal" default="true">
+    <stage name="initial">
+      <status name="Null">
+        <description>Uninitialized State</description>
+        <next state="Success"/>
+      </status>
+    </stage>
+    <stage name="done">
+      <status name="Success">
+        <description>Successfully Completed</description>
+      </status>
+    </stage>
+  </lifecycle>
+
+</cas:workflowlifecycles>

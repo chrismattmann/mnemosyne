@@ -27,7 +27,7 @@ import org.apache.oodt.cas.workflow.structs.exceptions.WorkflowTaskInstanceExcep
 import org.junit.Ignore;
 
 import java.io.File;
-import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.io.FileOutputStream;
 import java.io.PrintWriter;
 import java.util.logging.Level;
@@ -60,18 +60,25 @@ public class SimpleTester implements WorkflowTaskInstance {
       throws WorkflowTaskInstanceException {
     PrintWriter pw = null;
     try {
-      String jobFilePath = config.getProperty("TestDirPath") + "task-"
-          + metadata.getMetadata("StartDateTime") + ".job";
-      int n=0;
-      while(new File(jobFilePath).exists()){
-        jobFilePath = config.getProperty("TestDirPath") + "task-" 
-        + n + metadata.getMetadata("StartDateTime") + ".job";
+      // createNewFile checks and creates in one step. Testing exists() first
+      // and creating afterwards is a race: two tasks handed the same
+      // StartDateTime both saw no file, both chose the same name, and the
+      // second overwrote the first, so two tasks left one file behind. They
+      // do get the same StartDateTime routinely, because TaskRunner polls for
+      // work in a loop with no pause and the timestamp has millisecond
+      // resolution.
+      String base = config.getProperty("TestDirPath") + "task-"
+          + metadata.getMetadata("StartDateTime");
+      File jobFile = new File(base + ".job");
+      int n = 0;
+      while (!jobFile.createNewFile()) {
+        jobFile = new File(base + "-" + n + ".job");
         n++;
       }
-      LOG.log(Level.INFO, "Creating job file: [" + jobFilePath + "]");
-      pw = new PrintWriter(new FileOutputStream(jobFilePath));
+      LOG.log(Level.INFO, "Creating job file: [" + jobFile.getPath() + "]");
+      pw = new PrintWriter(new FileOutputStream(jobFile));
       pw.println("StartDateTime=" + metadata.getMetadata("StartDateTime"));
-    } catch (FileNotFoundException e) {
+    } catch (IOException e) {
       throw new WorkflowTaskInstanceException(e.getMessage());
     } finally {
       if (pw != null) {

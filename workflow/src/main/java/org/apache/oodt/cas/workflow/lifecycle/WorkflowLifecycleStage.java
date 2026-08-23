@@ -35,6 +35,12 @@ public class WorkflowLifecycleStage {
 
   private int order;
 
+  /**
+   * Tie-break weight when more than one state is eligible to be entered.
+   * Higher wins. Zero, the default, means the stage expresses no preference.
+   */
+  private int priority;
+
   private List<WorkflowState> states;
 
   /**
@@ -43,6 +49,7 @@ public class WorkflowLifecycleStage {
    */
   public WorkflowLifecycleStage() {
     states = new Vector<WorkflowState>();
+    priority = 0;
   }
 
   /**
@@ -60,9 +67,31 @@ public class WorkflowLifecycleStage {
    */
   public WorkflowLifecycleStage(String name, List<WorkflowState> states,
       int order) {
+    this(name, states, order, 0);
+  }
+
+  /**
+   * Constructs a new WorkflowLifecycleStage with an explicit priority.
+   *
+   * @param name
+   *          The name of the WorkflowLifecycleStage.
+   * @param states
+   *          The {@link List} of states that are part of this stage.
+   * @param order
+   *          Where this stage falls in the lifecycle, used for reporting how
+   *          far along a workflow is.
+   * @param priority
+   *          How strongly this stage is preferred when several states are
+   *          eligible at once. Separate from order on purpose: reordering the
+   *          stages of a lifecycle changes what percent complete means, and
+   *          should not silently change which transition the engine takes.
+   */
+  public WorkflowLifecycleStage(String name, List<WorkflowState> states,
+      int order, int priority) {
     this.name = name;
     this.states = states;
     this.order = order;
+    this.priority = priority;
   }
 
   /**
@@ -96,6 +125,24 @@ public class WorkflowLifecycleStage {
   }
 
   /**
+   * The tie-break weight used when more than one state is eligible to be
+   * entered at the same moment. Higher wins; the default is zero.
+   *
+   * @return the priority
+   */
+  public int getPriority() {
+    return priority;
+  }
+
+  /**
+   * @param priority
+   *          the priority to set
+   */
+  public void setPriority(int priority) {
+    this.priority = priority;
+  }
+
+  /**
    * @return the order
    */
   public int getOrder() {
@@ -116,7 +163,9 @@ public class WorkflowLifecycleStage {
    * @see java.lang.Object#hashCode()
    */
   public int hashCode() {
-    return this.name.hashCode() + Integer.valueOf(this.order).hashCode();
+    // Name alone, to stay consistent with equals. Mixing in the order meant
+    // two stages that compared equal could hash apart.
+    return this.name != null ? this.name.hashCode() : 0;
   }
 
   /*
@@ -126,7 +175,14 @@ public class WorkflowLifecycleStage {
    */
   @Override
   public boolean equals(Object stage) {
-    return this.name.equals(((WorkflowLifecycleStage) stage).getName());
+    if (!(stage instanceof WorkflowLifecycleStage)) {
+      return false;
+    }
+    String otherName = ((WorkflowLifecycleStage) stage).getName();
+    if (this.name == null) {
+      return otherName == null;
+    }
+    return this.name.equals(otherName);
   }
 
   /*

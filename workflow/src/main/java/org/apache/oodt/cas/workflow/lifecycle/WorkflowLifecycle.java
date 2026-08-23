@@ -47,6 +47,13 @@ public class WorkflowLifecycle {
   private String workflowId;
 
   /**
+   * Whether this lifecycle should be used by workflows that name no other.
+   * Set either by the magic {@code <default>} element or by declaring
+   * {@code default="true"} on a named lifecycle.
+   */
+  private boolean defaultLifecycle;
+
+  /**
    * Default Constructor.
    * 
    */
@@ -66,19 +73,22 @@ public class WorkflowLifecycle {
   public WorkflowLifecycle(String name, String workflowId) {
     this.name = name;
     this.workflowId = workflowId;
+    this.defaultLifecycle = false;
     this.stages = new TreeSet(new Comparator() {
 
       public int compare(Object o1, Object o2) {
         WorkflowLifecycleStage stage1 = (WorkflowLifecycleStage) o1;
         WorkflowLifecycleStage stage2 = (WorkflowLifecycleStage) o2;
 
-        if (stage1.getOrder() < stage2.getOrder()) {
-          return -1;
-        } else if (stage1.getOrder() == stage2.getOrder()) {
-          return 0;
-        } else {
-          return 1;
+        if (stage1.getOrder() != stage2.getOrder()) {
+          return stage1.getOrder() < stage2.getOrder() ? -1 : 1;
         }
+        // Two distinct stages given the same order used to compare equal, and
+        // a sorted set keeps only one of them, so the second was dropped
+        // without a word. Falling back to the name keeps both.
+        String name1 = stage1.getName() != null ? stage1.getName() : "";
+        String name2 = stage2.getName() != null ? stage2.getName() : "";
+        return name1.compareTo(name2);
       }
 
     });
@@ -136,6 +146,22 @@ public class WorkflowLifecycle {
    */
   public void clearStages() {
     stages.clear();
+  }
+
+  /**
+   * @return whether this is the lifecycle for workflows that name no other
+   */
+  public boolean isDefaultLifecycle() {
+    return defaultLifecycle || WorkflowLifecycle.DEFAULT_LIFECYCLE
+        .equals(this.name);
+  }
+
+  /**
+   * @param defaultLifecycle
+   *          whether this lifecycle is the default
+   */
+  public void setDefaultLifecycle(boolean defaultLifecycle) {
+    this.defaultLifecycle = defaultLifecycle;
   }
 
   /**
@@ -264,6 +290,14 @@ public class WorkflowLifecycle {
     newState.setName(state.getName());
     newState.setPrevState(state.getPrevState());
     newState.setStartTime(state.getStartTime());
+    // The declared transitions and guards travel with the copy. Without them
+    // a caller holding a state fetched from the lifecycle could not tell what
+    // may follow it, which is the whole point of declaring them.
+    newState.setNextStateNames(
+        new java.util.Vector<String>(state.getNextStateNames()));
+    newState.setPreConditions(
+        new java.util.Vector<WorkflowState.AttachedPreCondition>(
+            state.getPreConditions()));
     return newState;
   }
   

@@ -132,14 +132,12 @@ public class TestAsynchronousLocalEngineRunner {
 
   @Before
   public void setupTest() throws Exception {
-    String parentPath = File.createTempFile("test", "txt").getParentFile()
-        .getAbsolutePath();
-    parentPath = parentPath.endsWith("/") ? parentPath : parentPath + "/";
-    String testJobDirPath = parentPath + "jobs";
-    testDir = new File(testJobDirPath);
-    testDir.mkdirs();
     this.runner = new AsynchronousLocalEngineRunner();
     this.utils = new QuerierAndRunnerUtils();
+    // The directory the tasks actually write to, rather than a path built
+    // the same way and hoped to match. It used to be a fixed shared path, so
+    // this test counted files other tests had left there.
+    this.testDir = this.utils.getJobDir();
   }
 
   @After
