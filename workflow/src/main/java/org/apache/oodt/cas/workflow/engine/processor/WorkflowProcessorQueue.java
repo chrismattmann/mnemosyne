@@ -20,6 +20,7 @@ package org.apache.oodt.cas.workflow.engine.processor;
 //OODT imports
 import org.apache.oodt.cas.workflow.instrepo.WorkflowInstanceRepository;
 import org.apache.oodt.cas.workflow.lifecycle.WorkflowLifecycle;
+import org.apache.oodt.cas.metadata.Metadata;
 import org.apache.oodt.cas.workflow.lifecycle.WorkflowLifecycleManager;
 import org.apache.oodt.cas.workflow.lifecycle.WorkflowState;
 import org.apache.oodt.cas.workflow.repository.WorkflowRepository;
@@ -110,6 +111,33 @@ public class WorkflowProcessorQueue {
           + "] carried no execution type; defaulting to ["
           + this.defaultExecutionType + "]");
     }
+  }
+
+  /**
+   * Gives a sub-instance the context its parent is carrying.
+   *
+   * A workflow's tasks are run as sub-instances built here, and each one used
+   * to be constructed with a fresh, empty Metadata. Nothing ever copied the
+   * parent's context into them, so metadata handed to startWorkflow never
+   * reached a task, and nothing a task wrote was visible to the task after it:
+   * every task ran against an empty context and its output went nowhere.
+   *
+   * The same object is shared rather than copied, which is what a shared
+   * context means and matches how the ThreadPool engine has always carried one
+   * Metadata for the life of an instance. Writes therefore flow in both
+   * directions, which is what makes a sequential workflow able to pass work
+   * along.
+   *
+   * @param parent
+   *          The instance the sub-instance was derived from.
+   * @param child
+   *          The sub-instance being built.
+   */
+  private void shareContext(WorkflowInstance parent, WorkflowInstance child) {
+    if (parent.getSharedContext() == null) {
+      parent.setSharedContext(new Metadata());
+    }
+    child.setSharedContext(parent.getSharedContext());
   }
 
   /**
@@ -218,6 +246,7 @@ public class WorkflowProcessorQueue {
                       + "[" + inst.getId() + "]");
           instance.setState(condWorkflowState);
           instance.setPriority(inst.getPriority());
+          shareContext(inst, instance);
           WorkflowTask conditionTask = toConditionTask(cond);
           instance.setCurrentTaskId(conditionTask.getTaskId());
           Graph condGraph = new Graph();
@@ -234,6 +263,11 @@ public class WorkflowProcessorQueue {
           persist(instance);
           WorkflowProcessor subProcessor = fromWorkflowInstance(instance);
           processor.getSubProcessors().add(subProcessor);
+          // The parent listens to the child, so a child finishing is acted on
+          // at once instead of on the querier's next pass. The parent still
+          // recomputes from all its children when it reacts, so a lost
+          // notification costs latency rather than correctness.
+          subProcessor.getListeners().add(processor);
           synchronized (processorCache) {
             processorCache.put(instance.getId(), subProcessor);
           }
@@ -250,6 +284,7 @@ public class WorkflowProcessorQueue {
                       + "[" + inst.getId() + "]");
           instance.setState(taskWorkflowState);
           instance.setPriority(inst.getPriority());
+          shareContext(inst, instance);
           instance.setCurrentTaskId(task.getTaskId());
           Graph taskGraph = new Graph();
           taskGraph.setExecutionType("task");
@@ -265,6 +300,11 @@ public class WorkflowProcessorQueue {
           persist(instance);
           WorkflowProcessor subProcessor = fromWorkflowInstance(instance);
           processor.getSubProcessors().add(subProcessor);
+          // The parent listens to the child, so a child finishing is acted on
+          // at once instead of on the querier's next pass. The parent still
+          // recomputes from all its children when it reacts, so a lost
+          // notification costs latency rather than correctness.
+          subProcessor.getListeners().add(processor);
           synchronized (processorCache) {
             processorCache.put(instance.getId(), subProcessor);
           }
@@ -283,6 +323,7 @@ public class WorkflowProcessorQueue {
                       + "[" + inst.getId() + "]");
           instance.setState(condWorkflowState);
           instance.setPriority(inst.getPriority());
+          shareContext(inst, instance);
           WorkflowTask conditionTask = toConditionTask(cond);
           instance.setCurrentTaskId(conditionTask.getTaskId());
           Graph condGraph = new Graph();
@@ -300,6 +341,11 @@ public class WorkflowProcessorQueue {
           persist(instance);
           WorkflowProcessor subProcessor = fromWorkflowInstance(instance);
           processor.getSubProcessors().add(subProcessor);
+          // The parent listens to the child, so a child finishing is acted on
+          // at once instead of on the querier's next pass. The parent still
+          // recomputes from all its children when it reacts, so a lost
+          // notification costs latency rather than correctness.
+          subProcessor.getListeners().add(processor);
           synchronized (processorCache) {
             processorCache.put(instance.getId(), subProcessor);
           }

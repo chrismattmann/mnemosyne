@@ -19,6 +19,7 @@ package org.apache.oodt.cas.workflow.engine.processor;
 import org.apache.commons.lang.StringUtils;
 import org.apache.oodt.cas.metadata.Metadata;
 import org.apache.oodt.cas.workflow.lifecycle.WorkflowLifecycle;
+import org.apache.oodt.cas.workflow.lifecycle.WorkflowState;
 import org.apache.oodt.cas.workflow.lifecycle.WorkflowLifecycleManager;
 import org.apache.oodt.cas.workflow.structs.Graph;
 import org.apache.oodt.cas.workflow.structs.ParentChildWorkflow;
@@ -283,7 +284,16 @@ public class WorkflowProcessorHelper {
       List<WorkflowProcessor> workflowProcessors, String stateName) {
     List<WorkflowProcessor> returnProcessors = new Vector<WorkflowProcessor>();
     for (WorkflowProcessor workflowProcessor : workflowProcessors) {
-      if (workflowProcessor.getWorkflowInstance().getState().equals(stateName)) {
+      // Compare the name, not the state to a name. WorkflowState.equals
+      // type-checks its argument, so testing a WorkflowState against a String
+      // returned false every time and this method returned an empty list for
+      // every state, always. isDone() asks it for the failed sub-processors,
+      // got none, and concluded from "every child is in the done category" --
+      // which Failure is -- that the workflow had succeeded. A workflow whose
+      // task threw was reported as Success.
+      WorkflowState state = workflowProcessor.getWorkflowInstance().getState();
+      if (state != null && state.getName() != null
+          && state.getName().equals(stateName)) {
         returnProcessors.add(workflowProcessor);
       }
     }

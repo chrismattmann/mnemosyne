@@ -88,7 +88,7 @@ public class AsynchronousLocalEngineRunner extends AbstractEngineRunnerBase {
               + "] completed successfully";
           LOG.log(Level.INFO, msg);
           WorkflowState state = lifecycle.createState("ExecutionComplete", "transition", msg);
-          taskProcessor.getWorkflowInstance().setState(state);
+          taskProcessor.setState(state);
           persist(taskProcessor.getWorkflowInstance());
         } catch (Exception e) {
           LOG.log(Level.SEVERE, e.getMessage());
@@ -96,7 +96,7 @@ public class AsynchronousLocalEngineRunner extends AbstractEngineRunnerBase {
               + workflowTask.getTaskName() + "]: Message: " + e.getMessage();
           LOG.log(Level.WARNING, msg);
           WorkflowState state = lifecycle.createState("Failure", "done", msg);
-          taskProcessor.getWorkflowInstance().setState(state);
+          taskProcessor.setState(state);
           persist(taskProcessor.getWorkflowInstance());
         }
 

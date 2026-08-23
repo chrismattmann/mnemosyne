@@ -220,8 +220,43 @@ public abstract class WorkflowProcessor implements WorkflowProcessorListener,
    * (org.apache.oodt.cas.workflow.engine.WorkflowProcessor,
    * org.apache.oodt.cas.workflow.engine.ChangeType)
    */
+  /**
+   * Sets this processor's state and tells anyone listening.
+   *
+   * Use this rather than reaching through to the instance when the change
+   * should be seen by the rest of the tree; setting it on the instance
+   * directly is silent.
+   *
+   * @param state
+   *          The state to move to.
+   */
+  public void setState(WorkflowState state) {
+    this.workflowInstance.setState(state);
+    this.notifyChange(this, ChangeType.STATE);
+  }
+
+  /**
+   * Reacts to a change below, then passes it on.
+   *
+   * The listener machinery has been here since the port but nothing ever fired
+   * it and nothing was ever registered, so it did nothing at all. A parent now
+   * listens to its children, and a child changing state makes the parent work
+   * out what that means immediately rather than waiting for the querier to
+   * come round again -- which, on a nested workflow, could cost a pass per
+   * level.
+   *
+   * This is a shortcut, not a source of truth. The parent still recomputes
+   * from its children through {@link #isDone()} every time, so a notification
+   * that is missed, duplicated or delivered out of order costs latency and
+   * nothing else. Given that the alternative is a cached verdict that can go
+   * stale, and that a stale verdict here means reporting a failed workflow as
+   * successful, the recomputation is worth keeping.
+   */
   @Override
   public void notifyChange(WorkflowProcessor processor, ChangeType changeType) {
+    if (processor != this && ChangeType.STATE.equals(changeType)) {
+      this.nextState();
+    }
     for (WorkflowProcessorListener listener : this.getListeners()) {
       listener.notifyChange(this, changeType);
     }
@@ -259,7 +294,7 @@ public abstract class WorkflowProcessor implements WorkflowProcessorListener,
   /**
    * Advances this WorkflowProcessor to its next {@link WorkflowState}.
    */
-  public void nextState() {
+  public synchronized void nextState() {
     if (this.workflowInstance != null
         && this.workflowInstance.getState() != null) {
 
@@ -272,7 +307,7 @@ public abstract class WorkflowProcessor implements WorkflowProcessorListener,
         WorkflowState declaredNext = this.transitioner
             .nextState(this.workflowInstance);
         if (declaredNext != null) {
-          this.workflowInstance.setState(declaredNext);
+          this.setState(declaredNext);
         }
         return;
       }
@@ -286,9 +321,14 @@ public abstract class WorkflowProcessor implements WorkflowProcessorListener,
             "Workflow Processor: nextState: " + "loading workflow instance: ["
                 + this.workflowInstance.getId() + "]");
       } else if (currState.getName().equals("Loaded")) {
+        // "waiting", which is where the lifecycle files Queued. Naming
+        // "initial" here put the state in a stage that does not contain it,
+        // so a queued workflow reported the stage before the one it was
+        // actually in: percent complete was understated, and a query for the
+        // instances that are waiting did not return them.
         nextState = this.helper.getLifecycleForProcessor(this).createState(
             "Queued",
-            "initial",
+            "waiting",
             "Workflow Processor: nextState: " + "queueing instance: ["
                 + this.workflowInstance.getId() + "]");
       } else if (currState.getName().equals("Queued")) {
@@ -300,23 +340,10 @@ public abstract class WorkflowProcessor implements WorkflowProcessorListener,
                   + "running preconditiosn for workflow instance: ["
                   + this.workflowInstance.getId() + "]");
         } else {
-          if (this.isDone().getName().equals("ResultsSuccess")) {
-            nextState = this.helper.getLifecycleForProcessor(this).createState(
-                "Success",
-                "done",
-                "Workflow Processor: nextState: " + "workflow instance: ["
-                    + this.workflowInstance.getId()
-                    + "] completed successfully");
-          }
+          nextState = stateFromSubProcessors();
         }
       } else if (currState.getName().equals("Executing")) {
-        if(this.isDone().getName().equals("ResultsSuccess")){
-        nextState = this.helper.getLifecycleForProcessor(this).createState(
-            "Success",
-            "done",
-            "Workflow Processor: nextState: " + "workflow instance: ["
-                + this.workflowInstance.getId() + "] completed successfully");
-        }
+        nextState = stateFromSubProcessors();
       }
       else if(currState.getName().equals("ExecutionComplete")){
         nextState = this.helper.getLifecycleForProcessor(this).createState(
@@ -327,11 +354,11 @@ public abstract class WorkflowProcessor implements WorkflowProcessorListener,
       }
 
       if (nextState != null) {
-        this.workflowInstance.setState(nextState);
+        this.setState(nextState);
       }
 
     } else {
-      this.workflowInstance.setState(helper.getLifecycleForProcessor(this)
+      this.setState(helper.getLifecycleForProcessor(this)
           .createState(
               "Unknown",
               "holding",
@@ -341,6 +368,43 @@ public abstract class WorkflowProcessor implements WorkflowProcessorListener,
     }
   }
   
+  /**
+   * Turns what the sub-processors have done into this processor's next state.
+   *
+   * Only success was ever acted on here. A processor whose children had failed
+   * got no transition at all and sat where it was, so a workflow with a failed
+   * task never finished and never reported anything -- it simply stopped. That
+   * is the backward status calculation Brian Foster asked for on the umbrella
+   * issue: a parent has to be able to move to a failed state, not only to a
+   * successful one.
+   *
+   * @return The state to move to, or null to stay put, which is the right
+   *         answer while children are still working.
+   */
+  private WorkflowState stateFromSubProcessors() {
+    WorkflowState result = this.isDone();
+
+    if (result.getName().equals("ResultsSuccess")) {
+      return this.helper.getLifecycleForProcessor(this).createState(
+          "Success",
+          "done",
+          "Workflow Processor: nextState: " + "workflow instance: ["
+              + this.workflowInstance.getId() + "] completed successfully");
+    }
+
+    if (result.getName().equals("ResultsFailure")) {
+      return this.helper.getLifecycleForProcessor(this).createState(
+          "Failure",
+          "done",
+          "Workflow Processor: nextState: " + "workflow instance: ["
+              + this.workflowInstance.getId() + "] failed: "
+              + result.getMessage());
+    }
+
+    // ResultsBail: children are still working, so there is nothing to do yet.
+    return null;
+  }
+
   /**
    * Evaluates whether or not this processor's {@link WorkflowState}
    * is in any of the provided state names.

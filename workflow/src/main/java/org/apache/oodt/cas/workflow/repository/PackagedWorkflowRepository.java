@@ -125,13 +125,11 @@ import javax.xml.parsers.DocumentBuilderFactory;
  * deliberately not shaped like the file that was read.
  *
  * <ul>
- * <li><b>Every workflow id in the file is an event.</b>
- * {@link #computeEvents()} maps each workflow's id to itself, so a workflow is
- * started by sending an event named after it; there is no separate event
- * declaration in this dialect. The generated wrappers below are the exception:
- * they are added to {@link #workflows} while computeEvents is already running
- * over a snapshot, so they never get an event, and the two maps disagree about
- * them.</li>
+ * <li><b>Every workflow is an event.</b> {@link #computeEvents()} maps each
+ * workflow's id to itself, so a workflow is started by sending an event named
+ * after it; there is no separate event declaration in this dialect. The
+ * generated wrappers below are registered the same way when they are built,
+ * so everything {@link #getWorkflows()} lists can be started.</li>
  * <li><b>A nested workflow becomes a redirect.</b> Inside a
  * <code>sequential</code> parent, a child workflow is replaced by a generated
  * {@link BranchRedirector} task carrying the child's id as
@@ -504,9 +502,18 @@ public class PackagedWorkflowRepository implements WorkflowRepository {
         loadConfiguration(rootElements, root, staticMetadata);
         loadTaskAndConditionDefinitions(rootElements, root, staticMetadata);
         loadGraphs(rootElements, root, new Graph(), staticMetadata);
-        computeEvents();
-        computeWorkflowConditions();
       }
+
+      // Once, over everything that was read, rather than once per file. Both
+      // of these work on the accumulated maps, not on the file just parsed,
+      // so running them inside the loop meant re-running them over workflows
+      // that had already been rewritten. That was not merely wasteful: the
+      // second pass cleared a generated wrapper's task list and rebuilt it
+      // from a graph that has no children, emptying the workflow and losing
+      // the task. It took two files in the policy directory to happen, which
+      // is the ordinary case, since the repository is pointed at a directory.
+      computeEvents();
+      computeWorkflowConditions();
     } catch (Exception e) {
       LOG.log(Level.SEVERE, e.getMessage());
       throw new RepositoryException(e.getMessage());
@@ -802,6 +809,17 @@ public class PackagedWorkflowRepository implements WorkflowRepository {
 
   }
 
+  /**
+   * Wraps a bare task from a parallel block in a workflow of its own, since a
+   * task cannot be started on its own.
+   *
+   * The wrapper is registered as an event as well as a workflow. It used to be
+   * only a workflow: these are built while computeEvents is already iterating
+   * a snapshot taken before they existed, so nothing ever came back to give
+   * them one, and getWorkflows and getRegisteredEvents disagreed about them.
+   * A wrapper is a real workflow that really runs, so it is listed and
+   * startable like any other.
+   */
   private ParentChildWorkflow getDynamicWorkflow(WorkflowTask task) {
     Graph graph = new Graph();
     graph.setExecutionType("sequential");
@@ -810,6 +828,11 @@ public class PackagedWorkflowRepository implements WorkflowRepository {
     workflow.setName("Parallel Single Task " + task.getTaskName());
     workflow.getTasks().add(task);
     this.workflows.put(workflow.getId(), workflow);
+
+    List<ParentChildWorkflow> asEvent = new Vector<ParentChildWorkflow>();
+    asEvent.add(workflow);
+    this.eventWorkflowMap.put(workflow.getId(), asEvent);
+
     return workflow;
   }
 
