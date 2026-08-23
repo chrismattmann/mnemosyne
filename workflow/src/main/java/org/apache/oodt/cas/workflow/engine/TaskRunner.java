@@ -43,9 +43,11 @@ import java.util.logging.Logger;
  * false and {@link #isRunning()} is true, then the task is handed off to the
  * runner for execution.
  * 
- * The TaskRunner thread can be paused during which time it waits
- *  seconds, wakes up to see if it's unpaused, and then goes
- * back to sleep if not, otherwise, resumes executing if it was unpaused.
+ * When there is nothing runnable, the thread waits
+ * {@link #DEFAULT_IDLE_WAIT_MILLIS} milliseconds before looking again, or
+ * whatever {@link #IDLE_WAIT_PROPERTY} is set to. It does not wait after
+ * handing work over, so a busy engine is not slowed down by the pause that
+ * keeps an idle one from spinning.
  * 
  * @since Apache OODT 0.5
  * 
@@ -63,13 +65,62 @@ public class TaskRunner implements Runnable {
 
   private final EngineRunner runner;
 
+  /**
+   * How long to wait before polling again when there was nothing to run.
+   * Zero polls continuously, which is what this loop used to do.
+   */
+  private final long idleWaitMillis;
+
+  public static final String IDLE_WAIT_PROPERTY =
+      "org.apache.oodt.cas.workflow.wengine.taskrunner.idleWaitMillis";
+
+  public static final long DEFAULT_IDLE_WAIT_MILLIS = 100;
+
   private static final Logger LOG = Logger
       .getLogger(TaskRunner.class.getName());
 
   public TaskRunner(TaskQuerier taskQuerier, EngineRunner runner) {
+    this(taskQuerier, runner, readIdleWaitMillis());
+  }
+
+  /**
+   * Constructs a TaskRunner with an explicit idle wait.
+   *
+   * @param taskQuerier
+   *          Where runnable work comes from.
+   * @param runner
+   *          What the work is handed to.
+   * @param idleWaitMillis
+   *          How long to wait before polling again when there was nothing to
+   *          run. Milliseconds rather than seconds because, unlike the
+   *          querier's wait, this one decides how quickly a queued task gets
+   *          picked up.
+   */
+  public TaskRunner(TaskQuerier taskQuerier, EngineRunner runner,
+      long idleWaitMillis) {
     this.running = true;
     this.taskQuerier = taskQuerier;
     this.runner = runner;
+    this.idleWaitMillis = idleWaitMillis > 0 ? idleWaitMillis : 0;
+  }
+
+  private static long readIdleWaitMillis() {
+    try {
+      return Long.parseLong(System.getProperty(IDLE_WAIT_PROPERTY,
+          String.valueOf(DEFAULT_IDLE_WAIT_MILLIS)));
+    } catch (NumberFormatException e) {
+      LOG.log(Level.WARNING, "Property [" + IDLE_WAIT_PROPERTY + "] is not a "
+          + "number: [" + System.getProperty(IDLE_WAIT_PROPERTY) + "]; using ["
+          + DEFAULT_IDLE_WAIT_MILLIS + "]");
+      return DEFAULT_IDLE_WAIT_MILLIS;
+    }
+  }
+
+  /**
+   * @return how long this runner waits before polling again when idle
+   */
+  public long getIdleWaitMillis() {
+    return idleWaitMillis;
   }
 
   /*
@@ -83,10 +134,12 @@ public class TaskRunner implements Runnable {
 
     while (running) {
       nextTaskProcessor = taskQuerier.getNext();
+      boolean ranSomething = false;
 
       try {
         if (nextTaskProcessor != null && runner.hasOpenSlots(nextTaskProcessor)) {
           runner.execute(nextTaskProcessor);
+          ranSomething = true;
         }
       } catch (Exception e) {
         LOG.log(Level.SEVERE, e.getMessage());
@@ -95,6 +148,19 @@ public class TaskRunner implements Runnable {
             "Engine failed while submitting jobs to its runner : "
                 + e.getMessage(), e);
         this.flagProcessorAsFailed(nextTaskProcessor, e.getMessage());
+      }
+
+      // Only wait when there was nothing to do, so a busy engine still hands
+      // work over as fast as it arrives. Without this the loop polled an empty
+      // queue continuously and held a core at full tilt for as long as the
+      // engine was up, which is most of the time on an idle deployment.
+      if (!ranSomething && idleWaitMillis > 0) {
+        try {
+          Thread.sleep(idleWaitMillis);
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+          return;
+        }
       }
     }
 
