@@ -61,6 +61,17 @@ public abstract class WorkflowProcessor implements WorkflowProcessorListener,
   private int minReqSuccessfulSubProcessors; // FIXME: read this in
                                              // PackagedRepo: flow through
                                              // instance
+  /**
+   * The conditions that must pass before this processor may run.
+   *
+   * Held as the condition processors themselves rather than as a verdict, so
+   * that asking recomputes from their current states. Work is discovered from
+   * the instance repository, not by walking down from a parent, so a task
+   * arrives at the querier on its own and has to be able to see what governs
+   * it; nothing else on the path knows.
+   */
+  private List<WorkflowProcessor> governingConditions;
+
   protected WorkflowLifecycleManager lifecycleManager;
   protected WorkflowProcessorHelper helper;
   protected WorkflowStateTransitioner transitioner;
@@ -70,6 +81,7 @@ public abstract class WorkflowProcessor implements WorkflowProcessorListener,
     this.subProcessors = new Vector<WorkflowProcessor>();
     this.listeners = new Vector<WorkflowProcessorListener>();
     this.excusedSubProcessorIds = new Vector<String>();
+    this.governingConditions = new Vector<WorkflowProcessor>();
     this.minReqSuccessfulSubProcessors = -1;
     this.lifecycleManager = lifecycleManager;
     this.workflowInstance = workflowInstance;
@@ -267,10 +279,16 @@ public abstract class WorkflowProcessor implements WorkflowProcessorListener,
 
     // evaluate pre-conditions
     if (!this.passedPreConditions()) {
-      for (WorkflowProcessor subProcessor : this.getPreConditions()
-          .getRunnableSubProcessors()) {
-        for (TaskProcessor tp : subProcessor.getRunnableWorkflowProcessors()) {
-          runnableTasks.add(tp);
+      // Conditions can gate this processor without being held by it: they run
+      // as instances of their own, discovered from the repository like any
+      // other work. There is then nothing here to hand back, and asking for
+      // it used to throw, killing the querier thread.
+      if (this.getPreConditions() != null) {
+        for (WorkflowProcessor subProcessor : this.getPreConditions()
+            .getRunnableSubProcessors()) {
+          for (TaskProcessor tp : subProcessor.getRunnableWorkflowProcessors()) {
+            runnableTasks.add(tp);
+          }
         }
       }
 
@@ -279,10 +297,12 @@ public abstract class WorkflowProcessor implements WorkflowProcessorListener,
         runnableTasks.addAll(subProcessor.getRunnableWorkflowProcessors());
       }
     } else if (!this.passedPostConditions()) {
-      for (WorkflowProcessor subProcessor : this.getPostConditions()
-          .getRunnableSubProcessors()) {
-        for (TaskProcessor tp : subProcessor.getRunnableWorkflowProcessors()) {
-          runnableTasks.add(tp);
+      if (this.getPostConditions() != null) {
+        for (WorkflowProcessor subProcessor : this.getPostConditions()
+            .getRunnableSubProcessors()) {
+          for (TaskProcessor tp : subProcessor.getRunnableWorkflowProcessors()) {
+            runnableTasks.add(tp);
+          }
         }
       }
 
@@ -446,7 +466,37 @@ public abstract class WorkflowProcessor implements WorkflowProcessorListener,
     return false;
   }  
 
+  /**
+   * @return the conditions that gate this processor, never null
+   */
+  public List<WorkflowProcessor> getGoverningConditions() {
+    return governingConditions;
+  }
+
+  /**
+   * Declares the conditions that must pass before this processor may run.
+   *
+   * @param governingConditions
+   *          The condition processors, evaluated wherever they happen to run.
+   */
+  public void setGoverningConditions(
+      List<WorkflowProcessor> governingConditions) {
+    this.governingConditions = governingConditions != null
+        ? governingConditions : new Vector<WorkflowProcessor>();
+  }
+
   protected boolean passedPreConditions() {
+    // Recomputed from the conditions every time rather than read from a
+    // verdict someone had to remember to update. A condition runs as its own
+    // instance, dispositioned by the querier like any other work, so its state
+    // is the ground truth and there is nothing to keep in step.
+    for (WorkflowProcessor condition : this.governingConditions) {
+      WorkflowState state = condition.getWorkflowInstance().getState();
+      if (state == null || !"Success".equals(state.getName())) {
+        return false;
+      }
+    }
+
     if (this.getPreConditions() != null) {
       return this.getPreConditions().getWorkflowInstance().getState().getName()
           .equals("Success");

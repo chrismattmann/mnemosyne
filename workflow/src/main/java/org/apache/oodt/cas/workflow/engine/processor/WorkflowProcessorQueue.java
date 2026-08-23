@@ -114,6 +114,54 @@ public class WorkflowProcessorQueue {
   }
 
   /**
+   * Builds a processor that runs one condition.
+   *
+   * A condition executes as a task: ConditionTaskInstance evaluates it and
+   * throws when the answer is false, which the runner records as a failure.
+   * The instance is persisted like any other, so the querier finds it and runs
+   * it; what makes it a gate rather than just more work is that the processors
+   * it governs hold a reference to it.
+   *
+   * @param parent
+   *          The instance the condition belongs to.
+   * @param cond
+   *          The condition to run.
+   * @param idPrefix
+   *          Distinguishes the generated workflow id.
+   * @return The processor for that condition.
+   */
+  private WorkflowProcessor buildConditionProcessor(WorkflowInstance parent,
+      WorkflowCondition cond, String idPrefix) {
+    WorkflowInstance instance = new WorkflowInstance();
+    instance.setState(lifecycle.getDefaultLifecycle().createState("Null",
+        "initial", "Condition created for workflow instance: ["
+            + parent.getId() + "]"));
+    instance.setPriority(parent.getPriority());
+    shareContext(parent, instance);
+
+    WorkflowTask conditionTask = toConditionTask(cond);
+    instance.setCurrentTaskId(conditionTask.getTaskId());
+    Graph condGraph = new Graph();
+    condGraph.setExecutionType("condition");
+    condGraph.setCond(cond);
+    condGraph.setTask(conditionTask);
+    ParentChildWorkflow workflow = new ParentChildWorkflow(condGraph);
+    workflow.setId(idPrefix + cond.getConditionId() + "-"
+        + parent.getParentChildWorkflow().getId());
+    workflow.setName("Condition Workflow-" + cond.getConditionName());
+    workflow.getTasks().add(conditionTask);
+    instance.setParentChildWorkflow(workflow);
+    this.addToModelRepo(workflow);
+    persist(instance);
+
+    WorkflowProcessor condProcessor = fromWorkflowInstance(instance);
+    synchronized (processorCache) {
+      processorCache.put(instance.getId(), condProcessor);
+    }
+    return condProcessor;
+  }
+
+  /**
    * Gives a sub-instance the context its parent is carrying.
    *
    * A workflow's tasks are run as sub-instances built here, and each one used
@@ -234,6 +282,12 @@ public class WorkflowProcessorQueue {
         persist(inst);
 
         // handle its pre-conditions
+        // Collected as they are built so that the tasks they guard can be
+        // told what governs them. A task is discovered from the instance
+        // repository on its own, so its parent is not on the path when the
+        // querier decides whether to run it.
+        List<WorkflowProcessor> gatingConditions =
+            new Vector<WorkflowProcessor>();
         for (WorkflowCondition cond : inst.getParentChildWorkflow()
             .getPreConditions()) {
           WorkflowInstance instance = new WorkflowInstance();
@@ -263,6 +317,7 @@ public class WorkflowProcessorQueue {
           persist(instance);
           WorkflowProcessor subProcessor = fromWorkflowInstance(instance);
           processor.getSubProcessors().add(subProcessor);
+          gatingConditions.add(subProcessor);
           // The parent listens to the child, so a child finishing is acted on
           // at once instead of on the querier's next pass. The parent still
           // recomputes from all its children when it reacts, so a lost
@@ -300,6 +355,25 @@ public class WorkflowProcessorQueue {
           persist(instance);
           WorkflowProcessor subProcessor = fromWorkflowInstance(instance);
           processor.getSubProcessors().add(subProcessor);
+          // What the workflow's conditions say applies to its tasks. The
+          // check is already written -- TaskProcessor will not offer itself
+          // as runnable while passedPreConditions is false -- and until now
+          // there was simply nothing for it to check, so a condition ran
+          // beside the task it was supposed to guard and gated nothing.
+          // Conditions written on the task itself gate it too, alongside the
+          // workflow's. Nothing used to build these at all, which is why a
+          // task-level condition was never so much as evaluated.
+          List<WorkflowProcessor> taskGates =
+              new Vector<WorkflowProcessor>(gatingConditions);
+          for (Object taskCondObj : task.getConditions()) {
+            WorkflowCondition taskCond = (WorkflowCondition) taskCondObj;
+            WorkflowProcessor condProcessor = buildConditionProcessor(inst,
+                taskCond, "task-cond-workflow-");
+            processor.getSubProcessors().add(condProcessor);
+            condProcessor.getListeners().add(processor);
+            taskGates.add(condProcessor);
+          }
+          subProcessor.setGoverningConditions(taskGates);
           // The parent listens to the child, so a child finishing is acted on
           // at once instead of on the querier's next pass. The parent still
           // recomputes from all its children when it reacts, so a lost

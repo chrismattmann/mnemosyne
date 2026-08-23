@@ -251,7 +251,7 @@ public class TestQueueBasedEngineEndToEnd extends TestCase {
    * An open gate lets the work through. Establishes that the guarded workflow
    * runs at all, so that the closed-gate case below means something.
    */
-  public void reproduceOpenGateLetsTheTaskRun() throws Exception {
+  public void testOpenGateLetsTheTaskRun() throws Exception {
     GateCondition.open(true);
 
     engine.startWorkflow(modelFor("urn:oodt:e2e:GuardedTaskWorkflow"),
@@ -268,7 +268,7 @@ public class TestQueueBasedEngineEndToEnd extends TestCase {
    * something -- so this asserts both that the task did not run and that the
    * engine actually asked.
    */
-  public void reproduceClosedGateStopsTheTask() throws Exception {
+  public void testClosedGateStopsTheTask() throws Exception {
     GateCondition.open(false);
 
     engine.startWorkflow(modelFor("urn:oodt:e2e:GuardedTaskWorkflow"),
@@ -289,7 +289,7 @@ public class TestQueueBasedEngineEndToEnd extends TestCase {
    * hoists it into a generated task placed first, so it should gate the same
    * way.
    */
-  public void reproduceConditionOnTheWorkflowAlsoGates() throws Exception {
+  public void testConditionOnTheWorkflowAlsoGates() throws Exception {
     GateCondition.open(false);
 
     engine.startWorkflow(modelFor("urn:oodt:e2e:GuardedWorkflow"),
