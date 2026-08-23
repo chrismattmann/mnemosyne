@@ -1,5 +1,10 @@
 # Mnemosyne
 
+[![Build](https://github.com/chrismattmann/mnemosyne/actions/workflows/build.yml/badge.svg?branch=master)](https://github.com/chrismattmann/mnemosyne/actions/workflows/build.yml)
+[![Maven Central](https://img.shields.io/maven-central/v/ai.mattmann.mnemosyne/cas-filemgr.svg?label=Maven%20Central&color=6E4B8E)](https://central.sonatype.com/artifact/ai.mattmann.mnemosyne/cas-filemgr)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE.txt)
+[![JDK](https://img.shields.io/badge/JDK-21-orange.svg)](https://adoptium.net/)
+
 **Mnemosyne** is data pipeline and catalog middleware: it ingests data, runs it
 through processing stages, and remembers everything about every product it
 produces — where it came from, what generated it, and what it became.
@@ -171,6 +176,23 @@ All source files are UTF-8. If you generate the site, set
 `MAVEN_OPTS="-Dfile.encoding=UTF-8 -Xmx1g"` — documentation generation is
 memory-hungry.
 
+### Tests
+
+```bash
+mvn test                 # whole reactor
+mvn -pl workflow test    # one module
+```
+
+Every push and pull request against `master` builds and tests the full reactor
+on JDK 21; the Build badge above reports it. Signing and deployment live in the
+`release` profile and are not part of that run, so a pull request never needs a
+GPG key to go green.
+
+Some suites start real servers on fixed ports and write into temporary
+directories, so they are sensitive to being run in parallel with each other. If
+a run fails in CI, the surefire reports are attached to the failed job as an
+artifact.
+
 ## RADiX
 
 RADiX generates a complete, deployable Mnemosyne stack — File Manager, Workflow
@@ -178,7 +200,7 @@ Manager, Resource Manager, Crawler, Solr, and Tomcat, wired together — as a
 starting point for a new pipeline. The archetypes live in `mvn/archetypes/` and
 generate projects against the current coordinates.
 
-[Apache DRAT](https://github.com/apache/drat) and
+[DRAT](https://github.com/chrismattmann/drat) and
 [BigTranslate](https://github.com/chrismattmann/bigtranslate) are both RADiX
 projects, and are the best worked examples of what a real deployment looks like.
 
