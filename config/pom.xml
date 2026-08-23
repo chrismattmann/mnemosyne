@@ -9,6 +9,20 @@
     <modelVersion>4.0.0</modelVersion>
 
     <artifactId>oodt-conf</artifactId>
+
+  <!--
+    Declared explicitly rather than inherited. Maven appends the module path to
+    an inherited url and scm, publishing a 404 project url and an scm
+    connection ending in ".git/<module>". The child.*.inherit.append.path
+    attributes meant to suppress that are not honoured under Maven 3.9.
+  -->
+  <url>https://github.com/chrismattmann/mnemosyne</url>
+  <scm>
+    <connection>scm:git:https://github.com/chrismattmann/mnemosyne.git</connection>
+    <developerConnection>scm:git:https://github.com/chrismattmann/mnemosyne.git</developerConnection>
+    <url>https://github.com/chrismattmann/mnemosyne</url>
+    <tag>HEAD</tag>
+  </scm>
     <packaging>jar</packaging>
     <name>OODT - Configuration Management</name>
     <description>OODT project for distributed configuration management support</description>

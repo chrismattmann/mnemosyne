@@ -8,6 +8,20 @@
     <relativePath>../core/pom.xml</relativePath>
   </parent>
   <artifactId>cas-pge</artifactId>
+
+  <!--
+    Declared explicitly rather than inherited. Maven appends the module path to
+    an inherited url and scm, publishing a 404 project url and an scm
+    connection ending in ".git/<module>". The child.*.inherit.append.path
+    attributes meant to suppress that are not honoured under Maven 3.9.
+  -->
+  <url>https://github.com/chrismattmann/mnemosyne</url>
+  <scm>
+    <connection>scm:git:https://github.com/chrismattmann/mnemosyne.git</connection>
+    <developerConnection>scm:git:https://github.com/chrismattmann/mnemosyne.git</developerConnection>
+    <url>https://github.com/chrismattmann/mnemosyne</url>
+    <tag>HEAD</tag>
+  </scm>
   <name>CAS PGE Adaptor Framework</name>
   <description>Allows data processing jobs not written in conformance with the
         PCS PGE (Production Generation Executive) interface to be run within the PCS.</description>

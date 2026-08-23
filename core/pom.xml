@@ -28,7 +28,14 @@ the License.
   <version>1.11.0</version>
   <packaging>pom</packaging>
   <name>Mnemosyne Core</name>
+  <description>Shared build configuration and dependency management for
+    Mnemosyne, data pipeline and catalog middleware continuing Apache
+    OODT.</description>
   <properties>
+    <maven.gpg.plugin.version>3.2.7</maven.gpg.plugin.version>
+    <central.publishing.plugin.version>0.7.0</central.publishing.plugin.version>
+    <maven.source.plugin.version>3.3.1</maven.source.plugin.version>
+    <maven.javadoc.plugin.version>3.11.2</maven.javadoc.plugin.version>
     <maven.enforcer.plugin.version>3.5.0</maven.enforcer.plugin.version>
     <organizationLogo>http://www.apache.org/images/feather.gif</organizationLogo>
     <logo>/images/${project.artifactId}.jpg</logo>
@@ -709,17 +716,57 @@ mm
       </plugin>
       <plugin>
         <artifactId>maven-javadoc-plugin</artifactId>
-        <version>2.9</version>
+        <version>${maven.javadoc.plugin.version}</version>
         <configuration>
           <charset>UTF-8</charset>
           <docencoding>UTF-8</docencoding>
           <encoding>UTF-8</encoding>
+          <source>8</source>
+          <!--
+            This javadoc predates JDK 21's stricter doclint. Central requires
+            javadoc jars, so a malformed comment must not fail the release.
+          -->
+          <doclint>none</doclint>
+          <!--
+            failOnError stays true. With doclint off, malformed comments are
+            warnings rather than errors, and a genuine javadoc failure must
+            surface: the previous configuration masked one and attached an
+            empty jar, which is worse than failing.
+          -->
+          <failOnError>true</failOnError>
         </configuration>
         <executions>
           <execution>
             <id>attach-javadocs</id>
             <goals>
-              <goal>javadoc</goal>
+              <!--
+                jar, not javadoc. The javadoc goal generates HTML but attaches
+                no artifact; Maven Central requires a -javadoc.jar alongside
+                every published artifact.
+              -->
+              <goal>jar</goal>
+            </goals>
+            <phase>package</phase>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!--
+        Release publishing. Both plugins are confined to the `release` profile
+        so that ordinary builds neither require a GPG key nor contact Central.
+        Publish with:  mvn -Prelease deploy
+      -->
+
+      <!-- Central also requires a -sources.jar for every published artifact. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-source-plugin</artifactId>
+        <version>${maven.source.plugin.version}</version>
+        <executions>
+          <execution>
+            <id>attach-sources</id>
+            <goals>
+              <goal>jar-no-fork</goal>
             </goals>
             <phase>package</phase>
           </execution>
@@ -751,13 +798,14 @@ mm
       <!-- Produce JavaDoc -->
       <plugin>
         <artifactId>maven-javadoc-plugin</artifactId>
-        <version>3.6.3</version>
+        <version>${maven.javadoc.plugin.version}</version>
         <configuration>
           <charset>UTF-8</charset>
           <docencoding>UTF-8</docencoding>
           <encoding>UTF-8</encoding>
           <aggregate>true</aggregate>
           <source>8</source>
+          <doclint>none</doclint>
         </configuration>
       </plugin>
       <!-- Produce Source cross references -->
@@ -828,192 +876,14 @@ mm
   </licenses>
   <developers>
     <developer>
-      <id>thomas</id>
-      <name>Thomas Bennett</name>
-      <email>thomas@apache.org</email>
-      <organization>SKA South Africa</organization>
-      <roles>
-        <role>committer</role>
-      </roles>
-      <timezone>+2</timezone>
-    </developer>
-    <developer>
-      <id>crichton</id>
-      <name>Daniel Crichton</name>
-      <email>crichton@apache.org</email>
-      <organization>NASA Jet Propulsion Laboratory</organization>
-      <roles>
-        <role>committer</role>
-      </roles>
-      <timezone>-8</timezone>
-    </developer>
-    <developer>
-      <id>bfoster</id>
-      <name>Brian Foster</name>
-      <email>bfoster@apache.org</email>
-      <organization>Google</organization>
-      <roles>
-        <role>committer</role>
-      </roles>
-      <timezone>-8</timezone>
-    </developer>
-    <developer>
-      <id>joshuaga</id>
-      <name>Joshua Garcia</name>
-      <email>joshuaga@apache.org</email>
-      <organization>University of Southern California</organization>
-      <roles>
-        <role>committer</role>
-      </roles>
-      <timezone>-8</timezone>
-    </developer>
-    <developer>
-      <id>goodale</id>
-      <name>Cameron Goodale</name>
-      <email>goodale@apache.org</email>
-      <organization>NASA Jet Propulsion Laboratory</organization>
-      <roles>
-        <role>committer</role>
-      </roles>
-      <timezone>-8</timezone>
-      <properties>
-        <aim>nonflyt</aim>
-        <gtalk>sigep311@gmail.com</gtalk>
-      </properties>
-    </developer>
-    <developer>
-      <id>shardman</id>
-      <name>Sean Hardman</name>
-      <email>shardman@apache.org</email>
-      <organization>NASA Jet Propulsion Laboratory</organization>
-      <roles>
-        <role>committer</role>
-      </roles>
-      <timezone>-8</timezone>
-    </developer>
-    <developer>
-      <id>ahart</id>
-      <name>Andrew Hart</name>
-      <email>ahart@apache.org</email>
-      <organization>NASA Jet Propulsion Laboratory</organization>
-      <roles>
-        <role>committer</role>
-      </roles>
-      <timezone>-8</timezone>
-    </developer>
-    <developer>
-      <id>davekale</id>
-      <name>Dave Kale</name>
-      <email>davekale@apache.org</email>
-      <organization>Childrens Hospital Los Angeles</organization>
-      <roles>
-        <role>committer</role>
-      </roles>
-      <timezone>-8</timezone>
-    </developer>
-    <developer>
-      <id>kelly</id>
-      <name>Sean Kelly</name>
-      <email>kelly@apache.org</email>
-      <url>http://seankelly.biz/</url>
-      <organization>Independent Consultant</organization>
-      <roles>
-        <role>committer</role>
-        <role>technologist</role>
-      </roles>
-      <timezone>-6</timezone>
-      <properties>
-        <picUrl>http://seankelly.biz/Members/kelly/sean-kelly/image</picUrl>
-        <blogUrl>http://seankelly.biz/blog</blogUrl>
-        <foaf>http://seankelly.biz/Members/kelly/sean-kellys-foaf</foaf>
-        <aim>InsanityPoet</aim>
-        <skype>InsanityPoet</skype>
-        <gtalk>sean.c.kelly@gmail.com</gtalk>
-        <mobileme>sean.c.kelly@me.com</mobileme>
-      </properties>
-    </developer>
-    <developer>
       <id>mattmann</id>
       <name>Chris Mattmann</name>
-      <email>Chris.Mattmann@jpl.nasa.gov</email>
-      <url>http://www-scf.usc.edu/~mattmann/</url>
-      <organization>NASA Jet Propulsion Laboratory</organization>
+      <email>chris.mattmann@gmail.com</email>
+      <url>https://www.mattmann.ai/</url>
       <roles>
-        <role>committer</role>
-        <role>mentor</role>
-        <role>release engineer</role>
+        <role>Project Lead</role>
       </roles>
-      <timezone>-8</timezone>
-    </developer>
-    <developer>
-      <id>pramirez</id>
-      <name>Paul Ramirez</name>
-      <email>pramirez@apache.org</email>
-      <organization>NASA Jet Propulsion Laboratory</organization>
-      <roles>
-        <role>committer</role>
-      </roles>
-      <timezone>-8</timezone>
-    </developer>
-    <developer>
-      <id>smcclees</id>
-      <name>Sean McCleese</name>
-      <email>smcclees@apache.org</email>
-      <organization>NASA Jet Propulsion Laboratory</organization>
-      <roles>
-        <role>committer</role>
-      </roles>
-      <timezone>-8</timezone>
-    </developer>
-    <developer>
-      <id>gabe</id>
-      <name>Gabe Resneck</name>
-      <email>gabriel.m.resneck@jpl.nasa.gov</email>
-      <organization>NASA Jet Propulsion Laboratory</organization>
-      <roles>
-        <role>committer</role>
-      </roles>
-      <timezone>-8</timezone>
-    </developer>
-    <developer>
-      <id>pvee</id>
-      <name>Paul Vee</name>
-      <email>pvee@apache.org</email>
-      <organization>Childrens Hospital Los Angeles</organization>
-      <roles>
-        <role>committer</role>
-      </roles>
-      <timezone>-8</timezone>
-    </developer>
-    <developer>
-      <id>riverma</id>
-      <name>Rishi Verma</name>
-      <email>riverma@apache.org</email>
-      <organization>NASA Jet Propulsion Laboratory</organization>
-      <roles>
-        <role>committer</role>
-      </roles>
-      <timezone>-8</timezone>
-    </developer>
-    <developer>
-      <id>woollard</id>
-      <name>David Woollard</name>
-      <email>woollard@apache.org</email>
-      <organization>Project WBS</organization>
-      <roles>
-        <role>committer</role>
-      </roles>
-      <timezone>-8</timezone>
-    </developer>
-    <developer>
-      <id>siriwardana</id>
-      <name>Rajith Siriwardana</name>
-      <email>siriwardana@apache.org</email>
-      <organization>Independent Consultant</organization>
-      <roles>
-        <role>committer</role>
-      </roles>
-      <timezone>+5:30</timezone>
+      <timezone>America/Los_Angeles</timezone>
     </developer>
   </developers>
   <!--
@@ -1021,48 +891,22 @@ mm
     Apache project moved to the Attic. Discussion happens on GitHub.
   -->
   <scm>
-    <!--<connection>scm:svn:https://svn.apache.org/repos/asf/oodt/trunk/core</connection>
-    <developerConnection>scm:svn:https://svn.apache.org/repos/asf/oodt/trunk/core</developerConnection>
-    <url>http://svn.apache.org/viewvc/oodt/trunk/core</url>-->
-    <tag>0.13-SNAPSHOT</tag>
+    <connection>scm:git:https://github.com/chrismattmann/mnemosyne.git</connection>
+    <developerConnection>scm:git:https://github.com/chrismattmann/mnemosyne.git</developerConnection>
+    <url>https://github.com/chrismattmann/mnemosyne</url>
+    <tag>HEAD</tag>
   </scm>
   <issueManagement>
     <system>GitHub</system>
     <url>https://github.com/chrismattmann/mnemosyne/issues</url>
   </issueManagement>
   <profiles>
-    <profile>
-      <id>jdk1.8</id>
-	  <activation>
-	     <jdk>[1.8,)</jdk>
-	  </activation>
-	  <properties>
-	     <additionalparam>-Xdoclint:none</additionalparam>
-	  </properties>
-      <build>
-        <plugins>
-          <plugin>
-            <artifactId>maven-javadoc-plugin</artifactId>
-            <version>2.10.3</version>
-            <configuration>
-              <charset>UTF-8</charset>
-              <docencoding>UTF-8</docencoding>
-              <encoding>UTF-8</encoding>
-            </configuration>
-            <executions>
-              <execution>
-                <id>attach-javadocs</id>
-                <goals>
-                  <goal>javadoc</goal>
-                </goals>
-                <phase>package</phase>
-                <configuration />
-              </execution>
-            </executions>
-          </plugin>
-        </plugins>
-      </build>
-    </profile>
+    <!--
+      The jdk1.8 profile was removed. It activated on [1.8,) - which includes
+      JDK 21 - and pinned maven-javadoc-plugin 2.10.3, a 2015 release that
+      cannot run against a modern JDK. Its only purpose was disabling doclint,
+      which the main javadoc configuration now does directly.
+    -->
     <profile>
       <id>audit</id>
       <activation>
@@ -1140,6 +984,60 @@ mm
                 </configuration>
               </execution>
             </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+    <!--
+      Release profile. Signs artifacts and publishes to Maven Central under the
+      ai.mattmann namespace, which is verified by DNS TXT record on mattmann.ai.
+
+      Requires:
+        - a GPG key whose public half is on a public keyserver
+        - a Central Portal user token in ~/.m2/settings.xml under the server id
+          `central`
+    -->
+    <profile>
+      <id>release</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-gpg-plugin</artifactId>
+            <version>${maven.gpg.plugin.version}</version>
+            <executions>
+              <execution>
+                <id>sign-artifacts</id>
+                <phase>verify</phase>
+                <goals>
+                  <goal>sign</goal>
+                </goals>
+                <configuration>
+                  <!-- Non-interactive signing; the passphrase comes from the
+                       gpg agent rather than a prompt or a stored property. -->
+                  <gpgArguments>
+                    <arg>--pinentry-mode</arg>
+                    <arg>loopback</arg>
+                  </gpgArguments>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.sonatype.central</groupId>
+            <artifactId>central-publishing-maven-plugin</artifactId>
+            <version>${central.publishing.plugin.version}</version>
+            <extensions>true</extensions>
+            <configuration>
+              <publishingServerId>central</publishingServerId>
+              <!--
+                Deliberately not autoPublish. The first release should be
+                inspected in the Central Portal and released by hand; once
+                published, a version is immutable.
+              -->
+              <autoPublish>false</autoPublish>
+              <waitUntil>validated</waitUntil>
+            </configuration>
           </plugin>
         </plugins>
       </build>

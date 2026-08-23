@@ -155,8 +155,7 @@ they can be read, reviewed, and changed by people who did not write them.
 
 ## Build
 
-Mnemosyne is primarily Java, with some Python components under `agility/`. It
-builds with Maven 3 and runs on **JDK 21**.
+Mnemosyne is Java, built with Maven 3, and runs on **JDK 21**.
 
 ```bash
 mvn clean install

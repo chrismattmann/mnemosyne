@@ -23,6 +23,11 @@ the License.
     <version>1.11.0</version>
     <relativePath>../../core/pom.xml</relativePath>
   </parent>
+  <properties>
+    <!-- Not published to Maven Central; see the publish scope in README. -->
+    <maven.deploy.skip>true</maven.deploy.skip>
+  </properties>
+
   <artifactId>curator-services</artifactId>
   <packaging>war</packaging>
   <name>CAS Curation Web Services</name>

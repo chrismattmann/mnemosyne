@@ -23,6 +23,11 @@
     <version>1.11.0</version>
     <relativePath>../../../core</relativePath>
   </parent>
+  <properties>
+    <!-- Not published to Maven Central; see the publish scope in README. -->
+    <maven.deploy.skip>true</maven.deploy.skip>
+  </properties>
+
   <artifactId>opsui-archetype</artifactId>
   <packaging>maven-archetype</packaging>
 

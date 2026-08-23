@@ -30,6 +30,8 @@
     <description>OODT OPSUI implemented with ReactJs</description>
 
     <properties>
+    <!-- Not published to Maven Central; see the publish scope in README. -->
+    <maven.deploy.skip>true</maven.deploy.skip>
         <docker.build.disabled>false</docker.build.disabled>
         <docker.image.name>oodt/opsui:latest</docker.image.name>
     </properties>
