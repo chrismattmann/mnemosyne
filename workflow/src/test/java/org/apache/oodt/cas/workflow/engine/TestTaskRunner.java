@@ -50,15 +50,13 @@ public class TestTaskRunner extends TestCase {
 
   private TaskQuerier querier;
 
-  public void testExecuteTasks() {
+  public void testExecuteTasks() throws Exception {
     FILOPrioritySorter prioritizer = new FILOPrioritySorter();
     MockProcessorQueue processorQueue = new MockProcessorQueue();
     querier = new MetSetterTaskQuerier(processorQueue, prioritizer);
     Thread querierThread = new Thread(querier);
     querierThread.start();
-    while (querier.getRunnableProcessors().size() != 2) {
-      assertNotNull(querier.getRunnableProcessors());
-    }
+    awaitRunnableProcessors(2, 60000);
     List<WorkflowProcessor> runnables = querier.getRunnableProcessors();
     assertNotNull(runnables);
     assertEquals(2, runnables.size());
@@ -73,9 +71,11 @@ public class TestTaskRunner extends TestCase {
     assertNotNull(testDir);
     runnerThread.start();
 
-    while (!testDir.exists()
-        || (testDir.exists() && testDir.listFiles().length != 2)) {
-    }
+    // Bounded, and it sleeps. This was an empty-bodied loop with no timeout,
+    // so a run where the second job file never appeared did not fail: it spun
+    // a core at full tilt until somebody killed the build. Whether it waited
+    // at all depended on files left in a shared directory by earlier tests.
+    awaitJobFiles(2, 60000);
 
     querier.setRunning(false);
     runnerThread.interrupt();
@@ -106,12 +106,58 @@ public class TestTaskRunner extends TestCase {
   @Override
   protected void tearDown() throws Exception {
     // blow away test file
-    deleteAllFiles(testDir.getAbsolutePath());
-    testDir.delete();
+    if (testDir != null) {
+      deleteAllFiles(testDir.getAbsolutePath());
+      testDir.delete();
+    }
     testDir = null;
     this.runner = null;
     this.querier = null;
     this.taskRunner = null;
+  }
+
+  /**
+   * Waits for the querier to make the expected number of processors runnable.
+   * Bounded and sleeping, for the same reason as {@link #awaitJobFiles}.
+   */
+  private void awaitRunnableProcessors(int expected, long timeoutMillis)
+      throws InterruptedException {
+    long deadline = System.currentTimeMillis() + timeoutMillis;
+    while (System.currentTimeMillis() < deadline) {
+      assertNotNull(querier.getRunnableProcessors());
+      if (querier.getRunnableProcessors().size() == expected) {
+        return;
+      }
+      Thread.sleep(50);
+    }
+    fail("Timed out after " + timeoutMillis + "ms waiting for " + expected
+        + " runnable processors; found "
+        + querier.getRunnableProcessors().size());
+  }
+
+  /**
+   * Waits for the runner to produce the expected number of job files.
+   *
+   * @param expected
+   *          How many job files the runnable processors should produce.
+   * @param timeoutMillis
+   *          How long to wait before calling it a failure.
+   */
+  private void awaitJobFiles(int expected, long timeoutMillis)
+      throws InterruptedException {
+    long deadline = System.currentTimeMillis() + timeoutMillis;
+    while (System.currentTimeMillis() < deadline) {
+      File[] files = testDir.listFiles();
+      if (files != null && files.length == expected) {
+        return;
+      }
+      Thread.sleep(50);
+    }
+
+    File[] files = testDir.listFiles();
+    fail("Timed out after " + timeoutMillis + "ms waiting for " + expected
+        + " job files in [" + testDir + "]; found "
+        + (files != null ? String.valueOf(files.length) : "no directory"));
   }
 
   private void deleteAllFiles(String startDir) {

@@ -20,6 +20,7 @@ package org.apache.oodt.cas.workflow.engine;
 //JDK imports
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.lang.reflect.InvocationTargetException;
 import java.util.Collections;
 import java.util.Date;
@@ -46,6 +47,8 @@ import org.apache.oodt.cas.workflow.structs.WorkflowTaskConfiguration;
  * 
  */
 public class QuerierAndRunnerUtils {
+
+  private File jobDir;
 
   private int dateGen;
   
@@ -95,14 +98,29 @@ public class QuerierAndRunnerUtils {
     return taskProcessor;
   }
   
+  /**
+   * The directory the tasks built here write their job files to.
+   *
+   * One directory per instance of this class, created once and shared by every
+   * task it builds, so that a test can count what its own tasks produced.
+   *
+   * This used to be a single fixed path, the system temp directory plus
+   * "jobs", shared by every test that touches these utilities. Three of them
+   * wrote into it and two deleted it in tearDown, so what a test saw depended
+   * on which tests had run before it and whether one was still running. That
+   * is how TestTaskRunner came to pass in a millisecond: it found two files
+   * left behind by an earlier test and never waited for the runner it exists
+   * to exercise.
+   */
+  public File getJobDir() throws IOException {
+    if (this.jobDir == null) {
+      this.jobDir = Files.createTempDirectory("wengine-jobs").toFile();
+    }
+    return this.jobDir;
+  }
+
   private File getTmpPath() throws IOException{
-    File testDir;
-    String parentPath = File.createTempFile("test", "txt").getParentFile().getAbsolutePath();
-    parentPath = parentPath.endsWith("/") ? parentPath:parentPath + "/";
-    String testJobDirPath = parentPath + "jobs";
-    testDir = new File(testJobDirPath);
-    testDir.mkdirs();
-    return testDir;
+    return getJobDir();
   }
 
 }
