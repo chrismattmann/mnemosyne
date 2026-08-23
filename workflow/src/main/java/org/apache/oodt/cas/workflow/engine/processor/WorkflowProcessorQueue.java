@@ -263,6 +263,11 @@ public class WorkflowProcessorQueue {
           persist(instance);
           WorkflowProcessor subProcessor = fromWorkflowInstance(instance);
           processor.getSubProcessors().add(subProcessor);
+          // The parent listens to the child, so a child finishing is acted on
+          // at once instead of on the querier's next pass. The parent still
+          // recomputes from all its children when it reacts, so a lost
+          // notification costs latency rather than correctness.
+          subProcessor.getListeners().add(processor);
           synchronized (processorCache) {
             processorCache.put(instance.getId(), subProcessor);
           }
@@ -295,6 +300,11 @@ public class WorkflowProcessorQueue {
           persist(instance);
           WorkflowProcessor subProcessor = fromWorkflowInstance(instance);
           processor.getSubProcessors().add(subProcessor);
+          // The parent listens to the child, so a child finishing is acted on
+          // at once instead of on the querier's next pass. The parent still
+          // recomputes from all its children when it reacts, so a lost
+          // notification costs latency rather than correctness.
+          subProcessor.getListeners().add(processor);
           synchronized (processorCache) {
             processorCache.put(instance.getId(), subProcessor);
           }
@@ -331,6 +341,11 @@ public class WorkflowProcessorQueue {
           persist(instance);
           WorkflowProcessor subProcessor = fromWorkflowInstance(instance);
           processor.getSubProcessors().add(subProcessor);
+          // The parent listens to the child, so a child finishing is acted on
+          // at once instead of on the querier's next pass. The parent still
+          // recomputes from all its children when it reacts, so a lost
+          // notification costs latency rather than correctness.
+          subProcessor.getListeners().add(processor);
           synchronized (processorCache) {
             processorCache.put(instance.getId(), subProcessor);
           }

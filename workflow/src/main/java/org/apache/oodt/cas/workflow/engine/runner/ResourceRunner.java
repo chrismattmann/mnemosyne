@@ -265,7 +265,7 @@ public class ResourceRunner extends AbstractEngineRunnerBase implements CoreMetK
     WorkflowLifecycle lifecycle = getLifecycle(taskProcessor);
     WorkflowState state = lifecycle.createState("ExecutionComplete",
         "transition", msg);
-    taskProcessor.getWorkflowInstance().setState(state);
+    taskProcessor.setState(state);
     persist(taskProcessor.getWorkflowInstance());
   }
 
@@ -274,7 +274,7 @@ public class ResourceRunner extends AbstractEngineRunnerBase implements CoreMetK
     LOG.log(Level.WARNING, msg);
     WorkflowLifecycle lifecycle = getLifecycle(taskProcessor);
     WorkflowState state = lifecycle.createState("Failure", "done", msg);
-    taskProcessor.getWorkflowInstance().setState(state);
+    taskProcessor.setState(state);
     persist(taskProcessor.getWorkflowInstance());
   }
 

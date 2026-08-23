@@ -220,8 +220,43 @@ public abstract class WorkflowProcessor implements WorkflowProcessorListener,
    * (org.apache.oodt.cas.workflow.engine.WorkflowProcessor,
    * org.apache.oodt.cas.workflow.engine.ChangeType)
    */
+  /**
+   * Sets this processor's state and tells anyone listening.
+   *
+   * Use this rather than reaching through to the instance when the change
+   * should be seen by the rest of the tree; setting it on the instance
+   * directly is silent.
+   *
+   * @param state
+   *          The state to move to.
+   */
+  public void setState(WorkflowState state) {
+    this.workflowInstance.setState(state);
+    this.notifyChange(this, ChangeType.STATE);
+  }
+
+  /**
+   * Reacts to a change below, then passes it on.
+   *
+   * The listener machinery has been here since the port but nothing ever fired
+   * it and nothing was ever registered, so it did nothing at all. A parent now
+   * listens to its children, and a child changing state makes the parent work
+   * out what that means immediately rather than waiting for the querier to
+   * come round again -- which, on a nested workflow, could cost a pass per
+   * level.
+   *
+   * This is a shortcut, not a source of truth. The parent still recomputes
+   * from its children through {@link #isDone()} every time, so a notification
+   * that is missed, duplicated or delivered out of order costs latency and
+   * nothing else. Given that the alternative is a cached verdict that can go
+   * stale, and that a stale verdict here means reporting a failed workflow as
+   * successful, the recomputation is worth keeping.
+   */
   @Override
   public void notifyChange(WorkflowProcessor processor, ChangeType changeType) {
+    if (processor != this && ChangeType.STATE.equals(changeType)) {
+      this.nextState();
+    }
     for (WorkflowProcessorListener listener : this.getListeners()) {
       listener.notifyChange(this, changeType);
     }
@@ -259,7 +294,7 @@ public abstract class WorkflowProcessor implements WorkflowProcessorListener,
   /**
    * Advances this WorkflowProcessor to its next {@link WorkflowState}.
    */
-  public void nextState() {
+  public synchronized void nextState() {
     if (this.workflowInstance != null
         && this.workflowInstance.getState() != null) {
 
@@ -272,7 +307,7 @@ public abstract class WorkflowProcessor implements WorkflowProcessorListener,
         WorkflowState declaredNext = this.transitioner
             .nextState(this.workflowInstance);
         if (declaredNext != null) {
-          this.workflowInstance.setState(declaredNext);
+          this.setState(declaredNext);
         }
         return;
       }
@@ -314,11 +349,11 @@ public abstract class WorkflowProcessor implements WorkflowProcessorListener,
       }
 
       if (nextState != null) {
-        this.workflowInstance.setState(nextState);
+        this.setState(nextState);
       }
 
     } else {
-      this.workflowInstance.setState(helper.getLifecycleForProcessor(this)
+      this.setState(helper.getLifecycleForProcessor(this)
           .createState(
               "Unknown",
               "holding",
