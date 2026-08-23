@@ -26,7 +26,7 @@ fi
 export JAVA_HOME
 
 $JAVA_HOME/bin/java \
-        -Djava.ext.dirs=../lib \
+        -cp "../lib/*" \
         -Dorg.apache.oodt.cas.resource.properties=../etc/resource.properties \
         -Djava.util.logging.config.file=../etc/logging.properties \
         -Dlog4j.configurationFile=../etc/log4j2.xml \

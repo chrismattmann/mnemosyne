@@ -79,5 +79,5 @@ fi
 cd "$FILEMGR_HOME"/bin
 
 "$_RUNJAVA" $JAVA_OPTS $OODT_OPTS \
-  -Djava.endorsed.dirs=../lib \
+  -cp "../lib/*" \
   org.apache.oodt.cas.filemgr.tools.QueryTool "$@"
