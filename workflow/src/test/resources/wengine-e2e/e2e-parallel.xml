@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+Licensed to the Apache Software Foundation (ASF) under one or more contributor
+license agreements.  See the NOTICE.txt file distributed with this work for
+additional information regarding copyright ownership.  The ASF licenses this
+file to you under the Apache License, Version 2.0 (the "License"); you may not
+use this file except in compliance with the License.  You may obtain a copy of
+the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+License for the specific language governing permissions and limitations under
+the License.
+-->
+<!--
+  A second file on purpose. The repository is pointed at a directory, so more
+  than one file is the ordinary case, and until recently a second file emptied
+  the workflows a parallel block generates. Loading this alongside
+  e2e-workflow.xml also exercises resolving an id-ref across files.
+-->
+<cas:workflows xmlns="http://oodt.jpl.nasa.gov/2.0/cas"
+  xmlns:cas="http://oodt.jpl.nasa.gov/2.0/cas">
+
+  <!--
+    Two bare tasks in a parallel block. Neither can be started on its own, so
+    the repository dissolves this workflow and gives each task a generated
+    single-task workflow registered under this id as its event.
+  -->
+  <parallel id="urn:oodt:e2e:BothAtOnce" name="Both At Once">
+    <task id-ref="urn:oodt:e2e:Alpha"/>
+    <task id-ref="urn:oodt:e2e:Beta"/>
+  </parallel>
+
+  <!--
+    A sequential workflow holding a nested one, which becomes a redirect: the
+    child is started by an event rather than run in place.
+  -->
+  <sequential id="urn:oodt:e2e:Outer" name="Outer">
+    <task id-ref="urn:oodt:e2e:Alpha"/>
+    <sequential id="urn:oodt:e2e:Inner" name="Inner">
+      <task id-ref="urn:oodt:e2e:Beta"/>
+    </sequential>
+  </sequential>
+
+  <task id="urn:oodt:e2e:Alpha" name="Alpha"
+        class="org.apache.oodt.cas.workflow.engine.RecordingTask">
+    <conditions/>
+    <configuration>
+      <property name="RecordAs" value="alpha"/>
+    </configuration>
+  </task>
+
+  <task id="urn:oodt:e2e:Beta" name="Beta"
+        class="org.apache.oodt.cas.workflow.engine.RecordingTask">
+    <conditions/>
+    <configuration>
+      <property name="RecordAs" value="beta"/>
+    </configuration>
+  </task>
+
+</cas:workflows>
