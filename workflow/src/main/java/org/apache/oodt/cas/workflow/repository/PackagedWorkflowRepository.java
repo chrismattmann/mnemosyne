@@ -58,10 +58,110 @@ import javax.xml.parsers.DocumentBuilderFactory;
 //JDK imports
 
 /**
- * 
- * 
- * Loads Workflow2 (WEngine) Style Workflow XML files.
- * 
+ *
+ * Loads Workflow2 (WEngine) style workflow XML files.
+ *
+ * <h2>What it is for</h2>
+ *
+ * The older {@link XMLWorkflowRepository} reads a fixed set of files -
+ * <code>tasks.xml</code>, <code>conditions.xml</code>, <code>events.xml</code>
+ * - in which a workflow is a flat list of tasks. This one reads any number of
+ * files in a single dialect where workflows nest: a workflow may contain
+ * workflows, each declared sequential or parallel, to any depth. That nesting
+ * is what the queue-based engine was built to run.
+ *
+ * <p>
+ * It is selected by setting the workflow repository factory to
+ * {@link PackagedWorkflowRepositoryFactory} and pointing
+ * <code>org.apache.oodt.cas.workflow.wengine.packagedRepo.dir.path</code> at a
+ * directory. Every file in that directory is parsed; there are no reserved
+ * filenames.
+ * </p>
+ *
+ * <h2>The dialect</h2>
+ *
+ * Each file is rooted at <code>cas:workflows</code> and holds four kinds of
+ * element, listed in {@link Graph#processorIds}: <code>sequential</code>,
+ * <code>parallel</code>, <code>task</code> and <code>condition</code>. An
+ * element carrying an <code>id</code> is a definition; one carrying an
+ * <code>id-ref</code> is a reference to a definition, which may live in any of
+ * the parsed files. Definitions can therefore be written once and reused, which
+ * is most of the point of the dialect.
+ *
+ * <p>
+ * Note that the element <em>name</em> determines how a node executes.
+ * {@link Graph} reads an <code>execution</code> attribute and then overwrites
+ * it with the node name, so <code>&lt;conditions execution="parallel"&gt;</code>
+ * documents intent to a reader without changing what runs.
+ * </p>
+ *
+ * <h2>How a file becomes a model</h2>
+ *
+ * {@link #init()} makes three passes over every file, in order, because each
+ * depends on the one before it:
+ *
+ * <ol>
+ * <li>{@link #loadConfiguration} gathers <code>configuration</code> blocks.
+ * A block may name itself and be inherited elsewhere through
+ * <code>extends</code>, and <code>p:</code>-prefixed attributes on any element
+ * fold into the same static metadata.</li>
+ * <li>{@link #loadTaskAndConditionDefinitions} registers the standalone
+ * <code>task</code> and <code>condition</code> definitions, so that an
+ * <code>id-ref</code> encountered later resolves.</li>
+ * <li>{@link #loadGraphs} walks the XML recursively, building a {@link Graph}
+ * per element and linking it to its parent. {@link
+ * #expandWorkflowTasksAndConditions} then turns each Graph into the domain
+ * object its execution type calls for, and attaches it to the parent: a
+ * workflow into {@link #workflows}, a condition onto the enclosing workflow or
+ * task, a task onto the enclosing workflow.</li>
+ * </ol>
+ *
+ * <h2>Why this class is more than a parser</h2>
+ *
+ * The engine that consumes these models runs a flat workflow of tasks and
+ * understands conditions only on tasks. The XML expresses more than that, so
+ * the last two steps rewrite the model into something the engine can execute.
+ * This is the part worth knowing about, because the workflows handed out are
+ * deliberately not shaped like the file that was read.
+ *
+ * <ul>
+ * <li><b>Every workflow id in the file is an event.</b>
+ * {@link #computeEvents()} maps each workflow's id to itself, so a workflow is
+ * started by sending an event named after it; there is no separate event
+ * declaration in this dialect. The generated wrappers below are the exception:
+ * they are added to {@link #workflows} while computeEvents is already running
+ * over a snapshot, so they never get an event, and the two maps disagree about
+ * them.</li>
+ * <li><b>A nested workflow becomes a redirect.</b> Inside a
+ * <code>sequential</code> parent, a child workflow is replaced by a generated
+ * {@link BranchRedirector} task carrying the child's id as
+ * <code>eventName</code>. Reaching that task fires the event, which starts the
+ * child. Nesting is therefore flattened into a chain of events rather than
+ * executed as a tree.</li>
+ * <li><b>A parallel workflow does not survive as a workflow.</b> It is removed
+ * from {@link #workflows} entirely, and its children are registered under its
+ * event instead, so firing the event starts all of them at once. A child that
+ * is a bare task is first wrapped in a generated single-task workflow named
+ * <code>parallel-&lt;uuid&gt;</code>. Asking for a parallel workflow by id
+ * returns nothing; asking for the workflows of its event returns its
+ * children.</li>
+ * <li><b>Workflow-level conditions are hoisted into a task.</b>
+ * {@link #computeWorkflowConditions()} inserts a generated no-op task at
+ * position 0 carrying them, since the engine only enforces conditions attached
+ * to a task.</li>
+ * </ul>
+ *
+ * <p>
+ * All four rewrites happen during construction, so a model is fully expanded
+ * before any caller sees it, and the generated ids (<code>redirector-</code>,
+ * <code>parallel-</code>, and the conditions task) appear in anything that
+ * reports on a running workflow.
+ * </p>
+ *
+ * @see XMLWorkflowRepository
+ * @see Graph
+ * @see org.apache.oodt.cas.workflow.engine.PrioritizedQueueBasedWorkflowEngine
+ *
  * @author mattmann
  * @author bfoster
  */
