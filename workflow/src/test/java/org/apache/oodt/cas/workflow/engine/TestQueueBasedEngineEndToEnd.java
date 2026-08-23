@@ -71,6 +71,7 @@ public class TestQueueBasedEngineEndToEnd extends TestCase {
   protected void setUp() throws Exception {
     super.setUp();
     RecordingTask.reset();
+    GateCondition.reset();
 
     this.instanceRepo = new MemoryWorkflowInstanceRepository(500);
     this.runner = new AsynchronousLocalEngineRunner();
@@ -176,6 +177,132 @@ public class TestQueueBasedEngineEndToEnd extends TestCase {
         instanceRepo.getWorkflowInstanceById(inst.getId());
     assertEquals("and it should say it failed",
         "Failure", finished.getState().getName());
+  }
+
+  // ---- parallel ----------------------------------------------------------
+
+  /**
+   * A parallel block is dissolved by the repository: the workflow written in
+   * the file cannot be fetched by its id, and its children are registered
+   * under that id as an event instead. Starting them is how the block runs.
+   */
+  public void testParallelBlockRunsAllOfItsTasks() throws Exception {
+    assertNull("a parallel workflow is dissolved, not stored",
+        engine.getWorkflowRepository()
+            .getWorkflowById("urn:oodt:e2e:BothAtOnce"));
+
+    List<?> children = engine.getWorkflowRepository()
+        .getWorkflowsForEvent("urn:oodt:e2e:BothAtOnce");
+    assertEquals("each bare task should have been given a workflow",
+        2, children.size());
+
+    for (Object child : children) {
+      engine.startWorkflow((Workflow) child, new Metadata());
+    }
+
+    awaitRecorded(2);
+
+    List<String> ran = RecordingTask.recorded();
+    assertTrue("alpha should have run, got " + ran, ran.contains("alpha"));
+    assertTrue("beta should have run, got " + ran, ran.contains("beta"));
+  }
+
+  /**
+   * The generated wrappers survive being loaded alongside another file. Until
+   * recently the second file's pass emptied them and the task was lost, so
+   * starting one ran nothing at all.
+   */
+  public void testGeneratedWrapperStillCarriesItsTaskAcrossFiles()
+      throws Exception {
+    for (Object child : engine.getWorkflowRepository()
+        .getWorkflowsForEvent("urn:oodt:e2e:BothAtOnce")) {
+      assertEquals("a wrapper with no task would run nothing",
+          1, ((Workflow) child).getTasks().size());
+    }
+  }
+
+  /**
+   * Definitions resolve across files: these tasks are declared in one file and
+   * referenced from the workflow in another.
+   */
+  public void testIdRefResolvesAcrossFiles() throws Exception {
+    assertNotNull(engine.getWorkflowRepository()
+        .getWorkflowTaskById("urn:oodt:e2e:Alpha"));
+    assertNotNull(engine.getWorkflowRepository()
+        .getWorkflowById("urn:oodt:e2e:TwoStep"));
+  }
+
+  // ---- conditions: reproducer for #82, not yet passing --------------------
+
+  //
+  // Conditions do not gate anything in this engine: a condition on a task is
+  // never evaluated, and a condition on a workflow is evaluated and its answer
+  // discarded. Both are recorded in #82 along with why, so these three are
+  // deliberately not named test* and JUnit does not collect them. Rename them
+  // and they are the reproducer.
+  //
+  // They are kept here rather than pasted into the issue because the fixture
+  // and the gate condition they need are already in the tree, and because the
+  // shape of the assertion is the specification: a closed gate must stop the
+  // work, and the engine must be shown to have asked.
+  //
+
+  /**
+   * An open gate lets the work through. Establishes that the guarded workflow
+   * runs at all, so that the closed-gate case below means something.
+   */
+  public void reproduceOpenGateLetsTheTaskRun() throws Exception {
+    GateCondition.open(true);
+
+    engine.startWorkflow(modelFor("urn:oodt:e2e:GuardedTaskWorkflow"),
+        new Metadata());
+
+    awaitRecorded(1);
+    assertEquals(java.util.Arrays.asList("guarded-task"),
+        RecordingTask.recorded());
+  }
+
+  /**
+   * A closed gate must stop the task. A condition that is never consulted
+   * looks exactly like one that always passes, until it is supposed to stop
+   * something -- so this asserts both that the task did not run and that the
+   * engine actually asked.
+   */
+  public void reproduceClosedGateStopsTheTask() throws Exception {
+    GateCondition.open(false);
+
+    engine.startWorkflow(modelFor("urn:oodt:e2e:GuardedTaskWorkflow"),
+        new Metadata());
+
+    Thread.sleep(6000);
+
+    String observed = "evaluations=" + GateCondition.evaluations()
+        + " ran=" + RecordingTask.recorded();
+    assertEquals("a closed gate must stop the task running; " + observed,
+        java.util.Collections.emptyList(), RecordingTask.recorded());
+    assertTrue("the engine should have consulted the condition; " + observed,
+        GateCondition.evaluations() > 0);
+  }
+
+  /**
+   * A condition written on the workflow rather than the task. The repository
+   * hoists it into a generated task placed first, so it should gate the same
+   * way.
+   */
+  public void reproduceConditionOnTheWorkflowAlsoGates() throws Exception {
+    GateCondition.open(false);
+
+    engine.startWorkflow(modelFor("urn:oodt:e2e:GuardedWorkflow"),
+        new Metadata());
+
+    Thread.sleep(6000);
+
+    String observed = "evaluations=" + GateCondition.evaluations()
+        + " ran=" + RecordingTask.recorded();
+    assertEquals("a closed gate must stop the workflow's tasks; " + observed,
+        java.util.Collections.emptyList(), RecordingTask.recorded());
+    assertTrue("the hoisted condition should have been consulted; " + observed,
+        GateCondition.evaluations() > 0);
   }
 
   // ---- helpers -----------------------------------------------------------
