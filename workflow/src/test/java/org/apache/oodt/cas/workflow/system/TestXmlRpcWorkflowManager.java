@@ -77,7 +77,15 @@ public class TestXmlRpcWorkflowManager extends TestCase {
   }
 
   protected void tearDown() throws Exception {
-
+    // This used to be empty, so the manager kept port 50002 bound for the rest
+    // of the JVM. Three test classes in this module hardcode that port, and
+    // the two that ran later both failed with "Address already in use" -- not
+    // because of anything they did, but because nobody had let go of the
+    // socket.
+    if (wmgr != null) {
+      wmgr.shutdown();
+      wmgr = null;
+    }
   }
 
   private void startWorkflow() {
