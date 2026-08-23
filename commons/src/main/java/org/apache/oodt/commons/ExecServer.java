@@ -248,7 +248,6 @@ public class ExecServer {
 		XML.add(vmElement, "name", System.getProperty("java.vm.name", "UNKNOWN"));
 		XML.add(vmElement, "version", System.getProperty("java.version", "UNKNOWN"));
 		XML.add(vmElement, "classpath", System.getProperty("java.class.path", "UNKNOWN"));
-		XML.add(vmElement, "extdirs", System.getProperty("java.ext.dirs", "UNKNOWN"));
 		logElement = statusDocument.createElement("log");
 		serverElement.appendChild(logElement);
 	}

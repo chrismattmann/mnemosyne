@@ -91,12 +91,6 @@ if [ ! -x "$BASEDIR"/bin/setclasspath.sh ]; then
   fi
 fi
 
-# Don't override the endorsed dir if the user has set it previously
-if [ -z "$JAVA_ENDORSED_DIRS" ]; then
-  # Set the default -Djava.endorsed.dirs argument
-  JAVA_ENDORSED_DIRS="$BASEDIR"/endorsed
-fi
-
 # OSX hack to CLASSPATH
 JIKESPATH=
 if [ `uname -s` = "Darwin" ]; then

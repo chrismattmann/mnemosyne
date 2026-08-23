@@ -25,6 +25,27 @@ jobs:
           java-version: '21'
           cache: maven
 
+      # java.ext.dirs and java.endorsed.dirs were removed in Java 9, and a JVM
+      # given either one refuses to start. Every launcher script in the tree
+      # passed one until #75. The file count is asserted first so that a scan
+      # which matched nothing cannot pass for a clean tree.
+      - name: Check for JVM flags removed in Java 9
+        run: |
+          set -e
+          # .github is skipped because this step names the flags itself.
+          scan() {
+            find . -path ./.git -prune -o -path ./.github -prune \
+                 -o -path '*/target' -prune -o -type f -print
+          }
+          FILES=$(scan | wc -l)
+          echo "scanning $FILES files"
+          test "$FILES" -gt 1000
+          if scan | xargs grep -l 'java\.ext\.dirs\|java\.endorsed\.dirs' 2>/dev/null | grep .; then
+            echo "::error::the files above use a JVM flag removed in Java 9; use -cp instead"
+            exit 1
+          fi
+          echo "no removed JVM flags present"
+
       # The reactor builds and tests every module. Deploy and signing live in
       # the release profile and are deliberately not exercised here; a pull
       # request should never need a GPG key to go green.
