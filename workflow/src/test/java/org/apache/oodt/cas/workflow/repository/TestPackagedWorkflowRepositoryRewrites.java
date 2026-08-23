@@ -74,17 +74,15 @@ public class TestPackagedWorkflowRepositoryRewrites extends TestCase {
   }
 
   /**
-   * The generated wrappers are the exception, and the two maps disagree about
-   * them: they are workflows, but they are not events.
+   * A generated wrapper is a workflow like any other: listed, and startable by
+   * an event of its own.
    *
-   * computeEvents takes a snapshot of the workflows before it starts, and the
-   * wrappers are created while it runs, so nothing ever registers an event for
-   * them. The effect is reasonable -- a wrapper exists only to carry one task
-   * inside its parent, and starting it alone would be meaningless -- but it is
-   * worth knowing that getWorkflows() and getRegisteredEvents() do not agree.
+   * It used not to be. Wrappers are built while computeEvents is already
+   * iterating a snapshot taken before they existed, so nothing came back to
+   * register an event for them, and getWorkflows and getRegisteredEvents
+   * disagreed about which workflows existed.
    */
-  public void testGeneratedWrappersAreWorkflowsButNotEvents()
-      throws Exception {
+  public void testGeneratedWrappersAreWorkflowsAndEvents() throws Exception {
     String wrapperId = null;
     for (Object workflow : helloGoodbye.getWorkflows()) {
       if (((Workflow) workflow).getId().startsWith("parallel-")) {
@@ -93,11 +91,24 @@ public class TestPackagedWorkflowRepositoryRewrites extends TestCase {
     }
 
     assertNotNull("the wrapper is in the workflow map", wrapperId);
-    assertFalse("but it has no event of its own",
+    assertTrue("and has an event of its own",
         helloGoodbye.getRegisteredEvents().contains(wrapperId));
+    assertEquals("which starts exactly it", 1,
+        helloGoodbye.getWorkflowsForEvent(wrapperId).size());
   }
 
-  // ---- rewrite 2 and 3: parallel workflows are dissolved -----------------
+  /**
+   * With that fixed, the two maps agree: everything listed as a workflow can
+   * be started.
+   */
+  public void testEveryWorkflowIsStartable() throws Exception {
+    List events = helloGoodbye.getRegisteredEvents();
+    for (Object workflow : helloGoodbye.getWorkflows()) {
+      String id = ((Workflow) workflow).getId();
+      assertTrue("workflow " + id + " should be startable as an event",
+          events.contains(id));
+    }
+  }
 
   /**
    * The headline surprise. A parallel workflow is removed from the workflow
@@ -172,6 +183,43 @@ public class TestPackagedWorkflowRepositoryRewrites extends TestCase {
         3, first.getConditions().size());
   }
 
+  // ---- more than one file -------------------------------------------------
+
+  /**
+   * The repository is pointed at a directory, so more than one file is the
+   * normal case, and the second file must not damage what the first produced.
+   *
+   * computeEvents rebuilds a workflow's task list from its graph's children.
+   * A generated wrapper has its task set directly and its graph has no
+   * children at all, so a second pass over one clears the task and rebuilds
+   * nothing, leaving an empty workflow and losing the task.
+   */
+  public void testGeneratedWrapperSurvivesASecondFile() throws Exception {
+    PackagedWorkflowRepository repo = repositoryForBoth();
+
+    Workflow wrapper = null;
+    for (Object w : repo.getWorkflowsForEvent("urn:oodt:TestParallel")) {
+      if (((Workflow) w).getId().startsWith("parallel-")) {
+        wrapper = (Workflow) w;
+      }
+    }
+
+    assertNotNull("the wrapper should still exist", wrapper);
+    assertEquals("and must not have been emptied by the second file's pass",
+        1, wrapper.getTasks().size());
+  }
+
+  /**
+   * Nothing should be registered twice because there happened to be two files.
+   */
+  public void testWorkflowsAreNotDuplicatedAcrossFiles() throws Exception {
+    PackagedWorkflowRepository repo = repositoryForBoth();
+
+    List children = repo.getWorkflowsForEvent("urn:oodt:TestParallel");
+    assertEquals("one nested workflow and one wrapped task, once each",
+        2, children.size());
+  }
+
   // ---- definitions are shared across the parse ---------------------------
 
   /**
@@ -194,6 +242,15 @@ public class TestPackagedWorkflowRepositoryRewrites extends TestCase {
         .getTimeoutSeconds());
     assertTrue(helloGoodbye
         .getWorkflowConditionById("urn:oodt:OptionalCondition").isOptional());
+  }
+
+  /**
+   * Both example files at once, which is what pointing the repository at a
+   * directory does.
+   */
+  private PackagedWorkflowRepository repositoryForBoth() throws Exception {
+    return new PackagedWorkflowRepository(java.util.Arrays.asList(
+        new File(HELLO_GOODBYE), new File(GRANULE_MAPS)));
   }
 
   private PackagedWorkflowRepository repositoryFor(String path)
