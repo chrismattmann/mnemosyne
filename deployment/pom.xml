@@ -27,9 +27,6 @@
   <properties>
     <!-- Not published to Maven Central; see the publish scope in README. -->
     <maven.deploy.skip>true</maven.deploy.skip>
-    <!-- central-publishing-maven-plugin does not honour maven.deploy.skip;
-         it stages the whole reactor unless told otherwise. -->
-    <skipPublishing>true</skipPublishing>
   </properties>
 
     <artifactId>oodt-deployment</artifactId>
