@@ -116,6 +116,68 @@ public interface WorkflowInstanceRepository extends Pagination {
             throws InstanceRepositoryException;
 
     /**
+     * Gets the {@link WorkflowInstance}s whose current state belongs to the
+     * given lifecycle <code>category</code>.
+     *
+     * Categories group states by what the engine can do with them, so this is
+     * the question a scheduler actually asks: it wants the instances that are
+     * still workable, not every instance ever recorded. Filtering after
+     * retrieval means a repository full of finished work is paged through and
+     * discarded on every pass, which is what this exists to avoid.
+     *
+     * Implementations backed by a queryable store should override this and
+     * push the filter down. The default is correct but reads everything.
+     *
+     * @param category the lifecycle category name, for example "done"
+     * @return the matching {@link WorkflowInstance}s, never null
+     * @throws InstanceRepositoryException If there is any error that occurs.
+     */
+    default List getWorkflowInstancesByCategory(String category)
+            throws InstanceRepositoryException {
+        return filterByCategory(category, true);
+    }
+
+    /**
+     * Gets the {@link WorkflowInstance}s whose current state does NOT belong to
+     * the given lifecycle <code>category</code>.
+     *
+     * The complement of {@link #getWorkflowInstancesByCategory(String)}, and
+     * the direction a scheduler needs: "everything not done".
+     *
+     * @param category the lifecycle category name to exclude, for example "done"
+     * @return the matching {@link WorkflowInstance}s, never null
+     * @throws InstanceRepositoryException If there is any error that occurs.
+     */
+    default List getWorkflowInstancesNotByCategory(String category)
+            throws InstanceRepositoryException {
+        return filterByCategory(category, false);
+    }
+
+    /**
+     * Correct-but-unoptimised fallback shared by the two category queries.
+     * An instance with no state cannot be in a category, so it is only
+     * returned by the excluding form.
+     */
+    default List filterByCategory(String category, boolean matching)
+            throws InstanceRepositoryException {
+        List<WorkflowInstance> results = new java.util.Vector<WorkflowInstance>();
+        List all = getWorkflowInstances();
+        if (all == null) {
+            return results;
+        }
+        for (Object each : all) {
+            WorkflowInstance inst = (WorkflowInstance) each;
+            boolean inCategory = inst.getState() != null
+                    && inst.getState().getCategory() != null
+                    && category.equals(inst.getState().getCategory().getName());
+            if (inCategory == matching) {
+                results.add(inst);
+            }
+        }
+        return results;
+    }
+
+    /**
      * Gets the number of {@link WorkflowInstances} with any <code>status</code>
      * being managed by this WorkflowInstanceRepository.
      * 
