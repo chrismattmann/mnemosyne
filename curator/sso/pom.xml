@@ -23,10 +23,14 @@ the License.
     <version>1.11.0</version>
     <relativePath>../../core/pom.xml</relativePath>
   </parent>
+  <properties>
+    <!-- Not published to Maven Central; see the publish scope in README. -->
+    <maven.deploy.skip>true</maven.deploy.skip>
+  </properties>
+
   <artifactId>curator-sso</artifactId>
   <packaging>jar</packaging>
   <name>OODT CAS Curator Single Sign On Security Package</name>
-  <properties />
   <!-- All dependencies should be listed in core/pom.xml and be ordered alphabetically by package and artifact.
      Once the dependency is in the core pom, it can then be used in other modules without the version tags.
      For example, within core/pom.xml:

@@ -27,6 +27,7 @@ the License.
   <artifactId>pcs-opsui</artifactId>
   <packaging>war</packaging>
   <name>Process Control System Operator Interface Webapp</name>
+  <description>Web interface for monitoring Mnemosyne file manager products, workflow instances, and resource manager jobs.</description>
   <properties>
     <wicket.version>1.4.17</wicket.version>
     <jetty.version>6.1.25</jetty.version>

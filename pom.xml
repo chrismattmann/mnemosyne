@@ -24,9 +24,14 @@ the License.
     <relativePath>core/pom.xml</relativePath>
   </parent>
 
+  <properties>
+    <!-- Aggregator only; not published to Maven Central. -->
+    <maven.deploy.skip>true</maven.deploy.skip>
+  </properties>
+
   <artifactId>oodt</artifactId>
   <packaging>pom</packaging>
-  <name>Apache OODT</name>
+  <name>Mnemosyne</name>
   <description>Apache OODT is middleware for metadata.</description>
 
   <modules>

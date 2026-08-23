@@ -28,6 +28,8 @@ the License.
   <name>CAS Curation Interface</name>
   <description>A web application for managing policy for products and files and metadata that have been ingested via the CAS component.</description>
   <properties>
+    <!-- Not published to Maven Central; see the publish scope in README. -->
+    <maven.deploy.skip>true</maven.deploy.skip>
     <wicket.version>1.4.17</wicket.version>
   </properties>
   <!-- All dependencies should be listed in core/pom.xml and be ordered alphabetically by package and artifact.

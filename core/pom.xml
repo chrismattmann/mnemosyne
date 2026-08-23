@@ -28,7 +28,14 @@ the License.
   <version>1.11.0</version>
   <packaging>pom</packaging>
   <name>Mnemosyne Core</name>
+  <description>Shared build configuration and dependency management for
+    Mnemosyne, data pipeline and catalog middleware continuing Apache
+    OODT.</description>
   <properties>
+    <maven.gpg.plugin.version>3.2.7</maven.gpg.plugin.version>
+    <central.publishing.plugin.version>0.7.0</central.publishing.plugin.version>
+    <maven.source.plugin.version>3.3.1</maven.source.plugin.version>
+    <maven.javadoc.plugin.version>3.11.2</maven.javadoc.plugin.version>
     <maven.enforcer.plugin.version>3.5.0</maven.enforcer.plugin.version>
     <organizationLogo>http://www.apache.org/images/feather.gif</organizationLogo>
     <logo>/images/${project.artifactId}.jpg</logo>
@@ -709,17 +716,57 @@ mm
       </plugin>
       <plugin>
         <artifactId>maven-javadoc-plugin</artifactId>
-        <version>2.9</version>
+        <version>${maven.javadoc.plugin.version}</version>
         <configuration>
           <charset>UTF-8</charset>
           <docencoding>UTF-8</docencoding>
           <encoding>UTF-8</encoding>
+          <source>8</source>
+          <!--
+            This javadoc predates JDK 21's stricter doclint. Central requires
+            javadoc jars, so a malformed comment must not fail the release.
+          -->
+          <doclint>none</doclint>
+          <!--
+            failOnError stays true. With doclint off, malformed comments are
+            warnings rather than errors, and a genuine javadoc failure must
+            surface: the previous configuration masked one and attached an
+            empty jar, which is worse than failing.
+          -->
+          <failOnError>true</failOnError>
         </configuration>
         <executions>
           <execution>
             <id>attach-javadocs</id>
             <goals>
-              <goal>javadoc</goal>
+              <!--
+                jar, not javadoc. The javadoc goal generates HTML but attaches
+                no artifact; Maven Central requires a -javadoc.jar alongside
+                every published artifact.
+              -->
+              <goal>jar</goal>
+            </goals>
+            <phase>package</phase>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!--
+        Release publishing. Both plugins are confined to the `release` profile
+        so that ordinary builds neither require a GPG key nor contact Central.
+        Publish with:  mvn -Prelease deploy
+      -->
+
+      <!-- Central also requires a -sources.jar for every published artifact. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-source-plugin</artifactId>
+        <version>${maven.source.plugin.version}</version>
+        <executions>
+          <execution>
+            <id>attach-sources</id>
+            <goals>
+              <goal>jar-no-fork</goal>
             </goals>
             <phase>package</phase>
           </execution>
@@ -751,13 +798,14 @@ mm
       <!-- Produce JavaDoc -->
       <plugin>
         <artifactId>maven-javadoc-plugin</artifactId>
-        <version>3.6.3</version>
+        <version>${maven.javadoc.plugin.version}</version>
         <configuration>
           <charset>UTF-8</charset>
           <docencoding>UTF-8</docencoding>
           <encoding>UTF-8</encoding>
           <aggregate>true</aggregate>
           <source>8</source>
+          <doclint>none</doclint>
         </configuration>
       </plugin>
       <!-- Produce Source cross references -->
@@ -1021,48 +1069,22 @@ mm
     Apache project moved to the Attic. Discussion happens on GitHub.
   -->
   <scm>
-    <!--<connection>scm:svn:https://svn.apache.org/repos/asf/oodt/trunk/core</connection>
-    <developerConnection>scm:svn:https://svn.apache.org/repos/asf/oodt/trunk/core</developerConnection>
-    <url>http://svn.apache.org/viewvc/oodt/trunk/core</url>-->
-    <tag>0.13-SNAPSHOT</tag>
+    <connection>scm:git:https://github.com/chrismattmann/mnemosyne.git</connection>
+    <developerConnection>scm:git:https://github.com/chrismattmann/mnemosyne.git</developerConnection>
+    <url>https://github.com/chrismattmann/mnemosyne</url>
+    <tag>HEAD</tag>
   </scm>
   <issueManagement>
     <system>GitHub</system>
     <url>https://github.com/chrismattmann/mnemosyne/issues</url>
   </issueManagement>
   <profiles>
-    <profile>
-      <id>jdk1.8</id>
-	  <activation>
-	     <jdk>[1.8,)</jdk>
-	  </activation>
-	  <properties>
-	     <additionalparam>-Xdoclint:none</additionalparam>
-	  </properties>
-      <build>
-        <plugins>
-          <plugin>
-            <artifactId>maven-javadoc-plugin</artifactId>
-            <version>2.10.3</version>
-            <configuration>
-              <charset>UTF-8</charset>
-              <docencoding>UTF-8</docencoding>
-              <encoding>UTF-8</encoding>
-            </configuration>
-            <executions>
-              <execution>
-                <id>attach-javadocs</id>
-                <goals>
-                  <goal>javadoc</goal>
-                </goals>
-                <phase>package</phase>
-                <configuration />
-              </execution>
-            </executions>
-          </plugin>
-        </plugins>
-      </build>
-    </profile>
+    <!--
+      The jdk1.8 profile was removed. It activated on [1.8,) - which includes
+      JDK 21 - and pinned maven-javadoc-plugin 2.10.3, a 2015 release that
+      cannot run against a modern JDK. Its only purpose was disabling doclint,
+      which the main javadoc configuration now does directly.
+    -->
     <profile>
       <id>audit</id>
       <activation>
@@ -1140,6 +1162,60 @@ mm
                 </configuration>
               </execution>
             </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+    <!--
+      Release profile. Signs artifacts and publishes to Maven Central under the
+      ai.mattmann namespace, which is verified by DNS TXT record on mattmann.ai.
+
+      Requires:
+        - a GPG key whose public half is on a public keyserver
+        - a Central Portal user token in ~/.m2/settings.xml under the server id
+          `central`
+    -->
+    <profile>
+      <id>release</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-gpg-plugin</artifactId>
+            <version>${maven.gpg.plugin.version}</version>
+            <executions>
+              <execution>
+                <id>sign-artifacts</id>
+                <phase>verify</phase>
+                <goals>
+                  <goal>sign</goal>
+                </goals>
+                <configuration>
+                  <!-- Non-interactive signing; the passphrase comes from the
+                       gpg agent rather than a prompt or a stored property. -->
+                  <gpgArguments>
+                    <arg>--pinentry-mode</arg>
+                    <arg>loopback</arg>
+                  </gpgArguments>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.sonatype.central</groupId>
+            <artifactId>central-publishing-maven-plugin</artifactId>
+            <version>${central.publishing.plugin.version}</version>
+            <extensions>true</extensions>
+            <configuration>
+              <publishingServerId>central</publishingServerId>
+              <!--
+                Deliberately not autoPublish. The first release should be
+                inspected in the Central Portal and released by hand; once
+                published, a version is immutable.
+              -->
+              <autoPublish>false</autoPublish>
+              <waitUntil>validated</waitUntil>
+            </configuration>
           </plugin>
         </plugins>
       </build>

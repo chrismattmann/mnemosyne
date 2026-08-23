@@ -24,6 +24,8 @@
     A set of REST-ful services for the Workflow Manager.
   </description>
   <properties>
+    <!-- Not published to Maven Central; see the publish scope in README. -->
+    <maven.deploy.skip>true</maven.deploy.skip>
     <docker.build.disabled>true</docker.build.disabled>
   </properties>
   <build>

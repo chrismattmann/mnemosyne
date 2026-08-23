@@ -28,6 +28,7 @@
   </parent>
   <artifactId>cas-cli</artifactId>
   <name>CAS Command Line Interface</name>
+  <description>Command line framework for Mnemosyne components, providing declarative option parsing and action dispatch.</description>
   <!-- All dependencies should be listed in core/pom.xml and be ordered alphabetically by package and artifact.
      Once the dependency is in the core pom, it can then be used in other modules without the version tags.
      For example, within core/pom.xml:
