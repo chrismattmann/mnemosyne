@@ -137,9 +137,17 @@ public class TaskRunner implements Runnable {
       boolean ranSomething = false;
 
       try {
-        if (nextTaskProcessor != null && runner.hasOpenSlots(nextTaskProcessor)) {
-          runner.execute(nextTaskProcessor);
-          ranSomething = true;
+        if (nextTaskProcessor != null) {
+          if (runner.hasOpenSlots(nextTaskProcessor)) {
+            runner.execute(nextTaskProcessor);
+            ranSomething = true;
+          } else {
+            // getNext() already took it off the queue. Dropping it here left
+            // the instance in whatever state the querier last set, with
+            // nothing left to run it and nothing reporting it as failed: the
+            // task simply vanished whenever the runner happened to be full.
+            taskQuerier.requeue(nextTaskProcessor);
+          }
         }
       } catch (Exception e) {
         LOG.log(Level.SEVERE, e.getMessage());
