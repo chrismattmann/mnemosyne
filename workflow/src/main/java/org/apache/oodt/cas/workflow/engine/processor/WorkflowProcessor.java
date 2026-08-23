@@ -321,9 +321,14 @@ public abstract class WorkflowProcessor implements WorkflowProcessorListener,
             "Workflow Processor: nextState: " + "loading workflow instance: ["
                 + this.workflowInstance.getId() + "]");
       } else if (currState.getName().equals("Loaded")) {
+        // "waiting", which is where the lifecycle files Queued. Naming
+        // "initial" here put the state in a stage that does not contain it,
+        // so a queued workflow reported the stage before the one it was
+        // actually in: percent complete was understated, and a query for the
+        // instances that are waiting did not return them.
         nextState = this.helper.getLifecycleForProcessor(this).createState(
             "Queued",
-            "initial",
+            "waiting",
             "Workflow Processor: nextState: " + "queueing instance: ["
                 + this.workflowInstance.getId() + "]");
       } else if (currState.getName().equals("Queued")) {
