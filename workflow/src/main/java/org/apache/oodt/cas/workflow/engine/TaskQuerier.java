@@ -56,6 +56,16 @@ public class TaskQuerier implements Runnable {
 
   private List<WorkflowProcessor> runnableProcessors;
 
+  /**
+   * Guards {@link #runnableProcessors}.
+   *
+   * The field is reassigned rather than mutated when a pass produces a new
+   * list, so synchronizing on the list itself locks whichever object the field
+   * happened to point at, and two threads can hold different locks while
+   * touching the same queue.
+   */
+  private final Object queueLock = new Object();
+
   private PrioritySorter prioritizer;
 
   private WorkflowInstanceRepository repo;
@@ -137,7 +147,7 @@ public class TaskQuerier implements Runnable {
             prioritizer.sort(processorsToRun);
           }
 
-          synchronized (runnableProcessors) {
+          synchronized (queueLock) {
             if (running) {
               runnableProcessors = processorsToRun;
             }
@@ -188,15 +198,47 @@ public class TaskQuerier implements Runnable {
    * Gets the next available {@link TaskProcessor} from the {@link List} of
    * {@link #runnableProcessors}. Removes that {@link TaskProcessor} from the
    * actual {@link #runnableProcessors} {@link List}.
-   * 
+   *
+   * Whatever this hands out has left the queue, so a caller that decides not
+   * to run it must give it back with {@link #requeue(TaskProcessor)} or the
+   * task is lost.
+   *
    * @return The next available {@link TaskProcessor} from the {@link List} of
-   *         {@link #runnableProcessors}.
+   *         {@link #runnableProcessors}, or null if there is none.
    */
   public TaskProcessor getNext() {
-    if (getRunnableProcessors().size() == 0) {
-      return null;
+    synchronized (queueLock) {
+      // Checking the size and removing were two separate reads of a field the
+      // querier thread reassigns, so the size could be read from one list and
+      // the removal made from another.
+      if (this.runnableProcessors.isEmpty()) {
+        return null;
+      }
+      return (TaskProcessor) this.runnableProcessors.remove(0);
     }
-    return (TaskProcessor) getRunnableProcessors().remove(0);
+  }
+
+  /**
+   * Returns a {@link TaskProcessor} taken by {@link #getNext()} to the front of
+   * the queue.
+   *
+   * A processor that cannot be run right now, because the runner has no free
+   * slot for it, has already been removed from the queue by the time that is
+   * known. Without this it would simply be dropped: the workflow instance stays
+   * in whatever state the querier last set, nothing runs it, and nothing
+   * reports it as failed. Returning it to the front keeps the ordering the
+   * prioritizer chose.
+   *
+   * @param taskProcessor
+   *          The processor to put back. Null is ignored.
+   */
+  public void requeue(TaskProcessor taskProcessor) {
+    if (taskProcessor == null) {
+      return;
+    }
+    synchronized (queueLock) {
+      this.runnableProcessors.add(0, taskProcessor);
+    }
   }
 
   private synchronized void persist(WorkflowInstance instance) {
