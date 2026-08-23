@@ -165,4 +165,16 @@ public interface WorkflowEngine {
      */
     Metadata getWorkflowInstanceMetadata(String workflowInstId);
 
+
+    /**
+     * Stops the engine and releases anything it is holding.
+     *
+     * Engines that start threads of their own have no other way to be told to
+     * stop, so a long-lived process could not shut one down and a test could
+     * not avoid leaking its threads. Defaulted to doing nothing so that an
+     * engine with nothing to release need not implement it.
+     */
+    default void shutdown() {
+    }
+
 }
