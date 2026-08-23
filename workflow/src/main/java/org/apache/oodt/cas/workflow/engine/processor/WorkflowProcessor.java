@@ -300,23 +300,10 @@ public abstract class WorkflowProcessor implements WorkflowProcessorListener,
                   + "running preconditiosn for workflow instance: ["
                   + this.workflowInstance.getId() + "]");
         } else {
-          if (this.isDone().getName().equals("ResultsSuccess")) {
-            nextState = this.helper.getLifecycleForProcessor(this).createState(
-                "Success",
-                "done",
-                "Workflow Processor: nextState: " + "workflow instance: ["
-                    + this.workflowInstance.getId()
-                    + "] completed successfully");
-          }
+          nextState = stateFromSubProcessors();
         }
       } else if (currState.getName().equals("Executing")) {
-        if(this.isDone().getName().equals("ResultsSuccess")){
-        nextState = this.helper.getLifecycleForProcessor(this).createState(
-            "Success",
-            "done",
-            "Workflow Processor: nextState: " + "workflow instance: ["
-                + this.workflowInstance.getId() + "] completed successfully");
-        }
+        nextState = stateFromSubProcessors();
       }
       else if(currState.getName().equals("ExecutionComplete")){
         nextState = this.helper.getLifecycleForProcessor(this).createState(
@@ -341,6 +328,43 @@ public abstract class WorkflowProcessor implements WorkflowProcessorListener,
     }
   }
   
+  /**
+   * Turns what the sub-processors have done into this processor's next state.
+   *
+   * Only success was ever acted on here. A processor whose children had failed
+   * got no transition at all and sat where it was, so a workflow with a failed
+   * task never finished and never reported anything -- it simply stopped. That
+   * is the backward status calculation Brian Foster asked for on the umbrella
+   * issue: a parent has to be able to move to a failed state, not only to a
+   * successful one.
+   *
+   * @return The state to move to, or null to stay put, which is the right
+   *         answer while children are still working.
+   */
+  private WorkflowState stateFromSubProcessors() {
+    WorkflowState result = this.isDone();
+
+    if (result.getName().equals("ResultsSuccess")) {
+      return this.helper.getLifecycleForProcessor(this).createState(
+          "Success",
+          "done",
+          "Workflow Processor: nextState: " + "workflow instance: ["
+              + this.workflowInstance.getId() + "] completed successfully");
+    }
+
+    if (result.getName().equals("ResultsFailure")) {
+      return this.helper.getLifecycleForProcessor(this).createState(
+          "Failure",
+          "done",
+          "Workflow Processor: nextState: " + "workflow instance: ["
+              + this.workflowInstance.getId() + "] failed: "
+              + result.getMessage());
+    }
+
+    // ResultsBail: children are still working, so there is nothing to do yet.
+    return null;
+  }
+
   /**
    * Evaluates whether or not this processor's {@link WorkflowState}
    * is in any of the provided state names.

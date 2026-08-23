@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+Licensed to the Apache Software Foundation (ASF) under one or more contributor
+license agreements.  See the NOTICE.txt file distributed with this work for
+additional information regarding copyright ownership.  The ASF licenses this
+file to you under the Apache License, Version 2.0 (the "License"); you may not
+use this file except in compliance with the License.  You may obtain a copy of
+the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+License for the specific language governing permissions and limitations under
+the License.
+-->
+<!--
+  The smallest workflow that still proves something end to end: two tasks that
+  must run, in order, through the queue-based engine.
+-->
+<cas:workflows xmlns="http://oodt.jpl.nasa.gov/2.0/cas"
+  xmlns:cas="http://oodt.jpl.nasa.gov/2.0/cas">
+
+  <sequential id="urn:oodt:e2e:TwoStep" name="Two Step">
+    <task id-ref="urn:oodt:e2e:First"/>
+    <task id-ref="urn:oodt:e2e:Second"/>
+  </sequential>
+
+  <task id="urn:oodt:e2e:First" name="First"
+        class="org.apache.oodt.cas.workflow.engine.RecordingTask">
+    <conditions/>
+    <configuration>
+      <property name="RecordAs" value="first"/>
+    </configuration>
+  </task>
+
+  <task id="urn:oodt:e2e:Second" name="Second"
+        class="org.apache.oodt.cas.workflow.engine.RecordingTask">
+    <conditions/>
+    <configuration>
+      <property name="RecordAs" value="second"/>
+    </configuration>
+  </task>
+
+</cas:workflows>
