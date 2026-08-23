@@ -60,7 +60,24 @@ public class WorkflowInstance {
 
   private static final Logger logger = LoggerFactory.getLogger(WorkflowInstance.class);
 
-  private ParentChildWorkflow workflow;
+  /**
+   * The workflow this instance runs, stored as given.
+   *
+   * This used to be declared as, and forcibly converted to, a
+   * ParentChildWorkflow, so every instance carried the graph model whether or
+   * not the engine handling it had any use for one. Engines that need the
+   * graph obtain it through {@link #getParentChildWorkflow()}, which derives
+   * it on demand, so the shared structure stays free of engine-specific types
+   * while both engines keep working.
+   */
+  private Workflow workflow;
+
+  /**
+   * Memoised graph view of {@link #workflow}. Derived, never authoritative:
+   * callers hold on to it and read through it repeatedly, so the same object
+   * is handed out each time rather than a fresh wrapper per call.
+   */
+  private transient ParentChildWorkflow graphView;
 
   private String id;
 
@@ -90,8 +107,7 @@ public class WorkflowInstance {
   public WorkflowInstance(Workflow workflow, String id, WorkflowState state,
       String currentTaskId, Date startDate, Date endDate, 
       Metadata sharedContext, int timesBlocked, Priority priority) {
-    this.workflow = workflow instanceof ParentChildWorkflow ?
-            (ParentChildWorkflow) workflow : new ParentChildWorkflow(workflow != null ? workflow : new Workflow());
+    this.workflow = workflow != null ? workflow : new Workflow();
     this.id = id;
     this.state = state;
     this.currentTaskId = currentTaskId;
@@ -159,7 +175,7 @@ public class WorkflowInstance {
    */
   @Deprecated
   public Workflow getWorkflow() {
-    return (Workflow) workflow;
+    return workflow;
   }
 
   /**
@@ -168,14 +184,10 @@ public class WorkflowInstance {
    */
   @Deprecated
   public void setWorkflow(Workflow workflow) {
-    if (workflow != null && workflow instanceof ParentChildWorkflow) {
-      this.workflow = (ParentChildWorkflow) workflow;
-    } else {
-      if (workflow == null) {
-        workflow = new Workflow();
-      }
-      this.workflow = new ParentChildWorkflow(workflow);
-    }
+    // Stored as given. No conversion here: whether this instance needs a graph
+    // is the engine's concern, not the structure's.
+    this.workflow = workflow != null ? workflow : new Workflow();
+    this.graphView = null;
   }
 
   /**
@@ -183,7 +195,14 @@ public class WorkflowInstance {
    * @return The workflow, with its parent/child relationships.
    */
   public ParentChildWorkflow getParentChildWorkflow() {
-    return this.workflow;
+    if (this.workflow instanceof ParentChildWorkflow) {
+      return (ParentChildWorkflow) this.workflow;
+    }
+    if (this.graphView == null) {
+      this.graphView = new ParentChildWorkflow(
+          this.workflow != null ? this.workflow : new Workflow());
+    }
+    return this.graphView;
   }
 
   /**
@@ -193,7 +212,10 @@ public class WorkflowInstance {
    *          The workflow to set.
    */
   public void setParentChildWorkflow(ParentChildWorkflow workflow) {
+    // A graph-shaped workflow is still just the workflow; store it directly so
+    // the view and the stored value cannot drift apart.
     this.workflow = workflow;
+    this.graphView = workflow;
   }
 
   /**

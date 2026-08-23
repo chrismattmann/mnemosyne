@@ -57,12 +57,59 @@ public class WorkflowProcessorQueue {
 
   private Map<String, WorkflowProcessor> processorCache;
 
+  protected static final String SEQUENTIAL = "sequential";
+
+  protected static final String PARALLEL = "parallel";
+
+  /**
+   * Execution type given to a workflow whose graph does not specify one.
+   *
+   * A workflow that arrived from a repository with no notion of graphs has no
+   * execution type, and the engine has to decide how to run it. Sequential is
+   * the safe reading of an ordered task list; setting
+   * org.apache.oodt.cas.workflow.wengine.packagedRepo.parallelProcessors to
+   * true says the tasks are independent and the graph should be left to run
+   * them in parallel.
+   */
+  private final String defaultExecutionType;
+
   public WorkflowProcessorQueue(WorkflowInstanceRepository repo,
       WorkflowLifecycleManager lifecycle, WorkflowRepository modelRepo) {
     this.repo = repo;
     this.lifecycle = lifecycle;
     this.modelRepo = modelRepo;
     this.processorCache = new ConcurrentHashMap<String, WorkflowProcessor>();
+    this.defaultExecutionType = Boolean.parseBoolean(System.getProperty(
+        "org.apache.oodt.cas.workflow.wengine.packagedRepo.parallelProcessors",
+        "false")) ? PARALLEL : SEQUENTIAL;
+  }
+
+  /**
+   * Supplies the graph detail the engine needs but the workflow did not carry.
+   *
+   * The alternative was to make every repository produce graph-shaped
+   * workflows, which pushes one engine's model into code the other engine also
+   * uses. Doing it here keeps the repositories unaware of graphs and leaves
+   * this engine able to run workflows from any of them.
+   *
+   * Without this the engine fell back to inspecting the workflow id for
+   * "task-workflow", "pre-cond" and "post-cond" prefixes to guess whether it
+   * held a composite. Those prefixes are still honoured below, because they
+   * are structural markers this engine creates itself, but a user's workflow
+   * is no longer classified by the shape of its id.
+   */
+  private void ensureExecutionType(WorkflowInstance instance) {
+    ParentChildWorkflow workflow = instance.getParentChildWorkflow();
+    if (workflow == null || workflow.getGraph() == null) {
+      return;
+    }
+    String executionType = workflow.getGraph().getExecutionType();
+    if (executionType == null || executionType.equals("")) {
+      workflow.getGraph().setExecutionType(this.defaultExecutionType);
+      LOG.log(Level.FINE, "Workflow instance: [" + instance.getId()
+          + "] carried no execution type; defaulting to ["
+          + this.defaultExecutionType + "]");
+    }
   }
 
   /**
@@ -137,6 +184,9 @@ public class WorkflowProcessorQueue {
     if (processorCache.containsKey(inst.getId())) {
       return processorCache.get(inst.getId());
     } else {
+      // Convert here, at this engine's boundary, rather than requiring the
+      // repository to have produced a graph.
+      ensureExecutionType(inst);
       if (inst.getParentChildWorkflow().getGraph() == null) {
         LOG.log(Level.SEVERE,
             "Unable to process Graph for workflow instance: [" + inst.getId()
