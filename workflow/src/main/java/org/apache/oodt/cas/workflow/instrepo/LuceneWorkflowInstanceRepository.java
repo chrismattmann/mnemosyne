@@ -33,6 +33,7 @@ import org.apache.lucene.index.Term;
 import org.apache.lucene.search.BooleanClause;
 import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.IndexSearcher;
+import org.apache.lucene.search.MatchAllDocsQuery;
 import org.apache.lucene.search.ScoreDoc;
 import org.apache.lucene.search.Sort;
 import org.apache.lucene.search.SortField;
@@ -363,6 +364,79 @@ public class LuceneWorkflowInstanceRepository extends
      * 
      * @see org.apache.oodt.cas.workflow.instrepo.WorkflowInstanceRepository#getWorkflowInstancesByStatus(java.lang.String)
      */
+    /**
+     * Pushes the category filter into the index rather than reading every
+     * instance and discarding most of them. The state category is already
+     * indexed as workflow_inst_state_category.
+     */
+    @Override
+    public List getWorkflowInstancesByCategory(String category)
+            throws InstanceRepositoryException {
+        return categorySearch(category, true);
+    }
+
+    /**
+     * The excluding form cannot be a single term query, so it is expressed as
+     * "match everything, then subtract this category" via MUST_NOT.
+     */
+    @Override
+    public List getWorkflowInstancesNotByCategory(String category)
+            throws InstanceRepositoryException {
+        return categorySearch(category, false);
+    }
+
+    private List categorySearch(String category, boolean matching)
+            throws InstanceRepositoryException {
+        IndexSearcher searcher;
+        List wInsts = new Vector();
+        try {
+            reader = DirectoryReader.open(indexDir);
+        } catch (IOException e) {
+            LOG.log(Level.WARNING, "Unable to open index directory: ["
+                    + idxFilePath + "]: Message: " + e.getMessage());
+            throw new InstanceRepositoryException(e.getMessage());
+        }
+        try {
+            searcher = new IndexSearcher(reader);
+            TermQuery categoryQuery = new TermQuery(
+                    new Term("workflow_inst_state_category", category));
+
+            org.apache.lucene.search.Query query;
+            if (matching) {
+                query = categoryQuery;
+            } else {
+                BooleanQuery.Builder builder = new BooleanQuery.Builder();
+                builder.add(new MatchAllDocsQuery(), BooleanClause.Occur.MUST);
+                builder.add(categoryQuery, BooleanClause.Occur.MUST_NOT);
+                query = builder.build();
+            }
+
+            Sort sort = new Sort(new SortField("workflow_inst_startdatetime",
+                    SortField.Type.STRING, true));
+            TopDocs check = searcher.search(query, 1, sort);
+            if (check.totalHits > 0) {
+                TopDocs topDocs = searcher.search(query, check.totalHits, sort);
+                for (ScoreDoc hit : topDocs.scoreDocs) {
+                    wInsts.add(toWorkflowInstance(searcher.doc(hit.doc)));
+                }
+            }
+        } catch (IOException e) {
+            LOG.log(Level.WARNING, "IOException searching index directory: ["
+                    + idxFilePath + "]: Message: " + e.getMessage());
+            throw new InstanceRepositoryException(e.getMessage());
+        } finally {
+            try {
+                if (reader != null) {
+                    reader.close();
+                }
+            } catch (IOException ignore) {
+                LOG.log(Level.FINEST, "Unable to close index reader: Message: "
+                        + ignore.getMessage());
+            }
+        }
+        return wInsts;
+    }
+
     public List getWorkflowInstancesByStatus(String status)
             throws InstanceRepositoryException {
         IndexSearcher searcher = null;

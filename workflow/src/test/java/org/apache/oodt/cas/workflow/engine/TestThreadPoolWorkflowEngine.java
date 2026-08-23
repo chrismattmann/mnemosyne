@@ -62,10 +62,14 @@ public class TestThreadPoolWorkflowEngine extends TestCase {
         assertEquals(0.0, ThreadPoolWorkflowEngine
             .getCurrentTaskWallClockMinutes(inst));
 
-        // now set start date time, and assert that wall clock minutes > 0
+        // now set start date time, and assert that wall clock minutes > 0.
+        // The start is put a minute in the past rather than at "now": elapsed
+        // time is measured from the start to the current instant, so a start
+        // of exactly now can land in the same millisecond as the measurement
+        // and legitimately yield 0.0. That made this assertion fail whenever
+        // the JVM was warm enough to execute both in under a millisecond.
         inst.setCurrentTaskStartDateTimeIsoStr(DateConvert
-                .isoFormat(new Date()));
-        System.out.println(ThreadPoolWorkflowEngine.getCurrentTaskWallClockMinutes(inst));
+                .isoFormat(new Date(System.currentTimeMillis() - 60000)));
         assertTrue(ThreadPoolWorkflowEngine
                 .getCurrentTaskWallClockMinutes(inst) > 0.0);
 

@@ -359,78 +359,82 @@ public class ThreadPoolWorkflowEngine implements WorkflowEngine, WorkflowStatus 
     if (inst == null) {
       return 0.0;
     }
-
-    Date currentDateOrStopTime = (inst.getEndDateTimeIsoStr() != null
-        && !inst.getEndDateTimeIsoStr().equals("") && !inst
-        .getEndDateTimeIsoStr().equals("null")) ? safeDateConvert(inst
-        .getEndDateTimeIsoStr()) : new Date();
-
-    Date workflowStartDateTime;
-
-    if (inst.getStartDateTimeIsoStr() == null || ((inst
-                                                       .getStartDateTimeIsoStr().equals("") || inst
-                                                       .getStartDateTimeIsoStr().equals("null")))) {
-      return 0.0;
-    }
-
-    try {
-      workflowStartDateTime = DateConvert.isoParse(inst
-          .getStartDateTimeIsoStr());
-    } catch (ParseException e) {
-      return 0.0;
-    }
-
-    long diffMs = currentDateOrStopTime.getTime()
-        - workflowStartDateTime.getTime();
-    double diffSecs = (diffMs * 1.0 / 1000.0);
-    return diffSecs / 60.0;
-
+    return computeWallClockMinutes(inst.getStartDateTimeIsoStr(),
+        inst.getEndDateTimeIsoStr(), inst.getId());
   }
 
   protected static double getCurrentTaskWallClockMinutes(WorkflowInstance inst) {
     if (inst == null) {
       return 0.0;
     }
+    return computeWallClockMinutes(inst.getCurrentTaskStartDateTimeIsoStr(),
+        inst.getCurrentTaskEndDateTimeIsoStr(), inst.getId());
+  }
 
-    Date currentDateOrStopTime = (inst.getCurrentTaskEndDateTimeIsoStr() != null
-        && !inst.getCurrentTaskEndDateTimeIsoStr().equals("") && !inst
-        .getCurrentTaskEndDateTimeIsoStr().equals("null")) ? safeDateConvert(inst
-        .getCurrentTaskEndDateTimeIsoStr()) : new Date();
-
-    Date workflowTaskStartDateTime;
-
-    if (inst.getCurrentTaskStartDateTimeIsoStr() == null || ((inst
-                                                                  .getCurrentTaskStartDateTimeIsoStr().equals("")
-                                                              || inst
-                                                                  .getCurrentTaskStartDateTimeIsoStr().equals("null")))) {
+  /**
+   * Elapsed minutes between two ISO timestamps, shared by the workflow and the
+   * current-task level.
+   *
+   * These were previously two near-identical copies which had drifted: the
+   * task level refused a start that falls after the end and returned 0.0,
+   * while the workflow level subtracted anyway and reported a negative
+   * duration. One implementation keeps them honest.
+   *
+   * A missing start means the clock has not started, so 0.0. A missing or
+   * unreadable end means still running, so elapsed time is measured to now.
+   *
+   * @param startIsoStr start timestamp, ISO formatted
+   * @param endIsoStr end timestamp, ISO formatted, or null/empty if running
+   * @param instId instance id, for logging only
+   * @return elapsed minutes, never negative
+   */
+  private static double computeWallClockMinutes(String startIsoStr,
+      String endIsoStr, String instId) {
+    if (isAbsent(startIsoStr)) {
       return 0.0;
     }
 
+    Date startDateTime;
     try {
-      workflowTaskStartDateTime = DateConvert.isoParse(inst
-          .getCurrentTaskStartDateTimeIsoStr());
+      startDateTime = DateConvert.isoParse(startIsoStr);
     } catch (ParseException e) {
       return 0.0;
     }
+    if (startDateTime == null) {
+      return 0.0;
+    }
 
-    // should never be in this state, so return 0
-    if (workflowTaskStartDateTime.after(currentDateOrStopTime)) {
-      LOG.log(
-          Level.WARNING,
-          "Start date time: ["
-              + DateConvert.isoFormat(workflowTaskStartDateTime)
-              + " of workflow inst [" + inst.getId() + "] is AFTER "
-              + "End date time: ["
-              + DateConvert.isoFormat(currentDateOrStopTime)
+    Date endOrNow = null;
+    if (!isAbsent(endIsoStr)) {
+      endOrNow = safeDateConvert(endIsoStr);
+    }
+    if (endOrNow == null) {
+      // No end recorded, or one that cannot be read: treat as still running
+      // rather than throwing on a null date.
+      endOrNow = new Date();
+    }
+
+    if (startDateTime.after(endOrNow)) {
+      LOG.log(Level.WARNING,
+          "Start date time: [" + DateConvert.isoFormat(startDateTime)
+              + "] of workflow inst [" + instId + "] is AFTER "
+              + "End date time: [" + DateConvert.isoFormat(endOrNow)
               + "] of workflow inst.");
       return 0.0;
     }
 
-    long diffMs = currentDateOrStopTime.getTime()
-        - workflowTaskStartDateTime.getTime();
-    double diffSecs = (diffMs * 1.0 / 1000.0);
-    return diffSecs / 60.0;
+    long diffMs = endOrNow.getTime() - startDateTime.getTime();
+    return (diffMs / 1000.0) / 60.0;
   }
+
+  /**
+   * These timestamps are persisted as the literal string "null" when unset, so
+   * that spelling has to be treated as absent alongside null and empty.
+   */
+  private static boolean isAbsent(String isoStr) {
+    return isoStr == null || isoStr.equals("") || isoStr.equals("null");
+  }
+
 
   private synchronized void persistWorkflowInstance(WorkflowInstance wInst)
       throws EngineException {

@@ -71,9 +71,14 @@ public class WorkflowProcessorQueue {
    * @return the list of available, Queued, {@link WorkflowProcessor}s.
    */
   public synchronized List<WorkflowProcessor> getProcessors() {
-    WorkflowInstancePage page;
+    // Ask the repository for the instances that are not done, rather than
+    // paging through everything and discarding the finished ones here. Once a
+    // deployment has run for a while the done instances outnumber the live
+    // ones, and a page of them yields no runnable work at all.
+    List<WorkflowInstance> instances;
     try {
-      page = repo.getPagedWorkflows(1);
+      instances = (List<WorkflowInstance>) (List<?>) repo
+          .getWorkflowInstancesNotByCategory("done");
     } catch (Exception e) {
       LOG.log(Level.SEVERE, e.getMessage());
       LOG.log(Level.WARNING, "Unable to load workflow processors: Message: "
@@ -82,10 +87,12 @@ public class WorkflowProcessorQueue {
     }
 
     List<WorkflowProcessor> processors = new Vector<WorkflowProcessor>(
-        page.getPageWorkflows() != null ? page.getPageWorkflows().size() : 0);
-    for (WorkflowInstance inst : (List<WorkflowInstance>) (List<?>) page
-        .getPageWorkflows()) {
-      if (!inst.getState().getCategory().getName().equals("done")) {
+        instances != null ? instances.size() : 0);
+    for (WorkflowInstance inst : instances) {
+      // Retained as a guard: an instance with no state cannot be categorised,
+      // and repositories are free to return those from the excluding query.
+      if (inst.getState() != null && inst.getState().getCategory() != null
+          && !inst.getState().getCategory().getName().equals("done")) {
         WorkflowProcessor processor;
         try {
           processor = fromWorkflowInstance(inst);

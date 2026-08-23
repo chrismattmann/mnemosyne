@@ -49,6 +49,9 @@ public class MemoryWorkflowInstanceRepository extends
     /* our workflow instance map: maps workfllowInstId to WorkflowInstance */
     private ConcurrentHashMap workflowInstMap = null;
 
+    private final java.util.concurrent.atomic.AtomicLong instIdSeq =
+            new java.util.concurrent.atomic.AtomicLong();
+
     /* our log stream */
     private static final Logger LOG = Logger
             .getLogger(MemoryWorkflowInstanceRepository.class.getName());
@@ -70,7 +73,12 @@ public class MemoryWorkflowInstanceRepository extends
      */
     public synchronized void addWorkflowInstance(WorkflowInstance wInst)
             throws InstanceRepositoryException {
-        String instId = "urn:" + DateConvert.isoFormat(new Date());
+        // The id was previously derived from the current time alone, so two
+        // instances added within the same millisecond produced the same key
+        // and the second silently replaced the first. A counter makes the id
+        // unique regardless of how fast instances arrive.
+        String instId = "urn:" + DateConvert.isoFormat(new Date()) + ":"
+                + instIdSeq.incrementAndGet();
         wInst.setId(instId);
         workflowInstMap.put(instId, wInst);
     }

@@ -300,6 +300,9 @@
         <artifactId>maven-assembly-plugin</artifactId>
         <version>2.6</version>
         <configuration>
+          <!-- Built for local use, not attached: these RADiX bundles are ~159 MB
+               each and are deployment archives rather than library artifacts. -->
+          <attach>false</attach>
           <appendAssemblyId>false</appendAssemblyId>
           <descriptors>
             <descriptor>src/main/assembly/assembly.xml</descriptor>

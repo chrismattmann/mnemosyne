@@ -33,7 +33,7 @@ the License.
     OODT.</description>
   <properties>
     <maven.gpg.plugin.version>3.2.7</maven.gpg.plugin.version>
-    <central.publishing.plugin.version>0.7.0</central.publishing.plugin.version>
+    <central.publishing.plugin.version>0.11.0</central.publishing.plugin.version>
     <maven.source.plugin.version>3.3.1</maven.source.plugin.version>
     <maven.javadoc.plugin.version>3.11.2</maven.javadoc.plugin.version>
     <maven.enforcer.plugin.version>3.5.0</maven.enforcer.plugin.version>
@@ -1030,6 +1030,31 @@ mm
             <extensions>true</extensions>
             <configuration>
               <publishingServerId>central</publishingServerId>
+              <!--
+                central-publishing stages the entire reactor and does not
+                honour maven.deploy.skip, so the modules that must not be
+                published are listed here explicitly. Keep this in sync with
+                the maven.deploy.skip properties in those modules.
+              -->
+              <excludeArtifacts>
+                <excludeArtifact>oodt</excludeArtifact>
+                <excludeArtifact>oodt-deployment</excludeArtifact>
+                <excludeArtifact>oodt-webapps</excludeArtifact>
+                <excludeArtifact>oodt-reactjs-opsui</excludeArtifact>
+                <excludeArtifact>oodt-streaming</excludeArtifact>
+                <excludeArtifact>cas-streaming-resource</excludeArtifact>
+                <excludeArtifact>oodt-webapp-components</excludeArtifact>
+                <excludeArtifact>curator-services</excludeArtifact>
+                <excludeArtifact>curator-sso</excludeArtifact>
+                <excludeArtifact>cas-curator</excludeArtifact>
+                <excludeArtifact>fmbrowser</excludeArtifact>
+                <excludeArtifact>wmonitor</excludeArtifact>
+                <excludeArtifact>workflow-services</excludeArtifact>
+                <excludeArtifact>maven-cas-install-plugin</excludeArtifact>
+                <excludeArtifact>archetypes</excludeArtifact>
+                <excludeArtifact>radix-archetype</excludeArtifact>
+                <excludeArtifact>opsui-archetype</excludeArtifact>
+              </excludeArtifacts>
               <!--
                 Deliberately not autoPublish. The first release should be
                 inspected in the Central Portal and released by hand; once
