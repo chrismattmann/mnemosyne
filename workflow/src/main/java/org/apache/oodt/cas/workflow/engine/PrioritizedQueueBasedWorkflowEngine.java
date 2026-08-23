@@ -65,6 +65,8 @@ public class PrioritizedQueueBasedWorkflowEngine implements WorkflowEngine {
   private WorkflowProcessorQueue processorQueue;
   private URL wmgrUrl;
   private EngineRunner runner;
+  private final TaskQuerier querier;
+  private final TaskRunner taskRunner;
 
   public PrioritizedQueueBasedWorkflowEngine(WorkflowInstanceRepository repo,
       PrioritySorter prioritizer, WorkflowLifecycleManager lifecycle,
@@ -79,19 +81,45 @@ public class PrioritizedQueueBasedWorkflowEngine implements WorkflowEngine {
     this.runner.setInstanceRepository(repo);
 
     // Task QUEUER thread
-    TaskQuerier querier = new TaskQuerier(processorQueue, this.prioritizer,
+    this.querier = new TaskQuerier(processorQueue, this.prioritizer,
         this.repo, querierWaitSeconds);
-    queuerThread = new Thread(querier);
+    queuerThread = new Thread(this.querier);
     queuerThread.start();
 
     // Task Runner thread
-    runnerThread = new Thread(new TaskRunner(querier, runner));
+    this.taskRunner = new TaskRunner(this.querier, runner);
+    runnerThread = new Thread(this.taskRunner);
     runnerThread.start();
 
   }
 
   public void setEngineRunner(EngineRunner runner) {
     this.runner = runner;
+  }
+
+  /**
+   * Stops the querier and runner threads this engine started.
+   *
+   * Both were started in the constructor and there was no way to stop either,
+   * so a process embedding this engine could not shut it down and every test
+   * that built one leaked two threads for the life of the JVM.
+   */
+  @Override
+  public void shutdown() {
+    this.querier.setRunning(false);
+    this.taskRunner.setRunning(false);
+    this.queuerThread.interrupt();
+    this.runnerThread.interrupt();
+    if (this.runner != null) {
+      this.runner.shutdown();
+    }
+  }
+
+  /**
+   * @return the model repository this engine reads workflows from
+   */
+  public WorkflowRepository getWorkflowRepository() {
+    return this.modelRepo;
   }
 
   /*
