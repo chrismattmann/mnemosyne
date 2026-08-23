@@ -20,6 +20,7 @@ package org.apache.oodt.cas.workflow.engine.processor;
 //OODT imports
 import org.apache.oodt.cas.workflow.engine.ChangeType;
 import org.apache.oodt.cas.workflow.lifecycle.WorkflowLifecycleManager;
+import org.apache.oodt.cas.workflow.lifecycle.WorkflowStateTransitioner;
 import org.apache.oodt.cas.workflow.lifecycle.WorkflowState;
 import org.apache.oodt.cas.workflow.structs.WorkflowInstance;
 
@@ -62,6 +63,7 @@ public abstract class WorkflowProcessor implements WorkflowProcessorListener,
                                              // instance
   protected WorkflowLifecycleManager lifecycleManager;
   protected WorkflowProcessorHelper helper;
+  protected WorkflowStateTransitioner transitioner;
 
   public WorkflowProcessor(WorkflowLifecycleManager lifecycleManager,
       WorkflowInstance workflowInstance) {
@@ -72,6 +74,7 @@ public abstract class WorkflowProcessor implements WorkflowProcessorListener,
     this.lifecycleManager = lifecycleManager;
     this.workflowInstance = workflowInstance;
     this.helper = new WorkflowProcessorHelper(lifecycleManager);
+    this.transitioner = new WorkflowStateTransitioner(lifecycleManager);
     WorkflowState initState = helper.getLifecycleForProcessor(this)
         .createState("Null", "initial",
             "Instance created by workflow processor.");
@@ -259,6 +262,21 @@ public abstract class WorkflowProcessor implements WorkflowProcessorListener,
   public void nextState() {
     if (this.workflowInstance != null
         && this.workflowInstance.getState() != null) {
+
+      // A lifecycle that says where its states can go decides this itself.
+      // The chain below is what happens when it says nothing, which is the
+      // case for every lifecycle file written before transitions could be
+      // declared, so those deployments keep the behaviour they have.
+      if (this.transitioner != null
+          && this.transitioner.declaresTransitions(this.workflowInstance)) {
+        WorkflowState declaredNext = this.transitioner
+            .nextState(this.workflowInstance);
+        if (declaredNext != null) {
+          this.workflowInstance.setState(declaredNext);
+        }
+        return;
+      }
+
       WorkflowState currState = this.workflowInstance.getState();
       WorkflowState nextState = null;
       if (currState.getName().equals("Null")) {

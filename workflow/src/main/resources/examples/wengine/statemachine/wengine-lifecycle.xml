@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+Licensed to the Apache Software Foundation (ASF) under one or more contributor
+license agreements.  See the NOTICE.txt file distributed with this work for
+additional information regarding copyright ownership.  The ASF licenses this
+file to you under the Apache License, Version 2.0 (the "License"); you may not
+use this file except in compliance with the License.  You may obtain a copy of
+the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+License for the specific language governing permissions and limitations under
+the License.
+-->
+<!--
+  A lifecycle that describes its own state machine.
+
+  The plain wengine-lifecycle.xml one directory up lists which states exist and
+  which stage each belongs to. Where a workflow goes next is not in that file;
+  it is a chain of string comparisons inside WorkflowProcessor, so changing the
+  state machine means changing Java.
+
+  This file adds three things, all optional. A stage may carry a priority. A
+  status may name the statuses that can follow it. Any of those may carry
+  preconditions deciding whether it can be entered yet. When a processor
+  changes state it asks each reachable state whether its preconditions hold,
+  and among those that say yes the highest-priority stage wins.
+
+  A lifecycle file that declares none of this parses and behaves exactly as it
+  always has, which is why nothing here is required.
+-->
+<cas:workflowlifecycles xmlns:cas="http://oodt.jpl.nasa.gov/1.0/cas">
+
+  <!--
+    Lifecycles defined elsewhere. Imports resolve relative to this file, and
+    what this file declares wins over what it imports, so a deployment can
+    take a shared set of lifecycles and override one of them.
+  -->
+  <import file="wengine-shared-lifecycles.xml"/>
+
+  <default>
+
+    <stage name="initial">
+      <status name="Null">
+        <description>Uninitialized State</description>
+        <next state="Loaded"/>
+      </status>
+      <status name="Loaded">
+        <description>Loading Complete</description>
+        <next state="Queued"/>
+      </status>
+    </stage>
+
+    <!--
+      Two stages a queued workflow can move into, and the priorities that
+      decide between them. Blocked has no preconditions, so it is always
+      eligible; PreConditionEval is eligible only once the shared context says
+      the inputs have arrived. Because running outranks waiting, a workflow
+      whose inputs are ready runs, and one whose inputs are not waits, without
+      either outcome being written down as an if statement.
+    -->
+    <stage name="waiting" priority="5">
+      <status name="Queued">
+        <description>Queued in WorkflowEngine</description>
+        <next state="PreConditionEval"/>
+        <next state="Blocked"/>
+      </status>
+      <status name="Blocked">
+        <description>Task Bailed</description>
+        <next state="Queued"/>
+      </status>
+      <status name="WaitingOnResources">
+        <description>Waiting for resource to execute</description>
+        <next state="Executing"/>
+      </status>
+    </stage>
+
+    <stage name="running" priority="20">
+      <status name="PreConditionEval">
+        <description>Executing PreConditions</description>
+        <!--
+          Entered only when a task has recorded that the inputs are staged.
+          Drop the value attribute to require nothing more than the key being
+          present, or add negate="true" to enter the state exactly when the
+          test would otherwise have failed.
+        -->
+        <precondition class="org.apache.oodt.cas.workflow.lifecycle.MetadataPreCondition">
+          <property name="key" value="InputsStaged"/>
+          <property name="value" value="true"/>
+        </precondition>
+        <next state="Executing"/>
+      </status>
+      <status name="Executing">
+        <description>Current being executed</description>
+        <next state="ExecutionComplete"/>
+      </status>
+      <status name="PostConditionEval">
+        <description>Executing PostConditions</description>
+        <next state="ExecutionComplete"/>
+      </status>
+    </stage>
+
+    <stage name="transition" priority="10">
+      <status name="PreConditionSuccess">
+        <description>All PreCondition Finished Successfully</description>
+        <next state="Executing"/>
+      </status>
+      <status name="ExecutionComplete">
+        <description>Execution Completed Successfully</description>
+        <next state="Success"/>
+      </status>
+    </stage>
+
+    <stage name="holding">
+      <status name="Unknown">
+        <description>State is Unknown</description>
+      </status>
+      <status name="Paused">
+        <description>Has been manually paused</description>
+        <next state="Queued"/>
+      </status>
+    </stage>
+
+    <stage name="results">
+      <status name="ResultsSuccess">
+        <description>Notification of success</description>
+        <next state="Success"/>
+      </status>
+      <status name="ResultsFailure">
+        <description>Notification of failure</description>
+        <next state="Failure"/>
+      </status>
+      <status name="ResultsBail">
+        <description>Notification to bail workflow</description>
+        <next state="Blocked"/>
+      </status>
+    </stage>
+
+    <!-- Nothing follows a done state, so none of these declare a next. -->
+    <stage name="done">
+      <status name="Stopped">
+        <description>Force Killed</description>
+      </status>
+      <status name="Off">
+        <description>Turned OFF</description>
+      </status>
+      <status name="Failure">
+        <description>Execution Failed</description>
+      </status>
+      <status name="Success">
+        <description>Successfully Completed</description>
+      </status>
+    </stage>
+
+  </default>
+
+</cas:workflowlifecycles>
