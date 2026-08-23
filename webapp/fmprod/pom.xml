@@ -161,6 +161,10 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-assembly-plugin</artifactId>
         <configuration>
+          <!-- Built for local use, not attached. These RADiX bundles are
+               deployment archives rather than library artifacts, and each
+               one is well over 100 MB. -->
+          <attach>false</attach>
           <descriptorRefs>
             <descriptorRef>jar-with-dependencies</descriptorRef>
           </descriptorRefs>

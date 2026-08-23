@@ -27,6 +27,9 @@
   <properties>
     <!-- Not published to Maven Central; see the publish scope in README. -->
     <maven.deploy.skip>true</maven.deploy.skip>
+    <!-- central-publishing-maven-plugin does not honour maven.deploy.skip;
+         it stages the whole reactor unless told otherwise. -->
+    <skipPublishing>true</skipPublishing>
   </properties>
 
     <artifactId>oodt-deployment</artifactId>
@@ -109,7 +112,10 @@
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-assembly-plugin</artifactId>
                         <configuration>
-                            <appendAssemblyId>false</appendAssemblyId>
+                            <!-- Built for local use, not attached: these RADiX bundles are ~159 MB
+               each and are deployment archives rather than library artifacts. -->
+          <attach>false</attach>
+          <appendAssemblyId>false</appendAssemblyId>
                             <descriptors>
                                 <descriptor>assembly.xml</descriptor>
                             </descriptors>
