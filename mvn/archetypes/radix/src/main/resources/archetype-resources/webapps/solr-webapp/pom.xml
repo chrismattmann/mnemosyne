@@ -54,7 +54,14 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-war-plugin</artifactId>
-        <version>2.1.1</version>
+        <!--
+          2.1.1 dates from 2011 and cannot run on a modern JDK: it fails to
+          load with "Cannot access defaults field of Properties", which is
+          strong encapsulation refusing it reflective access it used to take
+          for granted. A generated project therefore built its nine ordinary
+          modules and then died on the first war.
+        -->
+        <version>3.4.0</version>
         <configuration>
           <overlays>
             <overlay>

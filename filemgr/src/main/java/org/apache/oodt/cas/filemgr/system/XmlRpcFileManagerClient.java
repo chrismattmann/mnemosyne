@@ -146,12 +146,20 @@ public class XmlRpcFileManagerClient implements FileManagerClient {
             return false;
           }
         };
+        // The two were crossed: the socket timeout, which bounds waiting for
+        // data, was given the connection timeout, and the connect timeout,
+        // which bounds establishing the socket, was given the request timeout.
+        // So reaching an unreachable host blocked for the request timeout --
+        // an hour by default -- while a slow but live server was cut off after
+        // the connection timeout. The transport below pairs the same two
+        // properties the right way round, which is what makes the crossing
+        // visible.
         RequestConfig config = RequestConfig.custom()
-                .setSocketTimeout(Integer
+                .setConnectTimeout(Integer
                         .getInteger(
                                 "org.apache.oodt.cas.filemgr.system.xmlrpc.connectionTimeout.minutes",
                                 20) * 60 * 1000)
-                .setConnectTimeout(Integer
+                .setSocketTimeout(Integer
                         .getInteger(
                                 "org.apache.oodt.cas.filemgr.system.xmlrpc.requestTimeout.minutes",
                                 60) * 60 * 1000)
@@ -159,6 +167,11 @@ public class XmlRpcFileManagerClient implements FileManagerClient {
         Registry<AuthSchemeProvider> r = RegistryBuilder.<AuthSchemeProvider>create().build();
         HttpClient client = HttpClients.custom().setRetryHandler(myRetryHandler).setDefaultAuthSchemeRegistry(r).setDefaultRequestConfig(config).build();
 
+        // Note that these two setters do nothing here. CommonsXmlRpcTransport
+        // only builds a request config of its own when it is handed no client,
+        // and it is handed one on the line above, so the config built here is
+        // what actually applies. They are left in place because they are what
+        // the transport would use if the client were ever dropped.
         CommonsXmlRpcTransport transport = new CommonsXmlRpcTransport(url, client);
         transport
                 .setConnectionTimeout(Integer
