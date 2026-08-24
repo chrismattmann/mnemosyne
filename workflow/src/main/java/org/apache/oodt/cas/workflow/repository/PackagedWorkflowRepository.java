@@ -520,15 +520,23 @@ public class PackagedWorkflowRepository implements WorkflowRepository {
     }
   }
 
+  /**
+   * Formerly moved a workflow's conditions into a generated no-op task placed
+   * first, because the engine enforced conditions on tasks and not on
+   * workflows.
+   *
+   * The engine now gates a workflow's tasks on its conditions directly, so the
+   * generated task is not merely redundant: the same condition is evaluated
+   * once as the workflow's and again as the generated task's, which for a
+   * condition that queries a catalogue or waits on a file is real work done
+   * twice, and shows up in the ordering as the same condition recorded
+   * repeatedly before anything else runs.
+   *
+   * Kept as a method rather than deleted at the call site so the history of
+   * why the generated task existed stays attached to the thing it produced.
+   */
   private void computeWorkflowConditions() {
-    if (this.workflows != null && this.workflows.values().size() > 0) {
-      for (ParentChildWorkflow w : this.workflows.values()) {
-        if (w.getConditions() != null && w.getConditions().size() > 0) {
-          w.getTasks().add(0,
-              getGlobalWorkflowConditionsTask(w.getName(), w.getId(), w.getConditions()));
-        }
-      }
-    }
+    // Nothing to do. Conditions stay on the workflow that declared them.
   }
 
   private void computeEvents() throws WorkflowException {
@@ -610,6 +618,21 @@ public class PackagedWorkflowRepository implements WorkflowRepository {
 
   private void loadGraphs(List<Element> rootElements, Element graphElem,
       Graph parent, Metadata staticMetadata)
+      throws CommonsException, CasMetadataException, WorkflowException,
+      ParseException {
+    loadGraphs(rootElements, graphElem, parent, staticMetadata, null);
+  }
+
+  /**
+   * @param conditionType
+   *          Which phase a condition element belongs to, "pre" or "post", as
+   *          declared on the enclosing conditions block. Null for anything
+   *          that is not a condition, and treated as "pre" when a conditions
+   *          block does not say, which is how every file written before the
+   *          attribute was honoured reads.
+   */
+  private void loadGraphs(List<Element> rootElements, Element graphElem,
+      Graph parent, Metadata staticMetadata, String conditionType)
       throws CommonsException, CasMetadataException, WorkflowException, ParseException {
 
     LOG.log(Level.FINEST, "Visiting node: [" + graphElem.getNodeName() + "]");
@@ -619,7 +642,7 @@ public class PackagedWorkflowRepository implements WorkflowRepository {
     parent.getChildren().add(graph);
     graph.setParent(parent);
     if (!graphElem.getNodeName().equals("cas:workflows")) {
-      expandWorkflowTasksAndConditions(graph, staticMetadata);
+      expandWorkflowTasksAndConditions(graph, staticMetadata, conditionType);
     }
 
     for (String processorType : Graph.processorIds) {
@@ -630,21 +653,25 @@ public class PackagedWorkflowRepository implements WorkflowRepository {
         LOG.log(Level.FINE, "Found: [" + procTypeBlocks.size() + "] ["
             + processorType + "] processor types");
         for (Element procTypeBlock : procTypeBlocks) {
-          loadGraphs(rootElements, procTypeBlock, graph, staticMetadata);
+          loadGraphs(rootElements, procTypeBlock, graph, staticMetadata, null);
         }
       } else {
         if (processorType.equals("condition")) {
-          Element conditionsElem = XMLUtils.getFirstElement("conditions",
-              graphElem);
-          if (conditionsElem != null) {
+          // Every conditions block, not just the first. Reading one meant a
+          // workflow declaring pre and post conditions silently lost one of
+          // them, and which one depended on the order they were written in.
+          for (Element conditionsElem : this.getChildrenByTagName(graphElem,
+              "conditions")) {
+            String condType = conditionsElem.getAttribute("type");
             List<Element> procTypeBlockNodes = this.getChildrenByTagName(
                 conditionsElem, "condition");
             if (procTypeBlockNodes != null && procTypeBlockNodes.size() > 0) {
               LOG.log(Level.FINE, "Found: [" + procTypeBlockNodes.size()
-                  + "] linked condition definitions");
+                  + "] linked [" + (condType == null || condType.equals("")
+                      ? "pre" : condType) + "] condition definitions");
               for (Element procTypeBlockNode : procTypeBlockNodes) {
                 loadGraphs(rootElements, procTypeBlockNode, graph,
-                    staticMetadata);
+                    staticMetadata, condType);
               }
             }
           }
@@ -716,7 +743,8 @@ public class PackagedWorkflowRepository implements WorkflowRepository {
   }
 
   private void expandWorkflowTasksAndConditions(Graph graph,
-      Metadata staticMetadata) {
+      Metadata staticMetadata, String conditionType) {
+    boolean post = "post".equalsIgnoreCase(conditionType);
     if (graph.getExecutionType().equals("workflow")
         || graph.getExecutionType().equals("sequential")
         || graph.getExecutionType().equals("parallel")) {
@@ -761,7 +789,14 @@ public class PackagedWorkflowRepository implements WorkflowRepository {
           LOG.log(Level.FINEST, "Adding condition: [" + cond.getConditionName()
               + "] to parent workflow: ["
               + graph.getParent().getWorkflow().getName() + "]");
-          graph.getParent().getWorkflow().getConditions().add(cond);
+          // The type attribute has been in the dialect and in the shipped
+          // examples all along; nothing read it, so every condition became a
+          // precondition and a post-condition could not be expressed.
+          if (post) {
+            graph.getParent().getWorkflow().getPostConditions().add(cond);
+          } else {
+            graph.getParent().getWorkflow().getPreConditions().add(cond);
+          }
         } else if (graph.getParent().getTask() != null) {
           // getPreConditions, not getConditions. WorkflowTask.getConditions
           // builds a fresh list from the pre and post lists and returns it, so
@@ -769,7 +804,11 @@ public class PackagedWorkflowRepository implements WorkflowRepository {
           // line: no task has ever carried the conditions written on it.
           // Workflow.getConditions returns its real list, which is why a
           // condition on a workflow attached and one on a task did not.
-          graph.getParent().getTask().getPreConditions().add(cond);
+          if (post) {
+            graph.getParent().getTask().getPostConditions().add(cond);
+          } else {
+            graph.getParent().getTask().getPreConditions().add(cond);
+          }
         } else {
           LOG.log(Level.FINEST, "Condition: [" + graph.getModelId()
               + "] has not parent: it's a condition definition");
