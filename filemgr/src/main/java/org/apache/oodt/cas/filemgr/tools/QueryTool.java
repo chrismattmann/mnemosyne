@@ -142,7 +142,7 @@ public final class QueryTool {
     } else if (luceneQuery instanceof BooleanQuery) {
         List<BooleanClause> clauses = ((BooleanQuery) luceneQuery).clauses();
         for (BooleanClause clause : clauses) {
-            generateCASQuery(casQuery, (clause).getQuery());
+            generateCASQuery(casQuery, (clause).query());
         }
     } else {
         throw new RuntimeException(

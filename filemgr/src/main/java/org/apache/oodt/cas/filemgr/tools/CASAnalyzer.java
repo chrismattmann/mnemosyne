@@ -24,12 +24,9 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import org.apache.lucene.analysis.*;
-import org.apache.lucene.analysis.core.StopAnalyzer;
 import org.apache.lucene.analysis.core.StopFilter;
 import org.apache.lucene.analysis.core.WhitespaceTokenizer;
-import org.apache.lucene.analysis.custom.CustomAnalyzer;
-import org.apache.lucene.analysis.standard.StandardFilter;
-import org.apache.lucene.analysis.standard.StandardTokenizer;
+import org.apache.lucene.analysis.en.EnglishAnalyzer;
 
 //JDK imports
 import java.io.Reader;
@@ -55,7 +52,11 @@ public class CASAnalyzer extends Analyzer {
      * An array containing some common English words that are usually not useful
      * for searching.
      */
-    public static final CharArraySet STOP_WORDS = StopAnalyzer.ENGLISH_STOP_WORDS_SET;
+    // Was StopAnalyzer.ENGLISH_STOP_WORDS_SET. The same list, moved: Lucene
+    // put the English stop words on EnglishAnalyzer and StopAnalyzer no longer
+    // carries them.
+    public static final CharArraySet STOP_WORDS =
+        EnglishAnalyzer.ENGLISH_STOP_WORDS_SET;
     private Reader reader;
 
     /** Builds an analyzer. */
@@ -66,7 +67,9 @@ public class CASAnalyzer extends Analyzer {
     @Override
     protected TokenStreamComponents createComponents(String fieldName) {
         TokenStream result = new WhitespaceTokenizer(/*reader*/);
-        /*result = new StandardFilter(result);
+        /* StandardFilter is gone: it stopped doing anything in Lucene 4.7
+           and was removed in 7.
+        result = new StandardFilter(result);
         result = new StopFilter(result, STOP_WORDS);
 
         try {
