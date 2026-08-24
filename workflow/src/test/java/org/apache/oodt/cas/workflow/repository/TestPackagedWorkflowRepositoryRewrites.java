@@ -163,24 +163,46 @@ public class TestPackagedWorkflowRepositoryRewrites extends TestCase {
         ((WorkflowTask) generated.getTasks().get(0)).getTaskId());
   }
 
-  // ---- rewrite 4: workflow conditions are hoisted ------------------------
+  // ---- conditions stay where they were written ---------------------------
 
   /**
-   * The engine enforces conditions only on tasks, so conditions written on a
-   * workflow are moved into a generated task placed first.
+   * Conditions written on a workflow stay on it.
+   *
+   * They used to be moved into a generated no-op task placed first, because
+   * the engine enforced conditions on tasks and not on workflows. The engine
+   * now gates a workflow's tasks on its conditions directly, so the generated
+   * task became worse than redundant: the same condition was evaluated once as
+   * the workflow's and again as the generated task's, which for a condition
+   * that queries a catalogue or waits on a file is real work done twice.
    */
-  public void testWorkflowConditionsAreHoistedIntoALeadingTask()
-      throws Exception {
+  public void testWorkflowConditionsStayOnTheWorkflow() throws Exception {
     PackagedWorkflowRepository repo = repositoryFor(GRANULE_MAPS);
     Workflow granuleMaps = repo.getWorkflowById("urn:npp:GranuleMaps");
 
     assertNotNull(granuleMaps);
-    assertEquals("the workflow keeps its conditions for reporting",
+    assertEquals("the workflow keeps its conditions",
         3, granuleMaps.getConditions().size());
 
-    WorkflowTask first = (WorkflowTask) granuleMaps.getTasks().get(0);
-    assertEquals("the same conditions are carried by the leading task",
-        3, first.getConditions().size());
+    for (Object task : granuleMaps.getTasks()) {
+      assertFalse("no generated conditions task should be inserted",
+          ((WorkflowTask) task).getTaskId()
+              .endsWith("-global-conditions-eval"));
+    }
+  }
+
+  /**
+   * A condition written on a task attaches to that task. WorkflowTask's
+   * getConditions returns a fresh list built from the pre and post lists, so
+   * the parser adding to it added to a temporary: no task carried the
+   * conditions written on it, in any workflow, including the shipped examples.
+   */
+  public void testTaskConditionsAttachToTheTask() throws Exception {
+    WorkflowTask helloWorld = helloGoodbye
+        .getWorkflowTaskById("urn:oodt:HelloWorld");
+
+    assertNotNull(helloWorld);
+    assertEquals("HelloWorld declares one condition in hello-goodbye.xml",
+        1, helloWorld.getConditions().size());
   }
 
   // ---- more than one file -------------------------------------------------

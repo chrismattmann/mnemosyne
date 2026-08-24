@@ -62,15 +62,19 @@ public abstract class WorkflowProcessor implements WorkflowProcessorListener,
                                              // PackagedRepo: flow through
                                              // instance
   /**
-   * The conditions that must pass before this processor may run.
+   * What must succeed before this processor may run.
    *
-   * Held as the condition processors themselves rather than as a verdict, so
-   * that asking recomputes from their current states. Work is discovered from
-   * the instance repository, not by walking down from a parent, so a task
-   * arrives at the querier on its own and has to be able to see what governs
-   * it; nothing else on the path knows.
+   * Preconditions gate a task, and the tasks in turn gate the workflow's
+   * post-conditions, which is what makes the three phases ordered rather than
+   * merely present.
+   *
+   * Held as the processors themselves rather than as a verdict, so that asking
+   * recomputes from their current states. Work is discovered from the instance
+   * repository, not by walking down from a parent, so a task arrives at the
+   * querier on its own and has to be able to see what gates it; nothing else
+   * on the path knows.
    */
-  private List<WorkflowProcessor> governingConditions;
+  private List<WorkflowProcessor> prerequisites;
 
   protected WorkflowLifecycleManager lifecycleManager;
   protected WorkflowProcessorHelper helper;
@@ -81,7 +85,7 @@ public abstract class WorkflowProcessor implements WorkflowProcessorListener,
     this.subProcessors = new Vector<WorkflowProcessor>();
     this.listeners = new Vector<WorkflowProcessorListener>();
     this.excusedSubProcessorIds = new Vector<String>();
-    this.governingConditions = new Vector<WorkflowProcessor>();
+    this.prerequisites = new Vector<WorkflowProcessor>();
     this.minReqSuccessfulSubProcessors = -1;
     this.lifecycleManager = lifecycleManager;
     this.workflowInstance = workflowInstance;
@@ -362,6 +366,22 @@ public abstract class WorkflowProcessor implements WorkflowProcessorListener,
         } else {
           nextState = stateFromSubProcessors();
         }
+      } else if (currState.getName().equals("PreConditionEval")) {
+        // The way back out. A processor waiting on something moves here, and
+        // until now nothing moved it on again: TaskProcessor offers itself as
+        // runnable from Loaded, Queued or PreConditionSuccess, and this is
+        // none of those, so whatever it was waiting for could pass and the
+        // work would still never run. It showed up as an intermittent hang,
+        // because a processor only lands here at all if it is dispositioned
+        // while it still has something to wait for.
+        if (this.passedPreConditions()) {
+          nextState = this.helper.getLifecycleForProcessor(this).createState(
+              "PreConditionSuccess",
+              "transition",
+              "Workflow Processor: nextState: " + "preconditions passed for "
+                  + "workflow instance: [" + this.workflowInstance.getId()
+                  + "]");
+        }
       } else if (currState.getName().equals("Executing")) {
         nextState = stateFromSubProcessors();
       }
@@ -467,30 +487,30 @@ public abstract class WorkflowProcessor implements WorkflowProcessorListener,
   }  
 
   /**
-   * @return the conditions that gate this processor, never null
+   * @return what must succeed before this processor runs, never null
    */
-  public List<WorkflowProcessor> getGoverningConditions() {
-    return governingConditions;
+  public List<WorkflowProcessor> getPrerequisites() {
+    return prerequisites;
   }
 
   /**
-   * Declares the conditions that must pass before this processor may run.
+   * Declares what must succeed before this processor may run.
    *
-   * @param governingConditions
-   *          The condition processors, evaluated wherever they happen to run.
+   * @param prerequisites
+   *          The processors to wait on, wherever they happen to run.
    */
-  public void setGoverningConditions(
-      List<WorkflowProcessor> governingConditions) {
-    this.governingConditions = governingConditions != null
-        ? governingConditions : new Vector<WorkflowProcessor>();
+  public void setPrerequisites(
+      List<WorkflowProcessor> prerequisites) {
+    this.prerequisites = prerequisites != null
+        ? prerequisites : new Vector<WorkflowProcessor>();
   }
 
   protected boolean passedPreConditions() {
-    // Recomputed from the conditions every time rather than read from a
-    // verdict someone had to remember to update. A condition runs as its own
-    // instance, dispositioned by the querier like any other work, so its state
-    // is the ground truth and there is nothing to keep in step.
-    for (WorkflowProcessor condition : this.governingConditions) {
+    // Recomputed every time rather than read from a verdict someone had to
+    // remember to update. Each prerequisite runs as its own instance,
+    // dispositioned by the querier like any other work, so its state is the
+    // ground truth and there is nothing to keep in step.
+    for (WorkflowProcessor condition : this.prerequisites) {
       WorkflowState state = condition.getWorkflowInstance().getState();
       if (state == null || !"Success".equals(state.getName())) {
         return false;

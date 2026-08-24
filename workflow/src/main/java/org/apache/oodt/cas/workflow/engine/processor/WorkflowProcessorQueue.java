@@ -329,6 +329,8 @@ public class WorkflowProcessorQueue {
         }
 
         // handle its tasks
+        List<WorkflowProcessor> taskProcessors =
+            new Vector<WorkflowProcessor>();
         for (WorkflowTask task : inst.getParentChildWorkflow().getTasks()) {
           WorkflowInstance instance = new WorkflowInstance();
           WorkflowState taskWorkflowState = lifecycle.getDefaultLifecycle()
@@ -373,7 +375,8 @@ public class WorkflowProcessorQueue {
             condProcessor.getListeners().add(processor);
             taskGates.add(condProcessor);
           }
-          subProcessor.setGoverningConditions(taskGates);
+          subProcessor.setPrerequisites(taskGates);
+          taskProcessors.add(subProcessor);
           // The parent listens to the child, so a child finishing is acted on
           // at once instead of on the querier's next pass. The parent still
           // recomputes from all its children when it reacts, so a lost
@@ -385,44 +388,16 @@ public class WorkflowProcessorQueue {
         }
 
         // handle its post conditions
+        // Gated on the tasks, so they run after the work rather than beside
+        // it. A post-condition exists to judge what the tasks produced, so one
+        // evaluated while they are still running is judging nothing.
         for (WorkflowCondition cond : inst.getParentChildWorkflow()
             .getPostConditions()) {
-          WorkflowInstance instance = new WorkflowInstance();
-          WorkflowState condWorkflowState = lifecycle
-              .getDefaultLifecycle()
-              .createState(
-                  "Null",
-                  "initial",
-                  "Sub Post Condition Workflow created by Workflow Processor Queue for workflow instance: "
-                      + "[" + inst.getId() + "]");
-          instance.setState(condWorkflowState);
-          instance.setPriority(inst.getPriority());
-          shareContext(inst, instance);
-          WorkflowTask conditionTask = toConditionTask(cond);
-          instance.setCurrentTaskId(conditionTask.getTaskId());
-          Graph condGraph = new Graph();
-          condGraph.setExecutionType("condition");
-          condGraph.setCond(cond);
-          condGraph.setTask(conditionTask);
-          ParentChildWorkflow workflow = new ParentChildWorkflow(condGraph);
-          workflow.setId("post-cond-workflow-"
-              + inst.getParentChildWorkflow().getId());
-          workflow
-              .setName("Post Condition Workflow-" + cond.getConditionName());
-          workflow.getTasks().add(conditionTask);
-          instance.setParentChildWorkflow(workflow);
-          this.addToModelRepo(workflow);
-          persist(instance);
-          WorkflowProcessor subProcessor = fromWorkflowInstance(instance);
-          processor.getSubProcessors().add(subProcessor);
-          // The parent listens to the child, so a child finishing is acted on
-          // at once instead of on the querier's next pass. The parent still
-          // recomputes from all its children when it reacts, so a lost
-          // notification costs latency rather than correctness.
-          subProcessor.getListeners().add(processor);
-          synchronized (processorCache) {
-            processorCache.put(instance.getId(), subProcessor);
-          }
+          WorkflowProcessor condProcessor = buildConditionProcessor(inst, cond,
+              "post-cond-workflow-");
+          condProcessor.setPrerequisites(taskProcessors);
+          processor.getSubProcessors().add(condProcessor);
+          condProcessor.getListeners().add(processor);
         }
 
       } else {
