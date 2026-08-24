@@ -18,8 +18,12 @@
 
 package org.apache.oodt.cas.workflow.instrepo;
 
-import org.apache.commons.dbcp.PoolingDataSource;
-import org.apache.commons.pool.impl.GenericObjectPool;
+import org.apache.commons.dbcp2.ConnectionFactory;
+import org.apache.commons.dbcp2.DriverManagerConnectionFactory;
+import org.apache.commons.dbcp2.PoolableConnection;
+import org.apache.commons.dbcp2.PoolableConnectionFactory;
+import org.apache.commons.dbcp2.PoolingDataSource;
+import org.apache.commons.pool2.impl.GenericObjectPool;
 import org.apache.oodt.cas.metadata.util.PathUtils;
 import org.apache.oodt.cas.workflow.exceptions.WorkflowException;
 
@@ -75,9 +79,28 @@ public class DataSourceWorkflowInstanceRepositoryFactory implements
             throw new WorkflowException("Cannot load driver: " + driver);
         }
 
-        GenericObjectPool connectionPool = new GenericObjectPool(null);
+        // This built a pool with no factory in it and wrapped that in a
+        // DataSource. The url, user and password read just above were never
+        // used for anything: no ConnectionFactory was ever constructed, so the
+        // pool had nothing to make connections with and the first getConnection
+        // would fail. In dbcp 1.x that was easy to miss, because the pool's
+        // factory was set as a side effect of constructing a
+        // PoolableConnectionFactory, and the other two call sites in this
+        // repository construct one and discard it purely for that. Here nobody
+        // did. dbcp2 requires the factory up front, which is what brought it
+        // to light.
+        ConnectionFactory connectionFactory = new DriverManagerConnectionFactory(
+                jdbcUrl, user, pass);
+        PoolableConnectionFactory poolableConnectionFactory =
+                new PoolableConnectionFactory(connectionFactory, null);
+        poolableConnectionFactory.setDefaultReadOnly(false);
+        poolableConnectionFactory.setDefaultAutoCommit(true);
+        GenericObjectPool<PoolableConnection> connectionPool =
+                new GenericObjectPool<PoolableConnection>(
+                        poolableConnectionFactory);
+        poolableConnectionFactory.setPool(connectionPool);
 
-        dataSource = new PoolingDataSource(connectionPool);
+        dataSource = new PoolingDataSource<PoolableConnection>(connectionPool);
         quoteFields = Boolean
                 .getBoolean("org.apache.oodt.cas.workflow.instanceRep.datasource.quoteFields");
         pageSize = Integer.getInteger(
