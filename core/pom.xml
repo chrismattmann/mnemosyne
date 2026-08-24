@@ -501,15 +501,24 @@ the License.
         <artifactId>poi</artifactId>
         <version>3.2-FINAL</version>
       </dependency>
-      <dependency>
-        <groupId>org.apache.solr</groupId>
-        <artifactId>solr-core</artifactId>
-        <version>1.3.0</version>
-      </dependency>
+      <!--
+        solr-core is gone. It is the search server, and nothing here ever ran
+        one: every Solr class this repository touches comes from solrj, the
+        client. Carrying the server meant carrying its whole dependency tree,
+        including commons-httpclient 3.x and a Lucene old enough that filemgr
+        already had to exclude lucene-core to keep it away from the 6.6.5 the
+        rest of the build uses.
+
+        solrj moves from 1.3.0, released in 2008, to 10.0.0. Every class used
+        here survives the intervening seventeen years: SolrServerException,
+        ClientUtils and SolrInputDocument are unchanged, SolrServer became
+        SolrClient, and the concrete client is now built rather than
+        constructed.
+      -->
       <dependency>
         <groupId>org.apache.solr</groupId>
         <artifactId>solr-solrj</artifactId>
-        <version>1.3.0</version>
+        <version>10.0.0</version>
       </dependency>
       <dependency>
         <groupId>org.apache.tika</groupId>

@@ -39,9 +39,9 @@ import org.apache.oodt.cas.filemgr.util.RpcCommunicationFactory;
 import org.apache.oodt.cas.metadata.Metadata;
 import org.apache.oodt.cas.metadata.SerializableMetadata;
 import org.apache.oodt.cas.metadata.util.PathUtils;
-import org.apache.solr.client.solrj.SolrServer;
+import org.apache.solr.client.solrj.SolrClient;
 import org.apache.solr.client.solrj.SolrServerException;
-import org.apache.solr.client.solrj.impl.CommonsHttpSolrServer;
+import org.apache.solr.client.solrj.impl.HttpJdkSolrClient;
 import org.apache.solr.common.SolrInputDocument;
 import org.springframework.util.StringUtils;
 
@@ -53,6 +53,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -78,7 +80,7 @@ public class SolrIndexer {
 	private final static String ACCESS_URL = "access.url";
 	private final static String PRODUCT_NAME = "CAS.ProductName";
 	private IndexerConfig config = null;
-	private final SolrServer server;
+	private final SolrClient server;
 	private String fmUrl;
 	private String solrUrl;
 	private final static SimpleDateFormat solrFormat = new SimpleDateFormat(
@@ -138,8 +140,16 @@ public class SolrIndexer {
 
 
 		try {
-			server = new CommonsHttpSolrServer(this.solrUrl);
-		} catch (MalformedURLException e) {
+			// The address is still checked here. The old constructor validated
+			// it and threw; the builder does not, so without this an unusable
+			// URL would be accepted quietly and only surface at the first
+			// request, a long way from the mistake.
+			new URI(this.solrUrl).toURL();
+			// HttpJdkSolrClient speaks over the JDK's own HTTP client, so the
+			// Solr route no longer brings an HTTP stack of its own.
+			server = new HttpJdkSolrClient.Builder(this.solrUrl).build();
+		} catch (MalformedURLException | URISyntaxException
+				| IllegalArgumentException e) {
 			LOG.severe("Could not connect to Solr server " + this.solrUrl);
 			throw new InstantiationException(e.getMessage());
 		}
