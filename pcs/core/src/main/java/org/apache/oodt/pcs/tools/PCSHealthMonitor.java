@@ -44,7 +44,7 @@ import org.jboss.netty.channel.socket.nio.NioClientSocketChannelFactory;
 import org.jboss.netty.channel.socket.nio.NioWorkerPool;
 import org.jboss.netty.util.HashedWheelTimer;
 import org.apache.oodt.cas.resource.system.extern.AvroRpcBatchStub;
-import org.apache.oodt.cas.crawl.daemon.CrawlDaemonController;
+import org.apache.oodt.cas.crawl.daemon.AvroRpcCrawlDaemonController;
 import org.apache.oodt.cas.filemgr.metadata.CoreMetKeys;
 import org.apache.oodt.cas.filemgr.structs.Product;
 import org.apache.oodt.cas.metadata.Metadata;
@@ -62,7 +62,6 @@ import org.apache.oodt.pcs.health.WorkflowStatesFile;
 import org.apache.oodt.pcs.util.FileManagerUtils;
 import org.apache.oodt.pcs.util.ResourceManagerUtils;
 import org.apache.oodt.pcs.util.WorkflowManagerUtils;
-import org.apache.xmlrpc.XmlRpcClient;
 
 /**
  * 
@@ -379,9 +378,9 @@ public final class PCSHealthMonitor implements CoreMetKeys,
       CrawlInfo info = (CrawlInfo) o;
       String crawlUrlStr = "http://" + this.crawlProps.getCrawlHost() + ":"
                            + info.getCrawlerPort();
+      AvroRpcCrawlDaemonController controller = null;
       try {
-        CrawlDaemonController controller = new CrawlDaemonController(
-            crawlUrlStr);
+        controller = new AvroRpcCrawlDaemonController(crawlUrlStr);
         CrawlerHealth health = new CrawlerHealth();
         health.setCrawlerName(info.getCrawlerName());
         health.setNumCrawls(controller.getNumCrawls());
@@ -395,6 +394,16 @@ public final class PCSHealthMonitor implements CoreMetKeys,
         health.setNumCrawls(CRAWLER_DOWN_INT);
         health.setAvgCrawlTime(CRAWLER_DOWN_DOUBLE);
         statuses.add(health);
+      } finally {
+        // The Avro controller holds a socket; the XML-RPC one it replaced did
+        // not, so nothing here used to need closing.
+        if (controller != null) {
+          try {
+            controller.close();
+          } catch (IOException e) {
+            LOG.log(Level.FINE, "Unable to close crawler health client", e);
+          }
+        }
       }
 
     }
@@ -581,9 +590,9 @@ public final class PCSHealthMonitor implements CoreMetKeys,
       CrawlInfo info = (CrawlInfo) o;
       String crawlUrlStr = "http://" + this.crawlProps.getCrawlHost() + ":"
                            + info.getCrawlerPort();
+      AvroRpcCrawlDaemonController controller = null;
       try {
-        CrawlDaemonController controller = new CrawlDaemonController(
-            crawlUrlStr);
+        controller = new AvroRpcCrawlDaemonController(crawlUrlStr);
         System.out.println(info.getCrawlerName() + ":");
         System.out.println("Number of Crawls: " + controller.getNumCrawls());
         System.out.println("Average Crawl Time (seconds): "
@@ -592,6 +601,14 @@ public final class PCSHealthMonitor implements CoreMetKeys,
 
       } catch (Exception e) {
         System.out.println(info.getCrawlerName() + ": DOWN");
+      } finally {
+        if (controller != null) {
+          try {
+            controller.close();
+          } catch (IOException e) {
+            LOG.log(Level.FINE, "Unable to close crawler client", e);
+          }
+        }
       }
 
     }
@@ -702,13 +719,26 @@ public final class PCSHealthMonitor implements CoreMetKeys,
   }
 
   private boolean getCrawlerUp(String crawlUrlStr) {
-    CrawlDaemonController controller;
-
+    // Avro, like everything else PCS talks to. The XML-RPC controller this
+    // used is on its way out of Mnemosyne along with the transport under it.
+    //
+    // Closed explicitly, which the XML-RPC controller never needed: that one
+    // held no socket, and this one does. A health check runs on a timer, so a
+    // transceiver leaked per probe is a transceiver leaked per minute.
+    AvroRpcCrawlDaemonController controller = null;
     try {
-      controller = new CrawlDaemonController(crawlUrlStr);
+      controller = new AvroRpcCrawlDaemonController(crawlUrlStr);
       return controller.isRunning();
     } catch (Exception e) {
       return false;
+    } finally {
+      if (controller != null) {
+        try {
+          controller.close();
+        } catch (IOException e) {
+          LOG.log(Level.FINE, "Unable to close crawler health check client", e);
+        }
+      }
     }
   }
 
