@@ -60,6 +60,14 @@ import java.util.logging.Logger;
  * backend.
  * </p>
  * 
+ *
+ * <h2>Indexes written before Mnemosyne 1.12.0 cannot be read</h2>
+ *
+ * Lucene reads one major version back, and this moved from Lucene 6 to 10.
+ * A catalog written by Apache OODT will not open; it has to be built again by
+ * re-ingesting or re-indexing from whatever holds the authority. If the
+ * catalog is the only copy of anything, export it before upgrading. See the
+ * README.
  */
 public class LuceneCatalog implements Catalog {
 
@@ -404,19 +412,25 @@ public class LuceneCatalog implements Catalog {
             searcher = new IndexSearcher(reader);
             Term productIdTerm = new Term("product_id", productId);
             org.apache.lucene.search.Query query = new TermQuery(productIdTerm);
-            TopDocs topDocs = searcher.search(query,1);
+            // count(), not the hit count of a one-hit search. From Lucene 8
+            // a search stops counting once it can answer and reports a lower
+            // bound, so a query matching five documents would report one --
+            // and a uniqueness check would pass on a record that is not
+            // unique.
+            int hitCount = searcher.count(query);
+            TopDocs topDocs = searcher.search(query, Math.max(hitCount, 1));
 
             ScoreDoc[] hits = topDocs.scoreDocs;
 
             // should be exactly 1 hit
-            if (topDocs.totalHits == 0) {
+            if (hitCount == 0) {
             	throw new CatalogException("Product: [" + productId + "] NOT found in the catalog!");
             }
-            if (topDocs.totalHits > 1) {
+            if (hitCount > 1) {
                 throw new CatalogException("Product: [" + productId+ "] is not unique in the catalog!");
             }
 
-            Document productDoc = searcher.doc(hits[0].doc);
+            Document productDoc = searcher.storedFields().document(hits[0].doc);
             return toCompleteProduct(productDoc, getRefs,
                     getMet);
         } catch (IOException e) {
@@ -460,16 +474,22 @@ public class LuceneCatalog implements Catalog {
             Sort sort = new Sort(new SortField("CAS.ProductReceivedTime",
                     SortField.Type.STRING, true));
             //TODO FIX NUMBER OF RECORDS
-            TopDocs check = searcher.search(query, 1, sort);
-            if(check.totalHits>0) {
-                TopDocs topDocs = searcher.search(query, check.totalHits, sort);
+            // count() rather than reading totalHits off a one-hit search.
+            // Until Lucene 8 that count was exact; now a search stops
+            // counting once it has enough hits to answer and reports a
+            // lower bound, so asking for one hit and trusting the count
+            // would fetch one product where there are hundreds. The
+            // compiler is perfectly happy with it either way.
+            int checkCount = searcher.count(query);
+            if(checkCount > 0) {
+                TopDocs topDocs = searcher.search(query, checkCount, sort);
 
                 ScoreDoc[] hits = topDocs.scoreDocs;
 
                 // should be > 0 hits
                 if (hits.length > 0) {
                     // just get the first hit back
-                    Document productDoc = searcher.doc(hits[0].doc);
+                    Document productDoc = searcher.storedFields().document(hits[0].doc);
                     CompleteProduct prod = toCompleteProduct(productDoc, getRefs,
                             false);
                     return prod.getProduct();
@@ -540,16 +560,22 @@ public class LuceneCatalog implements Catalog {
             Sort sort = new Sort(new SortField("CAS.ProductReceivedTime",
                     SortField.Type.STRING, true));
             //TODO FIX NUMBER OF RECORDS
-            TopDocs check = searcher.search(query, 1, sort);
-            if(check.totalHits>0) {
-                TopDocs topDocs = searcher.search(query, check.totalHits, sort);
+            // count() rather than reading totalHits off a one-hit search.
+            // Until Lucene 8 that count was exact; now a search stops
+            // counting once it has enough hits to answer and reports a
+            // lower bound, so asking for one hit and trusting the count
+            // would fetch one product where there are hundreds. The
+            // compiler is perfectly happy with it either way.
+            int checkCount = searcher.count(query);
+            if(checkCount > 0) {
+                TopDocs topDocs = searcher.search(query, checkCount, sort);
 
                 ScoreDoc[] hits = topDocs.scoreDocs;
 
                 // should be > 0 hits
                 if (hits.length > 0) {
                     for (ScoreDoc hit : hits) {
-                        Document productDoc = searcher.doc(hit.doc);
+                        Document productDoc = searcher.storedFields().document(hit.doc);
                         CompleteProduct prod = toCompleteProduct(productDoc,
                             getRefs, false);
                         products.add(prod.getProduct());
@@ -606,16 +632,22 @@ public class LuceneCatalog implements Catalog {
             Sort sort = new Sort(new SortField("CAS.ProductReceivedTime",
                     SortField.Type.STRING, true));
             //TODO FIX NUMBER OF RECORDS
-            TopDocs check = searcher.search(query, 1, sort);
-            if(check.totalHits>0) {
-                TopDocs topDocs = searcher.search(query, check.totalHits, sort);
+            // count() rather than reading totalHits off a one-hit search.
+            // Until Lucene 8 that count was exact; now a search stops
+            // counting once it has enough hits to answer and reports a
+            // lower bound, so asking for one hit and trusting the count
+            // would fetch one product where there are hundreds. The
+            // compiler is perfectly happy with it either way.
+            int checkCount = searcher.count(query);
+            if(checkCount > 0) {
+                TopDocs topDocs = searcher.search(query, checkCount, sort);
 
                 ScoreDoc[] hits = topDocs.scoreDocs;
 
                 // should be > 0 hits
                 if (hits.length > 0) {
                     for (ScoreDoc hit : hits) {
-                        Document productDoc = searcher.doc(hit.doc);
+                        Document productDoc = searcher.storedFields().document(hit.doc);
                         CompleteProduct prod = toCompleteProduct(productDoc,
                             getRefs, false);
                         products.add(prod.getProduct());
@@ -659,19 +691,25 @@ public class LuceneCatalog implements Catalog {
             Term productIdTerm = new Term("product_id", product.getProductId());
             org.apache.lucene.search.Query query = new TermQuery(productIdTerm);
             //TODO FIX NUMBER OF RECORDS
-            TopDocs topDocs = searcher.search(query, 1);
+            // count(), not the hit count of a one-hit search. From Lucene 8
+            // a search stops counting once it can answer and reports a lower
+            // bound, so a query matching five documents would report one --
+            // and a uniqueness check would pass on a record that is not
+            // unique.
+            int hitCount = searcher.count(query);
+            TopDocs topDocs = searcher.search(query, Math.max(hitCount, 1));
 
             ScoreDoc[] hits = topDocs.scoreDocs;
 
             // should be exactly 1 hit
-            if (topDocs.totalHits != 1) {
+            if (hitCount != 1) {
                 throw new CatalogException("Product: ["
                         + product.getProductId()
                         + "] is not unique in the catalog! Num Hits: ["
                         + hits.length + "]");
             }
 
-            Document productDoc = searcher.doc(hits[0].doc);
+            Document productDoc = searcher.storedFields().document(hits[0].doc);
 
             CompleteProduct prod = toCompleteProduct(productDoc, false, true);
             return prod.getMetadata();
@@ -755,16 +793,22 @@ public class LuceneCatalog implements Catalog {
             LOG.log(Level.FINE, "Querying LuceneCatalog: q: [" + booleanQuery
                     + "]");
             //TODO FIX NUMBER OF RECORDS
-            TopDocs check = searcher.search(booleanQuery.build(), 1, sort);
-            if(check.totalHits>0) {
-                TopDocs topDocs = searcher.search(booleanQuery.build(), check.totalHits, sort);
+            // count() rather than reading totalHits off a one-hit search.
+            // Until Lucene 8 that count was exact; now a search stops
+            // counting once it has enough hits to answer and reports a
+            // lower bound, so asking for one hit and trusting the count
+            // would fetch one product where there are hundreds. The
+            // compiler is perfectly happy with it either way.
+            int checkCount = searcher.count(booleanQuery.build());
+            if(checkCount > 0) {
+                TopDocs topDocs = searcher.search(booleanQuery.build(), checkCount, sort);
 
                 ScoreDoc[] hits = topDocs.scoreDocs;
 
                 if (hits.length > 0) {
                     int i = 0;
                     while (products.size() < Math.min(n, hits.length)) {
-                        Document productDoc = searcher.doc(hits[i].doc);
+                        Document productDoc = searcher.storedFields().document(hits[i].doc);
                         CompleteProduct prod = toCompleteProduct(productDoc, false,
                                 false);
                         products.add(prod.getProduct());
@@ -1281,9 +1325,24 @@ public class LuceneCatalog implements Catalog {
 
             for (String val : values) {
                 doc.add(new Field(key, val, StringField.TYPE_STORED));
-                if(values.size()==1) {
-                    doc.add(new SortedDocValuesField(key, new BytesRef(val)));
-                }
+            }
+
+            // Exactly one doc values entry per field per document, always.
+            // This used to be written only when the field happened to have a
+            // single value, so whether a field could be sorted on depended on
+            // how many values one product happened to carry: ingest a product
+            // with two ProductTypes and the field lost its doc values for
+            // every product after it. Lucene tolerated the inconsistency once
+            // and now refuses the document outright, which is the better
+            // behaviour and is what surfaced this.
+            //
+            // A sorted doc values field holds one value, so a multi-valued
+            // field sorts on its first. That is a choice, but it is a
+            // consistent one, and it is what the single-valued case already
+            // did.
+            if (!values.isEmpty()) {
+                doc.add(new SortedDocValuesField(key,
+                        new BytesRef(values.get(0))));
             }
         }
 
@@ -1356,11 +1415,10 @@ public class LuceneCatalog implements Catalog {
             LOG.log(Level.FINE, "Querying LuceneCatalog: q: [" + booleanQuery
                     + "]");
 
-            //TODO FIX returned records
-            TopDocs hits = searcher.search(booleanQuery.build(), 1);
-
-
-            numHits = hits.totalHits;
+            // count(), since the number of results is the answer this method
+            // returns. Reading it off a search sized to one hit gave 1 for any
+            // non-empty query once Lucene stopped counting past what it needed.
+            numHits = searcher.count(booleanQuery.build());
         } catch (IOException e) {
             LOG.log(Level.WARNING,
                     "IOException when opening index directory: ["
@@ -1417,13 +1475,18 @@ public class LuceneCatalog implements Catalog {
             LOG.log(Level.FINE, "Querying LuceneCatalog: q: [" + booleanQuery
                     + "]");
             //TODO FIX NUMBER OF RECORDS
-            TopDocs check = searcher.search(booleanQuery.build(),1, sort);
-            if(check.totalHits>0) {
-                TopDocs topDocs = searcher.search(booleanQuery.build(), check.totalHits, sort);
+            // count() rather than reading totalHits off a one-hit search.
+            // Until Lucene 8 that count was exact; now a search stops
+            // counting once it has enough hits to answer and reports a
+            // lower bound, so asking for one hit and trusting the count
+            // would fetch one record where there are hundreds.
+            int checkCount = searcher.count(booleanQuery.build());
+            if(checkCount > 0) {
+                TopDocs topDocs = searcher.search(booleanQuery.build(), checkCount, sort);
 
                 // Calculate page size and set it while we have the results
                 if (page != null) {
-                    page.setTotalPages(PaginationUtils.getTotalPage(topDocs.totalHits, pageSize));
+                    page.setTotalPages(PaginationUtils.getTotalPage(checkCount, pageSize));
                 }
 
                 ScoreDoc[] hits = topDocs.scoreDocs;
@@ -1438,7 +1501,7 @@ public class LuceneCatalog implements Catalog {
 
                         for (int i = startNum; i < Math.min(hits.length,
                             (startNum + pageSize)); i++) {
-                            Document productDoc = searcher.doc(hits[i].doc);
+                            Document productDoc = searcher.storedFields().document(hits[i].doc);
 
                             CompleteProduct prod = toCompleteProduct(productDoc,
                                 false, false);
@@ -1447,7 +1510,7 @@ public class LuceneCatalog implements Catalog {
                     } else {
                         products = new Vector<Product>(hits.length);
                         for (int i = 0; i < hits.length; i++) {
-                            Document productDoc = searcher.doc(hits[i].doc);
+                            Document productDoc = searcher.storedFields().document(hits[i].doc);
 
                             CompleteProduct prod = toCompleteProduct(productDoc,
                                 false, false);

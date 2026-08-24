@@ -72,6 +72,13 @@ import java.util.logging.Logger;
  * An implementation of the {@link WorkflowEngine} interface that is backed by
  * <a href="http://lucene.apache.org">Apache Lucene</a>.
  * </p>.
+ *
+ * <h2>Indexes written before Mnemosyne 1.12.0 cannot be read</h2>
+ *
+ * Lucene reads one major version back, and this moved from Lucene 6 to 10. An
+ * instance repository written by Apache OODT will not open. This is usually
+ * operational history rather than a record of record, so starting empty is
+ * ordinarily fine. See the README.
  */
 public class LuceneWorkflowInstanceRepository extends
         AbstractPaginatibleInstanceRepository {
@@ -123,9 +130,11 @@ public class LuceneWorkflowInstanceRepository extends
             org.apache.lucene.search.Query query = new TermQuery(instIdTerm);
             Sort sort = new Sort(new SortField("workflow_inst_startdatetime",
                     SortField.Type.STRING, true));
-            TopDocs topDocs = searcher.search(query, 1, sort);
-
-            numInsts = topDocs.totalHits;
+            // count(), because these methods exist to report how many there
+            // are. A search sized to one hit stops counting as soon as it
+            // can answer, and from Lucene 8 reports a lower bound, so this
+            // would have answered 1 however many there were.
+            numInsts = searcher.count(query);
 
         } catch (IOException e) {
             LOG.log(Level.WARNING,
@@ -164,9 +173,11 @@ public class LuceneWorkflowInstanceRepository extends
             org.apache.lucene.search.Query query = new TermQuery(instIdTerm);
             Sort sort = new Sort(new SortField("workflow_inst_startdatetime",
                     SortField.Type.STRING, true));
-            TopDocs topDocs = searcher.search(query, 1, sort);
-
-            numInsts = topDocs.totalHits;
+            // count(), because these methods exist to report how many there
+            // are. A search sized to one hit stops counting as soon as it
+            // can answer, and from Lucene 8 reports a lower bound, so this
+            // would have answered 1 however many there were.
+            numInsts = searcher.count(query);
 
         } catch (IOException e) {
             LOG.log(Level.WARNING,
@@ -240,18 +251,23 @@ public class LuceneWorkflowInstanceRepository extends
             searcher = new IndexSearcher(reader);
             Term instIdTerm = new Term("workflow_inst_id", workflowInstId);
             org.apache.lucene.search.Query query = new TermQuery(instIdTerm);
-            TopDocs check = searcher.search(query, 1);
+            // count() rather than reading totalHits off a one-hit search.
+            // Until Lucene 8 that count was exact; now a search stops
+            // counting once it has enough hits to answer and reports a
+            // lower bound, so asking for one hit and trusting the count
+            // would fetch one instance where there are hundreds.
+            int checkCount = searcher.count(query);
 
-            if (check.totalHits != 1) {
+            if (checkCount != 1) {
                 LOG.log(Level.WARNING, "The workflow instance: ["
                         + workflowInstId + "] is not being "
                         + "managed by this " + "workflow engine, or "
-                        + "is not unique in the catalog: num hits: ["+check.totalHits+"]");
+                        + "is not unique in the catalog: num hits: ["+checkCount+"]");
                 return null;
             } else {
-                TopDocs topDocs = searcher.search(query, check.totalHits);
+                TopDocs topDocs = searcher.search(query, checkCount);
                 ScoreDoc[] hits = topDocs.scoreDocs;
-                Document instDoc = searcher.doc(hits[0].doc);
+                Document instDoc = searcher.storedFields().document(hits[0].doc);
                 wInst = toWorkflowInstance(instDoc);
             }
 
@@ -291,15 +307,21 @@ public class LuceneWorkflowInstanceRepository extends
             org.apache.lucene.search.Query query = new TermQuery(instIdTerm);
             Sort sort = new Sort(new SortField("workflow_inst_startdatetime",
                     SortField.Type.STRING, true));
-            TopDocs check = searcher.search(query, 1, sort);
-            if(check.totalHits>0) {
-                TopDocs topDocs = searcher.search(query, check.totalHits, sort);
+            // count() rather than reading totalHits off a one-hit search.
+            // Until Lucene 8 that count was exact; now a search stops
+            // counting once it has enough hits to answer and reports a
+            // lower bound, so asking for one hit and trusting the count
+            // would fetch one product where there are hundreds. The
+            // compiler is perfectly happy with it either way.
+            int checkCount = searcher.count(query);
+            if(checkCount > 0) {
+                TopDocs topDocs = searcher.search(query, checkCount, sort);
                 ScoreDoc[] hits = topDocs.scoreDocs;
-                if (topDocs.totalHits > 0) {
+                if (checkCount > 0) {
                     wInsts = new Vector(hits.length);
 
                     for (ScoreDoc hit : hits) {
-                        Document doc = searcher.doc(hit.doc);
+                        Document doc = searcher.storedFields().document(hit.doc);
                         WorkflowInstance wInst = toWorkflowInstance(doc);
                         wInsts.add(wInst);
                     }
@@ -413,11 +435,17 @@ public class LuceneWorkflowInstanceRepository extends
 
             Sort sort = new Sort(new SortField("workflow_inst_startdatetime",
                     SortField.Type.STRING, true));
-            TopDocs check = searcher.search(query, 1, sort);
-            if (check.totalHits > 0) {
-                TopDocs topDocs = searcher.search(query, check.totalHits, sort);
+            // count() rather than reading totalHits off a one-hit search.
+            // Until Lucene 8 that count was exact; now a search stops
+            // counting once it has enough hits to answer and reports a
+            // lower bound, so asking for one hit and trusting the count
+            // would fetch one product where there are hundreds. The
+            // compiler is perfectly happy with it either way.
+            int checkCount = searcher.count(query);
+            if (checkCount > 0) {
+                TopDocs topDocs = searcher.search(query, checkCount, sort);
                 for (ScoreDoc hit : topDocs.scoreDocs) {
-                    wInsts.add(toWorkflowInstance(searcher.doc(hit.doc)));
+                    wInsts.add(toWorkflowInstance(searcher.storedFields().document(hit.doc)));
                 }
             }
         } catch (IOException e) {
@@ -452,15 +480,21 @@ public class LuceneWorkflowInstanceRepository extends
             org.apache.lucene.search.Query query = new TermQuery(instIdTerm);
             Sort sort = new Sort(new SortField("workflow_inst_startdatetime",
                     SortField.Type.STRING, true));
-            TopDocs check = searcher.search(query, 1, sort);
-            if(check.totalHits>0) {
-                TopDocs topDocs = searcher.search(query, check.totalHits, sort);
+            // count() rather than reading totalHits off a one-hit search.
+            // Until Lucene 8 that count was exact; now a search stops
+            // counting once it has enough hits to answer and reports a
+            // lower bound, so asking for one hit and trusting the count
+            // would fetch one product where there are hundreds. The
+            // compiler is perfectly happy with it either way.
+            int checkCount = searcher.count(query);
+            if(checkCount > 0) {
+                TopDocs topDocs = searcher.search(query, checkCount, sort);
                 ScoreDoc[] hits = topDocs.scoreDocs;
                 if (hits.length > 0) {
                     wInsts = new Vector(hits.length);
 
                     for (ScoreDoc hit : hits) {
-                        Document doc = searcher.doc(hit.doc);
+                        Document doc = searcher.storedFields().document(hit.doc);
                         WorkflowInstance wInst = toWorkflowInstance(doc);
                         wInsts.add(wInst);
                     }
@@ -519,9 +553,15 @@ public class LuceneWorkflowInstanceRepository extends
             LOG.log(Level.FINE,
                     "Querying LuceneWorkflowInstanceRepository: q: ["
                             + booleanQuery + "]");
-            TopDocs check = searcher.search(booleanQuery.build(), 1, sort);
-            if(check.totalHits>0) {
-                TopDocs topDocs = searcher.search(booleanQuery.build(), check.totalHits, sort);
+            // count() rather than reading totalHits off a one-hit search.
+            // Until Lucene 8 that count was exact; now a search stops
+            // counting once it has enough hits to answer and reports a
+            // lower bound, so asking for one hit and trusting the count
+            // would fetch one product where there are hundreds. The
+            // compiler is perfectly happy with it either way.
+            int checkCount = searcher.count(booleanQuery.build());
+            if(checkCount > 0) {
+                TopDocs topDocs = searcher.search(booleanQuery.build(), checkCount, sort);
                 ScoreDoc[] hits = topDocs.scoreDocs;
 
                 if (hits.length > 0) {
@@ -535,7 +575,7 @@ public class LuceneWorkflowInstanceRepository extends
 
                     for (int i = startNum; i < Math.min(hits.length,
                             (startNum + pageSize)); i++) {
-                        Document instDoc = searcher.doc(hits[i].doc);
+                        Document instDoc = searcher.storedFields().document(hits[i].doc);
                         WorkflowInstance inst = toWorkflowInstance(instDoc);
                         instIds.add(inst.getId());
 

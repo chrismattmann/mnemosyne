@@ -125,14 +125,21 @@ public final class RangeQueryTester {
 
             Sort sort = new Sort(new SortField("CAS.ProductReceivedTime",
                     SortField.Type.STRING, true));
-            //TODO Fix number
-            TopFieldDocs topDocs = searcher.search(booleanQuery.build(), 1, sort);
+            // This asked for one hit and then walked the full hit count,
+            // indexing an array with one element in it. Under the old Lucene
+            // that count was exact, so any query matching more than one
+            // product ran off the end of the array; under the current one the
+            // count is a lower bound, so it quietly returned a single result.
+            // Broken either way, in opposite directions.
+            int hitCount = searcher.count(booleanQuery.build());
+            TopFieldDocs topDocs = searcher.search(booleanQuery.build(),
+                    Math.max(hitCount, 1), sort);
             ScoreDoc[] hits = topDocs.scoreDocs;
 
-            if (topDocs.totalHits > 0) {
-                products = new Vector(topDocs.totalHits);
-                for (int i = 0; i < topDocs.totalHits; i++) {
-                    Document productDoc = searcher.doc(hits[i].doc);
+            if (hitCount > 0) {
+                products = new Vector(hits.length);
+                for (int i = 0; i < hits.length; i++) {
+                    Document productDoc = searcher.storedFields().document(hits[i].doc);
 
                     products.add(productDoc.get("reference_data_store"));
                 }

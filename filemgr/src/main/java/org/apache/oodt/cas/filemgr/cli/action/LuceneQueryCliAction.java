@@ -121,10 +121,10 @@ public class LuceneQueryCliAction extends AbstractQueryCliAction {
          BooleanQueryCriteria bqc = new BooleanQueryCriteria();
          bqc.setOperator(BooleanQueryCriteria.AND);
          for (BooleanClause clause : clauses) {
-            if (clause.getOccur().equals(BooleanClause.Occur.SHOULD)) {
+            if (clause.occur().equals(BooleanClause.Occur.SHOULD)) {
                bqc.setOperator(BooleanQueryCriteria.OR);
             }
-            bqc.addTerm(generateCASQuery(clause.getQuery()));
+            bqc.addTerm(generateCASQuery(clause.query()));
          }
          return bqc;
       } else {

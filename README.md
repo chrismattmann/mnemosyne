@@ -144,6 +144,36 @@ The usual fix for this — publishing a `<relocation>` POM under the old
 coordinates — is unavailable, since that requires owning the `org.apache.oodt`
 groupId on Maven Central.
 
+## Upgrading from Apache OODT: your indexes must be rebuilt
+
+**Mnemosyne 1.12.0 cannot read a Lucene index written by Apache OODT.** Not
+slowly, not with reduced functionality — it will not open it.
+
+Lucene reads indexes written by one major version back. OODT shipped Lucene
+6; Mnemosyne is on Lucene 10. That is four majors, so the File Manager
+catalog and the Workflow Manager instance repository both have to be built
+again from their sources:
+
+- **`LuceneCatalog`** — the File Manager product catalog. Re-ingest, or
+  re-index from whichever catalog holds the authority.
+- **`LuceneWorkflowInstanceRepository`** — workflow instance history. This is
+  usually operational history rather than a record of record, and is
+  ordinarily fine to start empty.
+
+Check before you upgrade whether your catalog is the only copy of anything.
+If it is, export it first. For a system whose purpose is keeping an unbroken
+record of every data product, a catalog you cannot open is the worst thing
+that can happen to you, and no upgrade is worth it.
+
+**If you would rather not rebuild**, the archived
+[`apache/oodt`](https://github.com/apache/oodt) still exists, still builds,
+and still reads those indexes. It is not maintained, but it has not stopped
+working. Mnemosyne is a continuation, not an obligation.
+
+Solr is a separate matter and is unaffected: Mnemosyne talks to Solr over the
+network as a client, so your Solr can be upgraded, or not, on its own
+schedule.
+
 ## Components
 
 | Module | Role |

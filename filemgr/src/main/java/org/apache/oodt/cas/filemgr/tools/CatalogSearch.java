@@ -261,7 +261,7 @@ public class CatalogSearch {
         } else if (luceneQuery instanceof BooleanQuery) {
             List<BooleanClause> clauses = ((BooleanQuery) luceneQuery).clauses();
             for (BooleanClause clause : clauses) {
-                GenerateCASQuery(casQuery, (clause).getQuery());
+                GenerateCASQuery(casQuery, (clause).query());
             }
         } else {
             System.out.println("Error Parsing Query");

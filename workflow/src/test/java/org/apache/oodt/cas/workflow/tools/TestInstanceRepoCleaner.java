@@ -27,6 +27,9 @@ import org.apache.commons.io.FileUtils;
 //OODT imports
 import org.apache.oodt.cas.workflow.instrepo.LuceneWorkflowInstanceRepository;
 import org.apache.oodt.cas.workflow.instrepo.WorkflowInstanceRepository;
+import org.apache.oodt.cas.workflow.structs.WorkflowTask;
+import org.apache.oodt.cas.workflow.structs.WorkflowTaskConfiguration;
+import org.apache.oodt.cas.workflow.structs.Workflow;
 import org.apache.oodt.cas.workflow.structs.WorkflowInstance;
 import org.apache.oodt.cas.workflow.structs.WorkflowStatus;
 import org.apache.oodt.cas.workflow.structs.exceptions.InstanceRepositoryException;
@@ -81,14 +84,39 @@ public class TestInstanceRepoCleaner extends TestCase {
    */
   @Override
   protected void setUp() throws Exception {
-    // get a temp directory path
+    // Build the index rather than ship one.
+    //
+    // This test used to copy a Lucene index committed to the repository in
+    // February 2018, and Lucene reads one major version back, not four: the
+    // current library cannot open it at all. A binary index checked in as a
+    // fixture is a landmine that goes off at every major upgrade, and it went
+    // off at this one. Building it here means the fixture is always in the
+    // format the library being tested actually writes.
     File tempDir = File.createTempFile("bogus", "txt").getParentFile();
-    FileUtils.copyDirectory(new File("./src/test/resources/testinstrepo"), new File(
-        tempDir.getAbsolutePath() + "/" + "testinstrepo"));
-    instRepoPath = tempDir.getAbsolutePath().endsWith("/") ? (tempDir
-        .getAbsolutePath() + "testinstrepo")
-        : (tempDir.getAbsolutePath() + "/" + "testinstrepo");
+    File repoDir = new File(tempDir, "testinstrepo-" + System.nanoTime());
+    assertTrue("could not create " + repoDir, repoDir.mkdirs());
+    instRepoPath = repoDir.getAbsolutePath();
 
+    LuceneWorkflowInstanceRepository repo =
+        new LuceneWorkflowInstanceRepository(instRepoPath, 20);
+
+    // One instance, left in a state the cleaner is supposed to finish.
+    WorkflowInstance inst = new WorkflowInstance();
+    inst.setId("test-instance");
+    inst.setStatus(WorkflowStatus.STARTED);
+    Workflow workflow = new Workflow();
+    workflow.setId("urn:oodt:TestWorkflow");
+    workflow.setName("Test Workflow");
+    WorkflowTask task = new WorkflowTask();
+    task.setTaskId("urn:oodt:TestTask");
+    task.setTaskName("Test Task");
+    task.setTaskInstanceClassName(
+        "org.apache.oodt.cas.workflow.examples.NoOpTask");
+    task.setTaskConfig(new WorkflowTaskConfiguration());
+    workflow.getTasks().add(task);
+    inst.setWorkflow(workflow);
+    inst.setCurrentTaskId(task.getTaskId());
+    repo.addWorkflowInstance(inst);
   }
 
   /*
