@@ -55,6 +55,14 @@ public class RecordingTask implements WorkflowTaskInstance {
     failEverything = false;
   }
 
+  /**
+   * Appends to the shared execution log. Conditions record here too, so the
+   * order of the whole workflow is visible in one list.
+   */
+  public static void record(String name) {
+    RECORDED.add(name);
+  }
+
   public static List<String> recorded() {
     synchronized (RECORDED) {
       return new ArrayList<String>(RECORDED);

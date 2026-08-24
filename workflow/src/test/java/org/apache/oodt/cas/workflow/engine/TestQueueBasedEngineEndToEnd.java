@@ -305,6 +305,53 @@ public class TestQueueBasedEngineEndToEnd extends TestCase {
         GateCondition.evaluations() > 0);
   }
 
+  // ---- ordered phases ----------------------------------------------------
+
+  /**
+   * The three phases a workflow has always claimed to have, in order.
+   *
+   * Order is the whole point. A precondition evaluated beside the work it
+   * guards has not gated anything, and a post-condition evaluated while the
+   * tasks are still running is judging nothing.
+   */
+  public void testConditionsRunBeforeAndAfterTheWork() throws Exception {
+    engine.startWorkflow(modelFor("urn:oodt:e2e:Phased"), new Metadata());
+
+    awaitRecordedContains("after");
+
+    assertEquals("preconditions, then work, then post-conditions",
+        java.util.Arrays.asList("before", "work", "after"),
+        RecordingTask.recorded());
+  }
+
+  /**
+   * Both conditions blocks are read. Only the first used to be, so a workflow
+   * declaring pre and post lost one of them depending on the order written.
+   */
+  public void testBothConditionsBlocksAreRead() throws Exception {
+    Workflow phased = modelFor("urn:oodt:e2e:Phased");
+
+    assertEquals("one precondition", 1, phased.getPreConditions().size());
+    assertEquals("one post-condition", 1, phased.getPostConditions().size());
+  }
+
+  /**
+   * A failing precondition stops the work, and the post-condition with it:
+   * there is nothing for it to judge.
+   */
+  public void testFailedPreconditionStopsBothLaterPhases() throws Exception {
+    GateCondition.open(false);
+
+    engine.startWorkflow(modelFor("urn:oodt:e2e:Phased"), new Metadata());
+
+    Thread.sleep(6000);
+
+    assertFalse("the work must not have run: " + RecordingTask.recorded(),
+        RecordingTask.recorded().contains("work"));
+    assertFalse("nor the post-condition: " + RecordingTask.recorded(),
+        RecordingTask.recorded().contains("after"));
+  }
+
   // ---- helpers -----------------------------------------------------------
 
   private Workflow modelFor(String id) throws Exception {
@@ -314,6 +361,33 @@ public class TestQueueBasedEngineEndToEnd extends TestCase {
       }
     }
     return null;
+  }
+
+  private void awaitRecordedContains(String entry) throws Exception {
+    long deadline = System.currentTimeMillis() + TIMEOUT_MILLIS;
+    while (System.currentTimeMillis() < deadline) {
+      if (RecordingTask.recorded().contains(entry)) {
+        return;
+      }
+      Thread.sleep(100);
+    }
+    StringBuilder dump = new StringBuilder();
+    try {
+      for (Object o : instanceRepo.getWorkflowInstances()) {
+        WorkflowInstance wi = (WorkflowInstance) o;
+        dump.append("\n  ").append(wi.getParentChildWorkflow().getId())
+            .append(" -> ")
+            .append(wi.getState() == null ? "null" : wi.getState().getName())
+            .append(" [")
+            .append(wi.getState() == null || wi.getState().getCategory() == null
+                ? "null" : wi.getState().getCategory().getName())
+            .append("]");
+      }
+    } catch (Exception ignore) {
+      dump.append(" <dump failed>");
+    }
+    fail("Timed out after " + TIMEOUT_MILLIS + "ms waiting for [" + entry
+        + "]; recorded " + RecordingTask.recorded() + "; instances:" + dump);
   }
 
   private void awaitRecorded(int expected) throws Exception {

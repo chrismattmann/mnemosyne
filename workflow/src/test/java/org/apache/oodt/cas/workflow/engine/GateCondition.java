@@ -61,6 +61,12 @@ public class GateCondition implements WorkflowConditionInstance {
   public boolean evaluate(Metadata metadata,
       WorkflowConditionConfiguration config) {
     EVALUATIONS.incrementAndGet();
+    // Recorded in the same log the tasks write to, so a test can assert the
+    // order the phases actually happened in rather than only that each did.
+    String name = config != null ? config.getProperty("RecordAs") : null;
+    if (name != null) {
+      RecordingTask.record(name);
+    }
     return open;
   }
 }
