@@ -18,11 +18,12 @@
 
 package org.apache.oodt.commons.database;
 
-import org.apache.commons.dbcp.ConnectionFactory;
-import org.apache.commons.dbcp.DriverManagerConnectionFactory;
-import org.apache.commons.dbcp.PoolableConnectionFactory;
-import org.apache.commons.dbcp.PoolingDataSource;
-import org.apache.commons.pool.impl.GenericObjectPool;
+import org.apache.commons.dbcp2.ConnectionFactory;
+import org.apache.commons.dbcp2.DriverManagerConnectionFactory;
+import org.apache.commons.dbcp2.PoolableConnection;
+import org.apache.commons.dbcp2.PoolableConnectionFactory;
+import org.apache.commons.dbcp2.PoolingDataSource;
+import org.apache.commons.pool2.impl.GenericObjectPool;
 
 import javax.sql.DataSource;
 
@@ -46,13 +47,24 @@ public final class DatabaseConnectionBuilder {
         } catch (ClassNotFoundException ignore) {
         }
 
-        GenericObjectPool connectionPool = new GenericObjectPool(null);
-      ConnectionFactory connectionFactory = new DriverManagerConnectionFactory(
-                          url, user, pass);
-              PoolableConnectionFactory poolableConnectionFactory = new PoolableConnectionFactory(
-                          connectionFactory, connectionPool, null, null, false, true);
+        // dbcp2 wires the other way round from dbcp 1.x. There the pool was
+        // built first with a null factory and the PoolableConnectionFactory
+        // constructor quietly registered itself against it, which is why the
+        // factory was assigned to a variable nobody read. Here the factory is
+        // built first, the pool is built from it, and the two are linked
+        // explicitly.
+        ConnectionFactory connectionFactory = new DriverManagerConnectionFactory(
+                url, user, pass);
+        PoolableConnectionFactory poolableConnectionFactory =
+                new PoolableConnectionFactory(connectionFactory, null);
+        poolableConnectionFactory.setDefaultReadOnly(false);
+        poolableConnectionFactory.setDefaultAutoCommit(true);
+        GenericObjectPool<PoolableConnection> connectionPool =
+                new GenericObjectPool<PoolableConnection>(
+                        poolableConnectionFactory);
+        poolableConnectionFactory.setPool(connectionPool);
 
-      return new PoolingDataSource(connectionPool);
+        return new PoolingDataSource<PoolableConnection>(connectionPool);
     }
 
 }
