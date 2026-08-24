@@ -18,6 +18,10 @@
 package org.apache.oodt.cas.crawl.daemon;
 
 //Avro imports
+import java.util.concurrent.Executors;
+import org.jboss.netty.channel.socket.nio.NioServerSocketChannelFactory;
+import org.jboss.netty.handler.execution.ExecutionHandler;
+import org.jboss.netty.handler.execution.OrderedMemoryAwareThreadPoolExecutor;
 import org.apache.avro.ipc.NettyServer;
 import org.apache.avro.ipc.Server;
 import org.apache.avro.ipc.specific.SpecificResponder;
@@ -47,6 +51,9 @@ import java.util.logging.Logger;
  */
 public class AvroRpcCrawlDaemon implements AvroCrawlDaemon {
 
+    /* handler threads; must exceed the depth of any re-entrant call chain */
+    private static final int HANDLER_THREADS = 50;
+
     private static final Logger LOG = Logger
         .getLogger(AvroRpcCrawlDaemon.class.getName());
 
@@ -73,9 +80,18 @@ public class AvroRpcCrawlDaemon implements AvroCrawlDaemon {
     }
 
     public void startCrawling() {
+        // Avro's two-argument NettyServer runs request handlers on the Netty
+        // I/O threads themselves. A handler that blocks holds one, so a crawl kicked off over RPC
+        // stalls the daemon's own status calls until it finishes.
+        // An ExecutionHandler gives handlers their own pool, which is what
+        // XML-RPC's WebServer did and why this was not visible before.
         this.server = new NettyServer(
             new SpecificResponder(AvroCrawlDaemon.class, this),
-            new InetSocketAddress(this.daemonPort));
+            new InetSocketAddress(this.daemonPort),
+                new NioServerSocketChannelFactory(Executors.newCachedThreadPool(),
+                        Executors.newCachedThreadPool()),
+                new ExecutionHandler(new OrderedMemoryAwareThreadPoolExecutor(
+                        HANDLER_THREADS, 0L, 0L)));
         this.server.start();
 
         LOG.log(Level.INFO, "Crawl Daemon started by "

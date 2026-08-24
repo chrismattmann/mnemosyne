@@ -18,6 +18,10 @@
 package org.apache.oodt.cas.resource.system;
 
 import org.apache.avro.AvroRemoteException;
+import java.util.concurrent.Executors;
+import org.jboss.netty.channel.socket.nio.NioServerSocketChannelFactory;
+import org.jboss.netty.handler.execution.ExecutionHandler;
+import org.jboss.netty.handler.execution.OrderedMemoryAwareThreadPoolExecutor;
 import org.apache.avro.ipc.NettyServer;
 import org.apache.avro.ipc.Server;
 import org.apache.avro.ipc.specific.SpecificResponder;
@@ -56,6 +60,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class AvroRpcResourceManager implements org.apache.oodt.cas.resource.structs.avrotypes.ResourceManager, ResourceManager {
+
+    /* handler threads; must exceed the depth of any re-entrant call chain */
+    private static final int HANDLER_THREADS = 50;
 
     private static final Logger logger = LoggerFactory.getLogger(AvroRpcResourceManager.class);
 
@@ -98,8 +105,18 @@ public class AvroRpcResourceManager implements org.apache.oodt.cas.resource.stru
         executorService.submit(scheduler);
 
         // start up the web server
-        server = new NettyServer(new SpecificResponder(org.apache.oodt.cas.resource.structs.avrotypes.ResourceManager.class, this),
-                new InetSocketAddress(this.port));
+        // Avro's two-argument NettyServer runs request handlers on the Netty
+        // I/O threads themselves. A handler that blocks on a batch stub or the job repository holds
+        // one, and stops unrelated calls from being served.
+        // An ExecutionHandler gives handlers their own pool, which is what
+        // XML-RPC's WebServer did and why this was not visible before.
+        server = new NettyServer(
+                new SpecificResponder(org.apache.oodt.cas.resource.structs.avrotypes.ResourceManager.class, this),
+                new InetSocketAddress(this.port),
+                new NioServerSocketChannelFactory(Executors.newCachedThreadPool(),
+                        Executors.newCachedThreadPool()),
+                new ExecutionHandler(new OrderedMemoryAwareThreadPoolExecutor(
+                        HANDLER_THREADS, 0L, 0L)));
         server.start();
 
         logger.info("Resource Manager started by {}", System.getProperty("user.name", "unknown"));
@@ -438,7 +455,7 @@ public class AvroRpcResourceManager implements org.apache.oodt.cas.resource.stru
 
     public static void main(String[] args) throws Exception {
         int portNum = -1;
-        String usage = "AvroRpcResourceManager --portNum <port number for xml rpc service>\n";
+        String usage = "AvroRpcResourceManager --portNum <port number for the Avro service>\n";
 
         for (int i = 0; i < args.length; i++) {
             if (args[i].equals("--portNum")) {

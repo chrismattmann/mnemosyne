@@ -177,10 +177,6 @@ the License.
       <classifier>asl</classifier>
     </dependency>
     <dependency>
-      <groupId>xmlrpc</groupId>
-      <artifactId>xmlrpc</artifactId>
-    </dependency>
-    <dependency>
       <groupId>org.mortbay.jetty</groupId>
       <artifactId>jetty</artifactId>
     </dependency>

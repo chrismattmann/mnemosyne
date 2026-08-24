@@ -33,6 +33,7 @@ public class AvroFileManagerClientFactory implements FileManagerClientFactory {
     private URL url;
 
     private boolean testConnection = true;
+    private boolean shareConnection = true;
 
     @Override
     public void setUrl(URL url) {
@@ -55,7 +56,17 @@ public class AvroFileManagerClientFactory implements FileManagerClientFactory {
     }
 
     @Override
+    public void setShareConnection(boolean shareConnection) {
+        this.shareConnection = shareConnection;
+    }
+
+    @Override
+    public boolean getShareConnection() {
+        return this.shareConnection;
+    }
+
+    @Override
     public FileManagerClient createFileManagerClient() throws ConnectionException {
-        return new AvroFileManagerClient(this.url,this.testConnection);
+        return new AvroFileManagerClient(this.url, this.testConnection, this.shareConnection);
     }
 }

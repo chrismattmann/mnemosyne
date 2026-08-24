@@ -108,10 +108,6 @@
       <groupId>org.springframework</groupId>
       <artifactId>spring-core</artifactId>
     </dependency>
-    <dependency>
-      <groupId>xmlrpc</groupId>
-      <artifactId>xmlrpc</artifactId>
-    </dependency>
 
     
     <dependency>

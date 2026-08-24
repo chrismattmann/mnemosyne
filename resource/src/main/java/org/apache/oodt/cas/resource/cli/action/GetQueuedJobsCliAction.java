@@ -22,7 +22,7 @@ import java.util.List;
 //OODT imports
 import org.apache.oodt.cas.cli.exception.CmdLineActionException;
 import org.apache.oodt.cas.resource.structs.Job;
-import static org.apache.oodt.cas.resource.system.XmlRpcResourceManagerClient.getReadableJobStatus;
+import static org.apache.oodt.cas.resource.structs.JobStatusNames.getReadableJobStatus;
 
 /**
  * A {@link CmdLineAction} which returns Jobs that are currently queued.

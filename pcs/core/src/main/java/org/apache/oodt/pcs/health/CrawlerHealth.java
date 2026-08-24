@@ -23,7 +23,7 @@ import java.io.Serializable;
 /**
  * 
  * Health of a PCS Crawler in terms of the number of crawls performed, and
- * average crawl time provided by a {@link org.apache.oodt.cas.crawl.daemon.CrawlDaemon}
+ * average crawl time provided by a {@link org.apache.oodt.cas.crawl.daemon.AvroRpcCrawlDaemon}
  * 
  * @author mattmann
  * @version $Revision$

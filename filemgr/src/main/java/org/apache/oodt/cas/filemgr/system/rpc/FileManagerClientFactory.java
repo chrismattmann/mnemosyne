@@ -54,5 +54,15 @@ public interface FileManagerClientFactory {
      * @return
      * @throws ConnectionException
      */
+    /**
+     * Whether the client may reuse the connection shared per URL across this
+     * JVM. Defaults to true; set false for a client that could call while a
+     * request is already in flight on that connection, which otherwise
+     * deadlocks. See {@code AvroFileManagerClient}'s constructor.
+     */
+    public void setShareConnection(boolean shareConnection);
+
+    public boolean getShareConnection();
+
     public FileManagerClient createFileManagerClient() throws ConnectionException;
 }

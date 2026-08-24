@@ -113,6 +113,10 @@ public class AvroFileManagerClient implements FileManagerClient {
     /*DataTransfer class for transferring products*/
     private DataTransfer dataTransfer = null;
 
+    /* false when this client owns its connection rather than sharing the
+       per-URL one; see the constructor for why that matters */
+    private final boolean sharedConnection;
+
     private static final class SharedConnection {
         private final Transceiver client;
         private final AvroFileManager proxy;
@@ -128,10 +132,30 @@ public class AvroFileManagerClient implements FileManagerClient {
     }
 
     public AvroFileManagerClient(final URL url, boolean testConnection) throws ConnectionException {
+        this(url, testConnection, true);
+    }
+
+    /**
+     * @param shareConnection whether to reuse the per-URL connection shared by
+     *   every client in this JVM. Sharing is the right default: it keeps one
+     *   socket per file manager however many clients are constructed.
+     *
+     *   Pass false when the caller may issue a request while a request is
+     *   already in flight on that shared connection and is waiting for it. The
+     *   server processes one channel's requests in order, so the second request
+     *   queues behind the first, which is blocked waiting for the second: both
+     *   sides park forever, and neither call has a timeout. A client running
+     *   inside the file manager itself is the case that matters, because its
+     *   loopback URL is the same URL its callers use, so it is handed the very
+     *   connection their request arrived on.
+     */
+    public AvroFileManagerClient(final URL url, boolean testConnection, boolean shareConnection)
+            throws ConnectionException {
         //setup the and start the client
+        this.sharedConnection = shareConnection;
         try {
             this.fileManagerUrl = url;
-            SharedConnection connection = getSharedConnection(url);
+            SharedConnection connection = shareConnection ? getSharedConnection(url) : newConnection(url);
             this.client = connection.client;
             proxy = connection.proxy;
         } catch (IOException e) {
@@ -761,19 +785,29 @@ public class AvroFileManagerClient implements FileManagerClient {
     @Override
     public void close() throws IOException {
         logger.info("Closing file manager client for URL: {}", fileManagerUrl);
+        // a shared connection outlives this client and is closed at shutdown;
+        // one we own is ours to release, or it leaks a socket per client.
+        if (!sharedConnection && client != null) {
+            closeSharedNettyTransceiver((NettyTransceiver) client);
+        }
         client = null;
         proxy = null;
+    }
+
+    /** A connection owned by a single client. Netty threads stay shared. */
+    private static SharedConnection newConnection(URL url) throws IOException {
+        InetSocketAddress inetSocketAddress = new InetSocketAddress(url.getHost(), url.getPort());
+        Transceiver transceiver = new NettyTransceiver(inetSocketAddress, CHANNEL_FACTORY, 40000L);
+        AvroFileManager clientProxy = (AvroFileManager) SpecificRequestor.getClient(
+            AvroFileManager.class, transceiver);
+        return new SharedConnection(transceiver, clientProxy);
     }
 
     private static synchronized SharedConnection getSharedConnection(URL url) throws IOException {
         String key = url.toExternalForm();
         SharedConnection connection = SHARED_CONNECTIONS.get(key);
         if (connection == null) {
-            InetSocketAddress inetSocketAddress = new InetSocketAddress(url.getHost(), url.getPort());
-            Transceiver transceiver = new NettyTransceiver(inetSocketAddress, CHANNEL_FACTORY, 40000L);
-            AvroFileManager sharedProxy = (AvroFileManager) SpecificRequestor.getClient(
-                AvroFileManager.class, transceiver);
-            connection = new SharedConnection(transceiver, sharedProxy);
+            connection = newConnection(url);
             SHARED_CONNECTIONS.put(key, connection);
         }
         return connection;

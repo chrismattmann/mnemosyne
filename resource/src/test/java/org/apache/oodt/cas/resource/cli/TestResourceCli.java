@@ -27,8 +27,8 @@ import org.apache.oodt.cas.resource.structs.Job;
 import org.apache.oodt.cas.resource.structs.JobInput;
 import org.apache.oodt.cas.resource.structs.JobSpec;
 import org.apache.oodt.cas.resource.structs.ResourceNode;
-import org.apache.oodt.cas.resource.system.MockXmlRpcResourceManagerClient;
-import org.apache.oodt.cas.resource.system.MockXmlRpcResourceManagerClient.MethodCallDetails;
+import org.apache.oodt.cas.resource.system.MockResourceManagerClient;
+import org.apache.oodt.cas.resource.system.MockResourceManagerClient.MethodCallDetails;
 import org.apache.oodt.cas.resource.util.JobBuilder;
 
 //JUnit imports
@@ -49,7 +49,7 @@ public class TestResourceCli extends TestCase {
    }
 
    private CmdLineUtility cmdLineUtility;
-   private MockXmlRpcResourceManagerClient client;
+   private MockResourceManagerClient client;
 
    @Override
    public void setUp() throws Exception {

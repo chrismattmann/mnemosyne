@@ -24,7 +24,8 @@ import org.apache.oodt.cas.resource.structs.JobInput;
 import org.apache.oodt.cas.resource.structs.JobSpec;
 import org.apache.oodt.cas.resource.structs.NameValueJobInput;
 import org.apache.oodt.cas.resource.structs.exceptions.JobExecutionException;
-import org.apache.oodt.cas.resource.system.XmlRpcResourceManagerClient;
+import org.apache.oodt.cas.resource.system.ResourceManagerClient;
+import org.apache.oodt.cas.resource.system.rpc.ResourceManagerFactory;
 import org.apache.oodt.cas.resource.util.JobBuilder;
 
 import java.io.BufferedReader;
@@ -54,10 +55,10 @@ public final class RunDirJobSubmitter {
             .getName());
 
     /* our res mgr client */
-    private XmlRpcResourceManagerClient client = null;
+    private ResourceManagerClient client = null;
 
     public RunDirJobSubmitter(URL rUrl) {
-        client = new XmlRpcResourceManagerClient(rUrl);
+        client = ResourceManagerFactory.getResourceManagerClient(rUrl);
     }
 
     public void submitRunDirJobFile(String jobFname, String inputFname)

@@ -40,6 +40,10 @@ import org.apache.oodt.cas.filemgr.structs.exceptions.VersioningException;
 import org.apache.oodt.cas.filemgr.structs.query.QueryResult;
 import org.apache.oodt.cas.filemgr.util.AvroTypeFactory;
 import org.apache.oodt.cas.filemgr.util.GenericFileManagerObjectFactory;
+import java.util.concurrent.Executors;
+import org.jboss.netty.channel.socket.nio.NioServerSocketChannelFactory;
+import org.jboss.netty.handler.execution.ExecutionHandler;
+import org.jboss.netty.handler.execution.OrderedMemoryAwareThreadPoolExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -58,6 +62,9 @@ public class AvroFileManagerServer implements AvroFileManager, FileManagerServer
 
     private static final Logger logger = LoggerFactory.getLogger(AvroFileManagerServer.class);
 
+    /* handler threads; must exceed the depth of any re-entrant call chain */
+    private static final int HANDLER_THREADS = 50;
+
     /*port for server*/
     protected int port = 1999;
 
@@ -72,7 +79,24 @@ public class AvroFileManagerServer implements AvroFileManager, FileManagerServer
 
     @Override
     public boolean startUp() throws Exception {
-        server = new NettyServer(new SpecificResponder(AvroFileManager.class,this),new InetSocketAddress(this.port));
+        // Avro's two-argument NettyServer runs request handlers directly on the
+        // Netty I/O threads. That deadlocks on any handler which itself makes a
+        // file manager call: moveProduct hands off to LocalDataTransferer, which
+        // reports progress back through a FileManagerClient, and that nested
+        // request needs an I/O thread while the outer one is still holding it
+        // waiting for the reply. Neither call has a timeout, so the server and
+        // the caller both park forever.
+        //
+        // An ExecutionHandler moves handler execution onto its own pool, leaving
+        // the I/O threads free to service the nested call. XML-RPC's WebServer
+        // dispatched to a worker pool for the same reason.
+        server = new NettyServer(
+                new SpecificResponder(AvroFileManager.class, this),
+                new InetSocketAddress(this.port),
+                new NioServerSocketChannelFactory(Executors.newCachedThreadPool(),
+                        Executors.newCachedThreadPool()),
+                new ExecutionHandler(new OrderedMemoryAwareThreadPoolExecutor(
+                        HANDLER_THREADS, 0L, 0L)));
         server.start();
         try {
             this.fileManager = new FileManager();

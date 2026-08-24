@@ -82,7 +82,13 @@ public class LocalDataTransferer implements DataTransfer {
     */
    public void setFileManagerUrl(URL url) {
       try {
-         client = RpcCommunicationFactory.createClient(url);
+         // A dedicated connection, not the shared per-URL one. This transferer
+         // also runs inside the file manager (moveProduct, and ingest when the
+         // client does not transfer), where the URL below is the server's own
+         // and the shared connection is the one the caller's request arrived
+         // on. Notifying over that connection queues the notification behind
+         // the request that is waiting for it, and both park forever.
+         client = RpcCommunicationFactory.createDedicatedClient(url);
          LOG.log(Level.INFO, "Local Data Transfer to: [" + client.getFileManagerUrl().toString() + "] enabled");
       } catch (ConnectionException e) {
          LOG.log(Level.SEVERE, e.getMessage());
