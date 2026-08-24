@@ -1,0 +1,31 @@
+@namespace("org.apache.oodt.cas.crawl.structs.avrotypes")
+
+/**
+ * The crawl daemon's remote control surface.
+ *
+ * These are exactly the six calls CrawlDaemonController has always made over
+ * XML-RPC. Nothing is added: the point is to speak the same conversation over
+ * the transport the rest of the system already uses, not to redesign it while
+ * the lights are off.
+ */
+protocol AvroCrawlDaemon {
+
+    /** Mean time spent in a single crawl, in seconds. */
+    double getAverageCrawlTime();
+
+    /** Total time spent crawling, in milliseconds. */
+    int getMilisCrawling();
+
+    /** How many crawls have completed. */
+    int getNumCrawls();
+
+    /** Seconds the daemon waits between crawls. */
+    int getWaitInterval();
+
+    /** Whether the daemon is still crawling. */
+    boolean isRunning();
+
+    /** Asks the daemon to stop after the current crawl. */
+    boolean stop();
+
+}

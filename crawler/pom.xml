@@ -13,6 +13,14 @@
   
   <dependencies>
     <dependency>
+      <groupId>org.apache.avro</groupId>
+      <artifactId>avro</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.avro</groupId>
+      <artifactId>avro-ipc</artifactId>
+    </dependency>
+    <dependency>
       <groupId>org.apache.solr</groupId>
       <artifactId>solr-solrj</artifactId>
       <exclusions>
@@ -125,6 +133,28 @@
       </resource>
     </resources>
     <plugins>
+      <plugin>
+        <groupId>org.apache.avro</groupId>
+        <artifactId>avro-maven-plugin</artifactId>
+        <version>1.8.2</version>
+        <configuration>
+          <stringType>String</stringType>
+          <detail>true</detail>
+        </configuration>
+        <executions>
+          <execution>
+            <id>protocol</id>
+            <configuration>
+              <imports>
+                <import>${basedir}/src/main/avro/types</import>
+              </imports>
+            </configuration>
+            <goals>
+              <goal>idl-protocol</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
       <plugin>
         <artifactId>maven-surefire-plugin</artifactId>
         <version>2.22.2</version>
