@@ -763,7 +763,13 @@ public class PackagedWorkflowRepository implements WorkflowRepository {
               + graph.getParent().getWorkflow().getName() + "]");
           graph.getParent().getWorkflow().getConditions().add(cond);
         } else if (graph.getParent().getTask() != null) {
-          graph.getParent().getTask().getConditions().add(cond);
+          // getPreConditions, not getConditions. WorkflowTask.getConditions
+          // builds a fresh list from the pre and post lists and returns it, so
+          // adding to it added to a temporary that was discarded on the next
+          // line: no task has ever carried the conditions written on it.
+          // Workflow.getConditions returns its real list, which is why a
+          // condition on a workflow attached and one on a task did not.
+          graph.getParent().getTask().getPreConditions().add(cond);
         } else {
           LOG.log(Level.FINEST, "Condition: [" + graph.getModelId()
               + "] has not parent: it's a condition definition");
