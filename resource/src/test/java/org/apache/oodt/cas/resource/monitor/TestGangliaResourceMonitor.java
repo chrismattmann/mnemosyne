@@ -60,6 +60,13 @@ public class TestGangliaResourceMonitor extends TestCase {
 
     @Override
     protected void tearDown(){
+        // Closing releases the port. Without it each test left a thread
+        // holding it, the tests that followed could not bind, and the suite
+        // ran on whichever server had started first.
+        MockGmetad server = mockGmetad.get();
+        if (server != null) {
+            server.close();
+        }
         mockGmetad.remove();
     }
 
@@ -138,7 +145,13 @@ public class TestGangliaResourceMonitor extends TestCase {
                 "test" + File.separator + "resources" + File.separator + "resourcemon" + File.separator + "gangliaXMLdump.xml";
         mockGmetad.set(new MockGmetad(port, sampleXMLfilePath));
         Thread mockGmetadServer = new Thread(mockGmetad.get());
+        mockGmetadServer.setDaemon(true);
         mockGmetadServer.start();
+        // The socket is bound on that thread, so returning here without
+        // waiting means the monitor may connect before there is anything to
+        // connect to.
+        assertTrue("the mock gmetad server should be listening on port ["
+                + port + "]", mockGmetad.get().awaitListening(20000));
     }
 
     private void generateTestConfig() throws IOException {

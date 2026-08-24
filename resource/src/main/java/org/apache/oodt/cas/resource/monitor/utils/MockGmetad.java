@@ -25,6 +25,8 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 /**
  * @author rajith
@@ -37,7 +39,12 @@ public class MockGmetad implements Runnable {
 
     private int socket;
     private File fakeXMLDump;
-    private boolean testFinished;
+    private volatile boolean testFinished;
+
+    /** Counted down once the port is actually bound. */
+    private final CountDownLatch listening = new CountDownLatch(1);
+
+    private volatile ServerSocket serverSocket;
 
     public MockGmetad(int socket, String filePath){
         this.socket = socket;
@@ -45,14 +52,58 @@ public class MockGmetad implements Runnable {
         this.testFinished = false;
     }
 
-    public void stop(){
+    /**
+     * Waits until the server is accepting connections.
+     *
+     * The socket is bound on the server's own thread, so starting that thread
+     * and connecting straight away is a race: whoever begins the conversation
+     * first wins. It is a race an idle machine reliably wins and a loaded one
+     * does not, which is the sort that passes everywhere except CI.
+     *
+     * @param timeoutMillis
+     *          How long to wait.
+     * @return True if the server is listening.
+     */
+    public boolean awaitListening(long timeoutMillis) {
+        try {
+            return listening.await(timeoutMillis, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
+    }
+
+    /**
+     * Stops the server and releases the port.
+     *
+     * Setting the flag alone never stopped anything: the loop spends its life
+     * blocked in accept and does not look at the flag again until a connection
+     * arrives. Closing the socket is what unblocks it. Without this every test
+     * left a thread holding the port, and the ones that followed failed to
+     * bind and silently gave up, so a whole suite depended on the first
+     * server it ever started.
+     */
+    public void close() {
         testFinished = true;
+        ServerSocket toClose = this.serverSocket;
+        if (toClose != null) {
+            try {
+                toClose.close();
+            } catch (IOException ignored) {
+                // Nothing useful to do; the port is going away regardless.
+            }
+        }
+    }
+
+    public void stop(){
+        close();
     }
 
     @Override
     public void run() {
         try {
-            ServerSocket serverSocket = new ServerSocket(socket);
+            this.serverSocket = new ServerSocket(socket);
+            listening.countDown();
             FileInputStream fis = null;
             OutputStream os = null;
 
@@ -70,10 +121,16 @@ public class MockGmetad implements Runnable {
                     }
                     os.flush();
                 } finally {
-                    assert fis != null;
-                    fis.close();
-                    assert os != null;
-                    os.close();
+                    // Guarded rather than asserted. Assertions are off by
+                    // default, so a stream that failed to open left these
+                    // throwing a NullPointerException over whatever had
+                    // actually gone wrong.
+                    if (fis != null) {
+                        fis.close();
+                    }
+                    if (os != null) {
+                        os.close();
+                    }
                     sock.close();
                 }
             }
@@ -81,6 +138,10 @@ public class MockGmetad implements Runnable {
             //Exception ignored
         } catch (IOException ignored) {
             //Exception ignored
+        } finally {
+            // So a caller waiting to be told the server is up is not left
+            // waiting out its whole timeout when the bind failed.
+            listening.countDown();
         }
 
     }
