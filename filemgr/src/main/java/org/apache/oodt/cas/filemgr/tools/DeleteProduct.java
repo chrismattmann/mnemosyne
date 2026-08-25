@@ -33,6 +33,7 @@ import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Vector;
 import java.util.logging.Level;
@@ -93,10 +94,10 @@ public class DeleteProduct {
     }
 
     // delete references first
-    Vector refs = new Vector();
+    List refs = new ArrayList();
 
     try {
-      refs = (Vector) client.getProductReferences(target);
+      refs = client.getProductReferences(target);
     } catch (CatalogException e) {
       LOG.log(Level.WARNING,
           "Unable to obtain references for product : [" + productId

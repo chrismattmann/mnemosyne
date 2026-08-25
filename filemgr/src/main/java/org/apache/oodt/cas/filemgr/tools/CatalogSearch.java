@@ -37,6 +37,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.StringTokenizer;
 import java.util.Vector;
@@ -67,9 +68,9 @@ public class CatalogSearch {
 
     public static void PostQuery(
             org.apache.oodt.cas.filemgr.structs.Query casQuery) {
-        Vector products = new Vector();
+        List products = new ArrayList();
         try {
-            products = (Vector) client.getProductTypes();
+            products = client.getProductTypes();
         } catch (RepositoryManagerException e) {
             System.out
                     .println("Error getting available product types from the File Manager.");
@@ -83,7 +84,7 @@ public class CatalogSearch {
 
     public static void PostQuery(String product,
             org.apache.oodt.cas.filemgr.structs.Query casQuery) {
-        Vector results = new Vector();
+        List results = new ArrayList();
         ProductType productType = null;
 
         try {
@@ -94,7 +95,7 @@ public class CatalogSearch {
         }
 
         try {
-            results = (Vector) client.query(casQuery, productType);
+            results = client.query(casQuery, productType);
         } catch (CatalogException ignore) {
             System.out.println("Error querying the File Manager");
             LOG.log(Level.SEVERE, ignore.getMessage());
@@ -131,9 +132,9 @@ public class CatalogSearch {
     }
 
     public static void ListProducts() {
-        Vector products = new Vector();
+        List products = new ArrayList();
         try {
-            products = (Vector) client.getProductTypes();
+            products = client.getProductTypes();
         } catch (RepositoryManagerException e) {
             System.out
                     .println("Error getting available product types from the File Manager.");
@@ -147,9 +148,9 @@ public class CatalogSearch {
     }
 
     public static void listElements() {
-        Vector products;
+        List products;
         try {
-            products = (Vector) client.getProductTypes();
+            products = client.getProductTypes();
             for (Object product : products) {
                 listElements(((ProductType) product).getProductTypeId());
             }
@@ -162,12 +163,12 @@ public class CatalogSearch {
     }
 
     public static void listElements(String prodID) {
-        Vector elements = new Vector();
+        List elements = new ArrayList();
         ProductType type;
 
         try {
             type = client.getProductTypeById(prodID);
-            elements = (Vector) client.getElementsByProductType(type);
+            elements = client.getElementsByProductType(type);
         } catch (RepositoryManagerException e1) {
             System.out.println("Could not find a ProductType with the ID: "
                     + prodID);

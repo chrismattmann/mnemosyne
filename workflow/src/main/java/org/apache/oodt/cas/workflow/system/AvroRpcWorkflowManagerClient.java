@@ -240,7 +240,13 @@ public class AvroRpcWorkflowManagerClient implements WorkflowManagerClient {
 
     @Override
     public Vector getWorkflowInstancesByStatus(String status) throws Exception {
-        return (Vector) AvroTypeFactory.getWorkflowInstances(proxy.getWorkflowInstancesByStatus(status));
+        // AvroTypeFactory returns an ArrayList, so casting it threw every time.
+        // getWorkflowInstances and getWorkflows next door copy instead; this one
+        // was left behind when the client was adapted from the XML-RPC version,
+        // where the wire type really was a Vector.
+        Vector instances = new Vector();
+        instances.addAll(AvroTypeFactory.getWorkflowInstances(proxy.getWorkflowInstancesByStatus(status)));
+        return instances;
 
     }
 
