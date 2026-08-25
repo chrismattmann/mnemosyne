@@ -91,6 +91,22 @@
     </dependency>
   <dependency><groupId>org.objenesis</groupId><artifactId>objenesis</artifactId><version>3.3</version><scope>test</scope></dependency></dependencies>
   <build>
+    <!--
+      logging.properties is deployment configuration, not library configuration.
+      The assembly copies it from here into etc/ and the start scripts point at
+      it with -Djava.util.logging.config.file. Left in the jar as well it rides
+      into any war bundling this module, where the container's JUL setup can
+      pick it up: OODT-991 reported exactly that, verbose logs appearing because
+      the libs carried their own configuration.
+    -->
+    <resources>
+      <resource>
+        <directory>${basedir}/src/main/resources</directory>
+        <excludes>
+          <exclude>logging.properties</exclude>
+        </excludes>
+      </resource>
+    </resources>
     <testSourceDirectory>${basedir}/src/test/java</testSourceDirectory>
     <plugins>
       <plugin>

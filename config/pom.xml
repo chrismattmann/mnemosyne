@@ -71,6 +71,24 @@
     </dependencies>
 
     <build>
+        <!--
+          log4j2.xml is deployment configuration, not library configuration. The
+          assembly copies it from here into etc/, and the start scripts point at
+          it with -Dlog4j.configurationFile. Left in the jar as well, it sits on
+          the classpath of every application depending on this module and log4j2
+          silently adopts it. That is how the file manager's own CLI tools came to
+          log DEBUG to SYSTEM_OUT, which corrupts the output of any tool whose
+          stdout is piped, such as query-tool feeding product ids to DeleteProduct.
+        -->
+        <resources>
+          <resource>
+            <directory>${basedir}/src/main/resources</directory>
+            <excludes>
+              <exclude>log4j2.xml</exclude>
+              <exclude>logging.properties</exclude>
+            </excludes>
+          </resource>
+        </resources>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
