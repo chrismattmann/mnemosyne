@@ -99,6 +99,30 @@ public class RpcCommunicationFactory {
      * @return instance of ether AvroRpc of XMLRPC of FileManagerClient.
      * @throws ConnectionException
      */
+    /**
+     * A client that owns its connection instead of sharing the per-URL one.
+     * Use it wherever a call might be made while a request is already in
+     * flight on the shared connection -- above all from inside the file
+     * manager, where the loopback URL matches the one callers use.
+     */
+    public static FileManagerClient createDedicatedClient(URL filemgrUrl) throws ConnectionException {
+        setPror();
+
+        try {
+            FileManagerClientFactory fmcf = (FileManagerClientFactory) Class.forName(getClientFactoryName()).newInstance();
+            fmcf.setTestConnection(true);
+            fmcf.setShareConnection(false);
+            fmcf.setUrl(filemgrUrl);
+            return fmcf.createFileManagerClient();
+        } catch (InstantiationException e) {
+            throw new ConnectionException(e.getMessage());
+        } catch (IllegalAccessException e) {
+            throw new ConnectionException(e.getMessage());
+        } catch (ClassNotFoundException e) {
+            throw new ConnectionException(e.getMessage());
+        }
+    }
+
     public static FileManagerClient createClient(URL filemgrUrl, boolean testConnection) throws ConnectionException {
         setPror();
 

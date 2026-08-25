@@ -29,7 +29,8 @@ import java.util.logging.Logger;
 //OODT imports
 import org.apache.oodt.cas.resource.structs.JobSpec;
 import org.apache.oodt.cas.resource.structs.exceptions.JobExecutionException;
-import org.apache.oodt.cas.resource.system.XmlRpcResourceManagerClient;
+import org.apache.oodt.cas.resource.system.ResourceManagerClient;
+import org.apache.oodt.cas.resource.system.rpc.ResourceManagerFactory;
 import org.apache.oodt.cas.resource.util.JobBuilder;
 
 /**
@@ -48,7 +49,7 @@ public final class JobSubmitter {
             .getName());
 
     /* our res mgr client */
-    private XmlRpcResourceManagerClient client = null;
+    private ResourceManagerClient client = null;
 
     /* our job file filter */
     private static final FileFilter JOB_FILE_FILTER = new FileFilter() {
@@ -60,7 +61,7 @@ public final class JobSubmitter {
     };
 
     public JobSubmitter(URL rUrl) {
-        client = new XmlRpcResourceManagerClient(rUrl);
+        client = ResourceManagerFactory.getResourceManagerClient(rUrl);
     }
 
     public void submitJobFiles(File jobFileDir) {

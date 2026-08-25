@@ -44,7 +44,7 @@ public class TestAvroRpcWorkflowManager extends TestCase{
     private String luceneCatLoc;
 
     private static final Logger LOG = Logger
-            .getLogger(TestXmlRpcWorkflowManager.class.getName());
+            .getLogger(TestAvroRpcWorkflowManager.class.getName());
     
     /**
      * {@link #startWorkflow()} fires an event of type "long". This event is associated with 2 instances of "LongWorkflow". Therefore, we should check if the

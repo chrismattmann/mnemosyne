@@ -38,15 +38,22 @@ import com.google.common.collect.Lists;
 /**
  * Mock implementation of {@link XmlRpcResourceManagerClient}.
  * 
+ * Implements the client interface rather than extending a real client.
+ *
+ * It used to extend the XML-RPC client, which is gone; extending the Avro one
+ * instead would be worse, since that constructor retries a real connection and
+ * a unit test has nothing to connect to.
+ *
  * @author bfoster (Brian Foster)
  */
-public class MockXmlRpcResourceManagerClient extends
-      XmlRpcResourceManagerClient {
+public class MockResourceManagerClient implements ResourceManagerClient {
 
    private MethodCallDetails lastMethodCallDetails;
 
-   public MockXmlRpcResourceManagerClient() throws MalformedURLException {
-      super(new URL("http://localhost:9000"));
+   private URL resMgrUrl;
+
+   public MockResourceManagerClient() throws MalformedURLException {
+      this.resMgrUrl = new URL("http://localhost:9000");
    }
 
    public MethodCallDetails getLastMethodCallDetails() {
@@ -185,4 +192,54 @@ public class MockXmlRpcResourceManagerClient extends
          return args;
       }
    }
+
+   // The rest of the interface. The old mock inherited these from a real
+   // client; implementing the interface means saying what they do, and for a
+   // mock that is nothing.
+
+   @Override
+   public boolean isAlive() {
+      return true;
+   }
+
+   @Override
+   public boolean isJobComplete(String jobId) {
+      return false;
+   }
+
+   @Override
+   public int getJobQueueCapacity() {
+      return 0;
+   }
+
+   @Override
+   public int getJobQueueSize() {
+      return 0;
+   }
+
+   @Override
+   public List getQueuedJobs() {
+      return Lists.newArrayList();
+   }
+
+   @Override
+   public String getExecReport() {
+      return "";
+   }
+
+   @Override
+   public String getNodeReport() {
+      return "";
+   }
+
+   @Override
+   public URL getResMgrUrl() {
+      return this.resMgrUrl;
+   }
+
+   @Override
+   public void setResMgrUrl(URL resMgrUrl) {
+      this.resMgrUrl = resMgrUrl;
+   }
+
 }

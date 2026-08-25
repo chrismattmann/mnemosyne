@@ -352,14 +352,6 @@ public class Configuration {
 				serverMgrPort = Integer.parseInt(XML.unwrappedText(childNode.getFirstChild()));
 			} else if (childNode.getNodeName().equals("properties")) {
 				loadProperties(childNode, properties);
-			} else if (childNode.getNodeName().equals("programs")) {
-				NodeList children = childNode.getChildNodes();
-				for (int i = 0; i < children.getLength(); ++i) {
-					// They're all of type execServer---for now.
-					ExecServerConfig esc = new ExecServerConfig(children.item(i));
-					esc.getProperties().setProperty("org.apache.oodt.commons.Configuration.url", inputSource.getSystemId());
-					execServers.add(esc);
-				}
 			}
 		}
 
@@ -457,23 +449,6 @@ public class Configuration {
 		  dumpProperties(properties, configurationNode);
 		}
 
-		// <programs>...
-		if (execServers.size() > 0) {
-			Element programsNode = document.createElement("programs");
-			configurationNode.appendChild(programsNode);
-
-		  for (Object execServer : execServers) {
-			ExecServerConfig esc = (ExecServerConfig) execServer;
-			Element execServerNode = document.createElement("execServer");
-			programsNode.appendChild(execServerNode);
-			XML.add(execServerNode, "class", esc.getClassName());
-			XML.add(execServerNode, "objectKey", esc.getObjectKey());
-			XML.add(execServerNode, "host", esc.getPreferredHost().toString());
-			if (esc.getProperties().size() > 0) {
-			  dumpProperties(esc.getProperties(), execServerNode);
-			}
-		  }
-		}
 
 		return configurationNode;
 	}
@@ -493,47 +468,6 @@ public class Configuration {
 		}
 	  }
 	}
-
-	/** Get the exec-server configurations.
-	 *
-	 * @return A collection of exec server configurations, each of class {@link ExecServerConfig}.
-	 */
-	public Collection getExecServerConfigs() {
-		return execServers;
-	}
-
-        /** Get the exec-server configurations.
-         *
-         * @param clazz The class of exec servers that will be returned.
-         * @return A collection of exec server configurations, each of class {@link ExecServerConfig}.
-         */
-        public Collection getExecServerConfigs(Class clazz) {
-                String className = clazz.getName();
-                Collection execServerConfigs = new ArrayList();
-		  for (Object execServer : execServers) {
-			ExecServerConfig exec = (ExecServerConfig) execServer;
-			if (className.equals(exec.getClassName())) {
-			  execServerConfigs.add(exec);
-			}
-		  }
-                return execServerConfigs;
-        }
-
-        /** Get an exec-server configuration.
-         *
-         * @param objectKey The object key of the Exec Server to retrieve.
-         * @return An {@link ExecServerConfig} or null if object key not found.
-         */
-        public ExecServerConfig getExecServerConfig(String objectKey) {
-                ExecServerConfig execServerConfig = null;
-                for (Iterator i = execServers.iterator(); i.hasNext() && execServerConfig == null;) {
-                        ExecServerConfig exec = (ExecServerConfig) i.next();
-                        if (objectKey.equals(exec.getObjectKey())) {
-						  execServerConfig = exec;
-						}
-                }
-                return execServerConfig;
-        }
 
 	/** Get the web server base URL.
 	 *
@@ -703,8 +637,6 @@ public class Configuration {
 	/** Object context environment. */
 	Hashtable contextEnvironment = new Hashtable();
 
-	/** Exec-servers. */
-	private List execServers = new ArrayList();
 
 	/** Web server host. */
 	private String webHost;

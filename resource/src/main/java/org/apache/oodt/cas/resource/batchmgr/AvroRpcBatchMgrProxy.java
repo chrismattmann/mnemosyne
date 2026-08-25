@@ -43,7 +43,10 @@ import java.util.logging.Logger;
 
 public class AvroRpcBatchMgrProxy extends Thread implements Runnable {
 
-    private static final Logger LOG = Logger.getLogger(XmlRpcBatchMgrProxy.class.getName());
+    // Was XmlRpcBatchMgrProxy.class: every line this class has ever logged
+    // was filed under the name of a different class, so anyone filtering logs
+    // by this one saw nothing.
+    private static final Logger LOG = Logger.getLogger(AvroRpcBatchMgrProxy.class.getName());
 
     private static final ChannelFactory CHANNEL_FACTORY = newSharedChannelFactory("avro-batch-client");
 

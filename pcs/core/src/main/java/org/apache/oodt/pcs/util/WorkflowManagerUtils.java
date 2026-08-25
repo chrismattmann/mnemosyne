@@ -20,7 +20,6 @@ package org.apache.oodt.pcs.util;
 import org.apache.oodt.cas.workflow.structs.WorkflowInstance;
 import org.apache.oodt.cas.workflow.system.WorkflowManagerClient;
 import org.apache.oodt.cas.workflow.system.rpc.RpcCommunicationFactory;
-import org.apache.xmlrpc.XmlRpcClient;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -28,7 +27,6 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.Collections;
 import java.util.List;
-import java.util.Vector;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -86,9 +84,12 @@ public class WorkflowManagerUtils implements Serializable, AutoCloseable {
 
   public boolean isConnected() {
     try {
-      XmlRpcClient c = new XmlRpcClient(this.client.getWorkflowManagerUrl());
-      c.execute("workflowmgr.getWorkflowInstances", new Vector());
-      return true;
+      // Was a raw XmlRpcClient calling "workflowmgr.getWorkflowInstances",
+      // which probed a transport the workflow manager no longer speaks: against
+      // an Avro workflow manager this reported not-connected however healthy
+      // the server was. isAlive goes over whichever transport the client is
+      // configured for, and asks the far cheaper question.
+      return this.client.isAlive();
     } catch (Exception ignore) {
       return false;
     }

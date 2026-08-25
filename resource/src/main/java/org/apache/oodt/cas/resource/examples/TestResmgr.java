@@ -22,7 +22,8 @@ package org.apache.oodt.cas.resource.examples;
 
 import org.apache.oodt.cas.resource.structs.Job;
 import org.apache.oodt.cas.resource.structs.NameValueJobInput;
-import org.apache.oodt.cas.resource.system.XmlRpcResourceManagerClient;
+import org.apache.oodt.cas.resource.system.ResourceManagerClient;
+import org.apache.oodt.cas.resource.system.rpc.ResourceManagerFactory;
 
 import java.net.URL;
 import java.util.logging.Level;
@@ -50,7 +51,7 @@ public class TestResmgr {
 
     try {
       URL managerUrl = new URL(Args[0]);
-      XmlRpcResourceManagerClient client = new XmlRpcResourceManagerClient(
+      ResourceManagerClient client = ResourceManagerFactory.getResourceManagerClient(
           managerUrl);
 
       Job hw1 = new Job("JobOne", "HelloWorldJob",

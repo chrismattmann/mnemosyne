@@ -35,7 +35,7 @@ do
                       || printError "Could not terminate mesos slave on ${host}"
 done
 sshc ${RESOURCE_HOST} \
-    "pkill -u $(whoami) -f org.apache.oodt.cas.resource.system.XmlRpcResourceManager" false \
+    "pkill -u $(whoami) -f org.apache.oodt.cas.resource.system.AvroRpcResourceManager" false \
     || printError "Could not terminate resource manager on host: ${RESOURCE_HOST}"
 #Shut down screen if using screen
 if [[ "${SCREEN}" != "" ]]

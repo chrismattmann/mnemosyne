@@ -21,7 +21,7 @@ Document Type for the Apache Object Oriented Data Technology
 configuration file, used by the class Configuration.
 -->
 
-<!ELEMENT configuration (webServer, nameServer, ldapServer?, xml?, serverMgr?, properties?, programs?)>
+<!ELEMENT configuration (webServer, nameServer, ldapServer?, xml?, serverMgr?, properties?)>
 
 <!-- Location of the web server -->
 <!ELEMENT webServer (host, port, dir?)>
@@ -58,18 +58,6 @@ configuration file, used by the class Configuration.
 
 <!-- A collection of Java properties -->
 <!ELEMENT properties (key, value)*>
-
-<!-- A series of programs to execute or that can be executed -->
-<!ELEMENT programs (execServer | client)*>
-
-<!-- A program executed by the ExecServer class -->
-<!ELEMENT execServer (class, objectKey, host?, properties?)>
-
-<!-- A program that you execute by hand -->
-<!ELEMENT client (class, properties?)>
-
-<!-- A fully-qualified Java class name -->
-<!ELEMENT class (#PCDATA)>
 
 <!-- An Internet host name or dotted IP decimal address -->
 <!ELEMENT host (#PCDATA)>

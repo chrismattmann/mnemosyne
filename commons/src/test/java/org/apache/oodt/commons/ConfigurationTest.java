@@ -68,32 +68,6 @@ public class ConfigurationTest extends TestCase {
 		assertTrue(c.getEntityRefDirs().contains("/dir/1"));
 		assertTrue(c.getEntityRefDirs().contains("/dir/2"));
 		assertEquals("/dir/1,/dir/2,/dir/one,/dir/two", System.getProperty(Configuration.ENTITY_DIRS_PROP));
-		Collection servers = c.getExecServerConfigs();
-		assertEquals(2, servers.size());
-	  for (Object server : servers) {
-		ExecServerConfig esc = (ExecServerConfig) server;
-		if (esc.getClassName().equals("test.Class1")) {
-		  assertEquals("Name1", esc.getObjectKey());
-		  assertEquals(1, esc.getProperties().size());
-		} else if (esc.getClassName().equals("test.Class2")) {
-		  assertEquals("Name2", esc.getObjectKey());
-		  assertEquals(3, esc.getProperties().size());
-		  for (Map.Entry<Object, Object> objectObjectEntry : esc.getProperties().entrySet()) {
-			Map.Entry entry = (Map.Entry) objectObjectEntry;
-			if (entry.getKey().equals("localKey1")) {
-			  assertEquals("localKey2", entry.getValue());
-			} else if (entry.getKey().equals("globalKey2")) {
-			  assertEquals("local-override", entry.getValue());
-			} else if (entry.getKey().equals("org.apache.oodt.commons.Configuration.url")) {
-			  ; // This one's OK.
-			} else {
-			  fail("Unknown local property \"" + entry.getKey() + "\" in exec server");
-			}
-		  }
-		} else {
-		  fail("Unknown ExecServerConfig \"" + esc.getClassName() + "\" in servers from Configuration");
-		}
-	  }
 	}
 
 	/** The temporary test configuration file. */
@@ -102,5 +76,5 @@ public class ConfigurationTest extends TestCase {
 	/** Old value of the {@link Configuration#ENTITY_DIRS_PROP} system property. */
 	public String oldValue;
 
-	private static final String TEST_DOC = "<?xml version=\"1.0\"?>\n<!DOCTYPE configuration PUBLIC \"-//JPL//DTD EDA Configuration 1.0//EN\" \"http://enterprise.jpl.nasa.gov/dtd/configuration.dtd\">\n<configuration><webServer><host>testhost.test.domain</host><port>12345</port></webServer><nameServer stateFrequency=\"42\"><iiop><version>1.2</version><host>testhost.test.domain</host><port>12345</port><objectKey>TestService</objectKey></iiop></nameServer><xml><entityRef><dir>/dir/one</dir><dir>/dir/two</dir></entityRef></xml><properties><key>globalKey1</key><value>globalValue1</value><key>globalKey2</key><value>globalValue2</value></properties><programs><execServer><class>test.Class1</class><objectKey>Name1</objectKey></execServer><execServer><class>test.Class2</class><objectKey>Name2</objectKey><properties><key>localKey1</key><value>localKey2</value><key>globalKey2</key><value>local-override</value></properties></execServer></programs></configuration>";
+	private static final String TEST_DOC = "<?xml version=\"1.0\"?>\n<!DOCTYPE configuration PUBLIC \"-//JPL//DTD EDA Configuration 1.0//EN\" \"http://enterprise.jpl.nasa.gov/dtd/configuration.dtd\">\n<configuration><webServer><host>testhost.test.domain</host><port>12345</port></webServer><nameServer stateFrequency=\"42\"><iiop><version>1.2</version><host>testhost.test.domain</host><port>12345</port><objectKey>TestService</objectKey></iiop></nameServer><xml><entityRef><dir>/dir/one</dir><dir>/dir/two</dir></entityRef></xml><properties><key>globalKey1</key><value>globalValue1</value><key>globalKey2</key><value>globalValue2</value></properties></configuration>";
 }

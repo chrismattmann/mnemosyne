@@ -97,10 +97,6 @@ the License.
       <groupId>ai.mattmann.mnemosyne</groupId>
       <artifactId>pcs-input</artifactId>
     </dependency>
-    <dependency>
-      <groupId>xmlrpc</groupId>
-      <artifactId>xmlrpc</artifactId>
-    </dependency>
   </dependencies>
   <build>
     <plugins>

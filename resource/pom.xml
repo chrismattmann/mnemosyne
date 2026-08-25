@@ -104,7 +104,7 @@
           </descriptors>
           <archive>
             <manifest>
-              <mainClass>org.apache.oodt.cas.resource.system.XmlRpcResourceManagerClient</mainClass>
+              <mainClass>org.apache.oodt.cas.resource.system.AvroRpcResourceManagerClient</mainClass>
             </manifest>
           </archive>
         </configuration>
@@ -152,15 +152,6 @@
       <groupId>org.apache.commons</groupId>
       <artifactId>commons-dbcp2</artifactId>
     </dependency>
-    <!--
-      Needed at runtime, not at compile time: XmlRpcResourceManagerClient asks
-      XML-RPC for CommonsXmlRpcTransportFactory, the only transport there that
-      honours a timeout. Nothing here imports it, so it looks unused and is not.
-    -->
-    <dependency>
-      <groupId>commons-httpclient</groupId>
-      <artifactId>commons-httpclient</artifactId>
-    </dependency>
     <dependency>
       <groupId>org.apache.httpcomponents</groupId>
       <artifactId>httpclient</artifactId>
@@ -207,10 +198,6 @@
       <groupId>org.safehaus.jug</groupId>
       <artifactId>jug</artifactId>
       <classifier>asl</classifier>
-    </dependency>
-    <dependency>
-      <groupId>xmlrpc</groupId>
-      <artifactId>xmlrpc</artifactId>
     </dependency>
     <dependency>
       <groupId>org.hamcrest</groupId>

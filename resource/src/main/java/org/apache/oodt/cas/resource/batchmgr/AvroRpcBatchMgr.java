@@ -38,7 +38,8 @@ import java.util.logging.Logger;
 public class AvroRpcBatchMgr implements Batchmgr {
 
     /* our log stream */
-    private static final Logger LOG = Logger.getLogger(XmlRpcBatchMgr.class
+    // Was XmlRpcBatchMgr.class.
+    private static final Logger LOG = Logger.getLogger(AvroRpcBatchMgr.class
             .getName());
 
     private Monitor mon;
@@ -122,11 +123,16 @@ public class AvroRpcBatchMgr implements Batchmgr {
             this.nodeToJobMap.remove(spec.getJob().getId());
         }
         synchronized (this.specToProxyMap) {
-            XmlRpcBatchMgrProxy proxy = (XmlRpcBatchMgrProxy) this.specToProxyMap
-                    .remove(spec.getJob().getId());
-            if (proxy != null) {
-                proxy = null;
-            }
+            // This cast the removed proxy to XmlRpcBatchMgrProxy, and
+            // executeRemotely puts an AvroRpcBatchMgrProxy in, so every job
+            // completion threw ClassCastException whether the job had
+            // succeeded or failed. The Avro batch manager could not finish a
+            // job at all, which is presumably why deployments were still
+            // configured for the XML-RPC one.
+            //
+            // The cast never did anything besides throw: the result was only
+            // assigned null. Removing it from the map is the whole operation.
+            this.specToProxyMap.remove(spec.getJob().getId());
         }
 
         try {
@@ -143,11 +149,16 @@ public class AvroRpcBatchMgr implements Batchmgr {
             this.nodeToJobMap.remove(spec.getJob().getId());
         }
         synchronized (this.specToProxyMap) {
-            XmlRpcBatchMgrProxy proxy = (XmlRpcBatchMgrProxy) this.specToProxyMap
-                    .remove(spec.getJob().getId());
-            if (proxy != null) {
-                proxy = null;
-            }
+            // This cast the removed proxy to XmlRpcBatchMgrProxy, and
+            // executeRemotely puts an AvroRpcBatchMgrProxy in, so every job
+            // completion threw ClassCastException whether the job had
+            // succeeded or failed. The Avro batch manager could not finish a
+            // job at all, which is presumably why deployments were still
+            // configured for the XML-RPC one.
+            //
+            // The cast never did anything besides throw: the result was only
+            // assigned null. Removing it from the map is the whole operation.
+            this.specToProxyMap.remove(spec.getJob().getId());
         }
 
         try {

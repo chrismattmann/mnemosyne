@@ -28,7 +28,8 @@ import java.util.Iterator;
 import org.apache.oodt.cas.metadata.Metadata;
 import org.apache.oodt.cas.resource.structs.Job;
 import org.apache.oodt.cas.resource.structs.exceptions.JobQueueException;
-import org.apache.oodt.cas.resource.system.XmlRpcResourceManagerClient;
+import org.apache.oodt.cas.resource.system.ResourceManagerClient;
+import org.apache.oodt.cas.resource.system.rpc.ResourceManagerFactory;
 import org.apache.oodt.cas.workflow.structs.WorkflowConditionConfiguration;
 import org.apache.oodt.cas.workflow.structs.WorkflowConditionInstance;
 
@@ -54,7 +55,7 @@ public class PrerequisiteCondition implements WorkflowConditionInstance {
 	 * @return true if job is present, otherwise false
 	 */
 	@SuppressWarnings("unchecked")
-	private boolean isJobPresentInQueue(XmlRpcResourceManagerClient client, String jobName){
+	private boolean isJobPresentInQueue(ResourceManagerClient client, String jobName){
 		Iterator<Job> iter;
 		try {
 			iter = (Iterator<Job>)client.getQueuedJobs().iterator();
@@ -81,9 +82,9 @@ public class PrerequisiteCondition implements WorkflowConditionInstance {
 		System.out.println(new Date() + " PrerequisiteCondition: Jobs: "+ Arrays.toString(jobs));
 		System.out.println(new Date() + " PrerequisiteCondition: Resource Manager: "+ resourceManagerUrl);
 		
-		XmlRpcResourceManagerClient client = null;
+		ResourceManagerClient client = null;
 		try {
-			client = new XmlRpcResourceManagerClient(new URL(resourceManagerUrl));
+			client = ResourceManagerFactory.getResourceManagerClient(new URL(resourceManagerUrl));
 			flag = true;
 			for (String job : jobs)
 				flag = flag && !isJobPresentInQueue(client, job);

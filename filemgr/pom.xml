@@ -155,10 +155,6 @@
       <artifactId>jug</artifactId>
       <classifier>asl</classifier>
     </dependency>
-    <dependency>
-      <groupId>xmlrpc</groupId>
-      <artifactId>xmlrpc</artifactId>
-    </dependency>
 
     
     <dependency>

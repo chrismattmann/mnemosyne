@@ -38,7 +38,6 @@ import org.apache.oodt.cas.metadata.Metadata;
 import org.apache.oodt.commons.database.DatabaseConnectionBuilder;
 import org.apache.oodt.commons.database.SqlScript;
 import org.apache.oodt.commons.pagination.PaginationUtils;
-import org.apache.xmlrpc.XmlRpcException;
 
 import java.io.File;
 import java.io.FileInputStream;

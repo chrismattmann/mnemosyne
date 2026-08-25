@@ -19,6 +19,6 @@ the License.
 	<queue name="example">
 		<scheduler factory="org.apache.oodt.cas.resource.scheduler.LRUSchedulerFactory"/>
 		<monitor factory="org.apache.oodt.cas.resource.monitor.AssignmentMonitorFactory"/>
-		<batchmgr factory="org.apache.oodt.cas.resource.batchmgr.XmlRpcBatchMgrFactory"/>
+		<batchmgr factory="org.apache.oodt.cas.resource.batchmgr.AvroRpcBatchMgrFactory"/>
 	</queue>
 </cas:queue-to-backend-mapping>

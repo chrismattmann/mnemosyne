@@ -10,7 +10,6 @@ import org.apache.oodt.cas.filemgr.structs.query.ComplexQuery;
 import org.apache.oodt.cas.filemgr.structs.query.QueryResult;
 import org.apache.oodt.cas.filemgr.system.FileManagerClient;
 import org.apache.oodt.cas.metadata.Metadata;
-import org.apache.xmlrpc.XmlRpcException;
 
 import java.io.IOException;
 import java.net.URL;
@@ -252,17 +251,17 @@ public class DummyFileManagerClient implements FileManagerClient {
     }
 
     @Override
-    public Metadata getCatalogValues(Metadata metadata, ProductType productType) throws XmlRpcException, IOException {
+    public Metadata getCatalogValues(Metadata metadata, ProductType productType) throws IOException {
         return null;
     }
 
     @Override
-    public Metadata getOrigValues(Metadata metadata, ProductType productType) throws XmlRpcException, IOException {
+    public Metadata getOrigValues(Metadata metadata, ProductType productType) throws IOException {
         return null;
     }
 
     @Override
-    public Query getCatalogQuery(Query query, ProductType productType) throws XmlRpcException, IOException {
+    public Query getCatalogQuery(Query query, ProductType productType) throws IOException {
         return null;
     }
 
