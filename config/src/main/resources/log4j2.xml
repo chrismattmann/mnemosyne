@@ -20,7 +20,9 @@
 <Configuration status="INFO">
 
     <Appenders>
-        <Console name="Console" target="SYSTEM_OUT">
+        <Console name="Console" target="SYSTEM_ERR">
+            <!-- console carries errors only; the file appender keeps the full record -->
+            <ThresholdFilter level="error" onMatch="ACCEPT" onMismatch="DENY"/>
             <PatternLayout pattern="%d{HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n"/>
         </Console>
         <File name="File" fileName="config.log" immediateFlush="true">
@@ -33,7 +35,7 @@
         <Logger name="org.springframework" level="error"/>
         <Logger name="org.apache.curator" level="error"/>
 
-        <Root level="debug">
+        <Root level="info">
             <AppenderRef ref="Console"/>
             <AppenderRef ref="File"/>
         </Root>
