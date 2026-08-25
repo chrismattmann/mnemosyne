@@ -174,6 +174,28 @@ Solr is a separate matter and is unaffected: Mnemosyne talks to Solr over the
 network as a client, so your Solr can be upgraded, or not, on its own
 schedule.
 
+## Upgrading from Apache OODT: logging is quieter by default
+
+Stock OODT shipped `.level = ALL` in every component's `logging.properties`,
+and `<Root level="debug">` in most `log4j2.xml` files. A default deployment
+therefore logged at FINE and below, which is what
+[OODT-991](https://issues.apache.org/jira/browse/OODT-991) complained about in
+2018. Mnemosyne ships `INFO` instead, and sends only errors to the console
+while the file appenders keep the full record.
+
+If you depended on `FINE` output from a stock deployment, set it back
+deliberately in `etc/logging.properties` or `etc/log4j2.xml`. Both files are
+still shipped to `etc/` and are still what the start scripts point at.
+
+What changed alongside it is worth knowing if you script the CLIs: those two
+files used to be packaged **inside** some of the library jars as well, so any
+application with, say, `cas-workflow` on its classpath silently adopted its
+logging configuration. That is how the File Manager's own command line tools
+came to log DEBUG to standard output, which corrupts the output of any tool
+whose stdout is piped — `query-tool ... | DeleteProduct --read` fed a log line
+in place of a product id. Library jars no longer carry logging configuration,
+and the console appenders write to standard error rather than standard output.
+
 ## Components
 
 | Module | Role |

@@ -4,7 +4,24 @@ Apache OODT Change Log
 =======
 Release 2.0 - In Progress
 
-NOTE: Avro RPC becomes the default method of communication from this version. XML RPC is made deprecated.
+NOTE: XML-RPC is gone entirely from this version. Avro RPC is the only
+transport. See README.md for what that means for an existing deployment.
+
+NOTE: Logging defaults are quieter. Shipped logging.properties moves from
+.level = ALL to INFO, log4j2.xml root moves to info with only errors going to
+the console, and the console appenders write to stderr rather than stdout. If
+you relied on FINE output from a stock deployment, set it back in
+etc/logging.properties or etc/log4j2.xml.
+
+* OODT-991 Logs too verbose: turn shipped log levels down, and stop packaging
+  logging.properties and log4j2.xml inside library jars, where any application
+  depending on them silently inherited their configuration (Tom Barber, Ryan
+  McDonagh reported)
+
+* Remove Apache XML-RPC from the file manager, workflow manager, resource
+  manager and crawler, along with the ExecServer framework that was its last
+  user. Drops the xmlrpc and commons-httpclient dependencies, and with them
+  CVE-2012-5783
 
 * OODT-1006 Introduce docker images for file manager, resource manager, ReactJs based OPSUI and file manager/workflow manager REST APIs
 
