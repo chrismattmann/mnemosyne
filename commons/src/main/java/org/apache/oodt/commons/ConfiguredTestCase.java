@@ -72,8 +72,5 @@ public abstract class ConfiguredTestCase extends TestCase {
 		+ "<password>h1ghly;s3cr3t</password></ldapServer><xml><parser>crimson</parser><entityRef>"
 		+ "<dir>/non/existent/htdocs/xml</dir><dir>/non/existent/htdocs/dtd</dir></entityRef></xml><serverMgr>"
 		+ "<port>84</port></serverMgr><properties><key>global</key><value>1</value><key>override</key><value>2</value>"
-		+ "</properties><programs><execServer><class>TestServer</class><objectKey>urn:eda:rmi:TestObject</objectKey>"
-		+ "<host>oodt.apache.org</host><properties><key>local</key><value>3</value><key>override</key><value>4</value>"
-		+ "</properties></execServer><client><class>TestClient</class><properties><key>local</key><value>5</value>"
-		+ "<key>override</key><value>6</value></properties></client></programs></configuration>";
+		+ "</properties></configuration>";
 }

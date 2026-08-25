@@ -152,30 +152,6 @@ the License.
         <version>2.12.0</version>
       </dependency>
       <!--
-        commons-httpclient 3.x is a different library from httpcomponents
-        httpclient below, it reached end of life in 2011, and it carries
-        CVE-2012-5783: it does not check that the certificate a server presents
-        matches the host that was asked for, so TLS through it offers no
-        protection against an interposed party. There is no fixed version; the
-        library was abandoned before anyone fixed it.
-
-        It cannot simply be dropped. No OODT source imports it, but XML-RPC
-        loads it: XmlRpcResourceManagerClient asks for
-        CommonsXmlRpcTransportFactory, which is the only transport in XML-RPC 2
-        that honours a connection or request timeout, and removing the
-        dependency turns every XML-RPC resource manager call into a
-        NoClassDefFoundError. Solr 1.3 pulls it in as well.
-
-        Pinned at 3.1, the last release, so at least one version is on the
-        classpath rather than two. See the tracker for what it takes to be rid
-        of it: the XML-RPC transport and Solr both have to move.
-      -->
-      <dependency>
-        <groupId>commons-httpclient</groupId>
-        <artifactId>commons-httpclient</artifactId>
-        <version>3.1</version>
-      </dependency>
-      <!--
         4.5.13 is where CVE-2020-13956 was fixed: URIUtils.extractHost
         mis-parsed authority components, so a URI could be made to resolve to a
         different host than it appeared to name. curator/sso calls exactly that
@@ -666,11 +642,6 @@ the License.
         <groupId>xerces</groupId>
         <artifactId>xercesImpl</artifactId>
         <version>2.9.1</version>
-      </dependency>
-      <dependency>
-        <groupId>xmlrpc</groupId>
-        <artifactId>xmlrpc</artifactId>
-        <version>2.0.1</version>
       </dependency>
       <dependency>
         <groupId>xmlunit</groupId>
