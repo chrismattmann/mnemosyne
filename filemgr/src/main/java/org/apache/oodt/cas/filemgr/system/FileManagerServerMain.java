@@ -43,16 +43,29 @@ public class FileManagerServerMain {
             System.exit(1);
         }
 
-        @SuppressWarnings("unused")
-
-        FileManagerServer manager = RpcCommunicationFactory.createServer(portNum);
+        final FileManagerServer manager = RpcCommunicationFactory.createServer(portNum);
         manager.startUp();
 
+        // Without this the process ignores SIGTERM. Avro's Netty server runs on
+        // non-daemon threads -- 54 of them in a default configuration -- so
+        // nothing brings the JVM down once main is parked in join(), and
+        // bin/filemgr stop reports "File Manager did not stop in time. PID file
+        // was not removed" while the server keeps listening. The resource and
+        // workflow managers have always registered one; the file manager was
+        // the one that did not.
+        Runtime.getRuntime().addShutdownHook(new Thread() {
+            @Override
+            public void run() {
+                manager.shutdown();
+            }
+        });
 
         for (;;)
             try {
                 Thread.currentThread().join();
             } catch (InterruptedException ignore) {
+                manager.shutdown();
+                break;
             }
     }
 }
