@@ -213,7 +213,7 @@
               <forkCount>1</forkCount>
               <reuseForks>false</reuseForks>
               <useSystemClassLoader>false</useSystemClassLoader>
-              <argLine>--enable-native-access=ALL-UNNAMED</argLine>
+              <argLine>${coverageArgLine} --enable-native-access=ALL-UNNAMED</argLine>
               <systemProperties>
                 <property>
                   <name>java.util.logging.config.file</name>

@@ -39,6 +39,13 @@ the License.
     <maven.enforcer.plugin.version>3.5.0</maven.enforcer.plugin.version>
     <!-- Property-based testing; see the `hegel` profile. JDK 22+ only. -->
     <hegel.version>0.4.2</hegel.version>
+    <!--
+      Prepended to the surefire argLine in the `hegel` profile. Empty by
+      default; a coverage agent (jacoco prepare-agent with
+      propertyName=coverageArgLine) sets it, so hardcoding the native-access
+      flag does not silently discard the agent.
+    -->
+    <coverageArgLine/>
     <junit.jupiter.version>5.11.4</junit.jupiter.version>
     <organizationLogo>http://www.apache.org/images/feather.gif</organizationLogo>
     <logo>/images/${project.artifactId}.jpg</logo>
@@ -1183,7 +1190,7 @@ mm
                 Hegel's engine is native. Without this the JVM prints a
                 native-access warning on every run.
               -->
-              <argLine>--enable-native-access=ALL-UNNAMED</argLine>
+              <argLine>${coverageArgLine} --enable-native-access=ALL-UNNAMED</argLine>
             </configuration>
           </plugin>
         </plugins>
