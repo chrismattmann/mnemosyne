@@ -117,6 +117,7 @@ local.properties
 
 # test by-products
 *.log
+*.log.[0-9]*
 
 # Apple OS X folder attributes
 .DS_Store
