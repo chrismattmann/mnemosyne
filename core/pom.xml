@@ -37,6 +37,9 @@ the License.
     <maven.source.plugin.version>3.3.1</maven.source.plugin.version>
     <maven.javadoc.plugin.version>3.11.2</maven.javadoc.plugin.version>
     <maven.enforcer.plugin.version>3.5.0</maven.enforcer.plugin.version>
+    <!-- Property-based testing; see the `hegel` profile. JDK 22+ only. -->
+    <hegel.version>0.4.2</hegel.version>
+    <junit.jupiter.version>5.11.4</junit.jupiter.version>
     <organizationLogo>http://www.apache.org/images/feather.gif</organizationLogo>
     <logo>/images/${project.artifactId}.jpg</logo>
     <xdocVersion>${project.version}</xdocVersion>
@@ -1084,6 +1087,103 @@ mm
               -->
               <autoPublish>false</autoPublish>
               <waitUntil>validated</waitUntil>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+
+    <!--
+      Property-based tests, written against Hegel (https://hegel.dev), which
+      generates inputs to falsify a stated property and then shrinks any
+      failure to a minimal counterexample.
+
+      Hegel calls a native engine through the Foreign Function & Memory API
+      and therefore requires JDK 22 or newer, while this project targets
+      JDK 21. Everything Hegel needs is confined to this profile, and the
+      profile activates only on a JDK that can run it, so a JDK 21 build is
+      byte-for-byte unaffected: no JUnit 5 on the classpath, no extra test
+      sources compiled, no change to surefire.
+
+      The properties live in src/test/pbt/java rather than src/test/java so
+      that a JDK 21 build never presents them to javac. They are written
+      against JUnit 5, which the vintage engine below lets run alongside the
+      existing JUnit 3 and JUnit 4 suites in the same surefire execution.
+
+      To run them:  mvn test -P hegel      (on JDK 22+)
+    -->
+    <profile>
+      <id>hegel</id>
+      <activation>
+        <jdk>[22,)</jdk>
+      </activation>
+      <dependencies>
+        <dependency>
+          <groupId>dev.hegel</groupId>
+          <artifactId>hegel</artifactId>
+          <version>${hegel.version}</version>
+          <scope>test</scope>
+        </dependency>
+        <dependency>
+          <groupId>org.junit.jupiter</groupId>
+          <artifactId>junit-jupiter</artifactId>
+          <version>${junit.jupiter.version}</version>
+          <scope>test</scope>
+        </dependency>
+        <!--
+          The existing suites are JUnit 3 and JUnit 4. Once the JUnit Platform
+          is on the classpath surefire runs the platform, which finds JUnit 4
+          tests only through the vintage engine. Without this, adding Hegel
+          would silently stop running several hundred existing tests.
+        -->
+        <dependency>
+          <groupId>org.junit.vintage</groupId>
+          <artifactId>junit-vintage-engine</artifactId>
+          <version>${junit.jupiter.version}</version>
+          <scope>test</scope>
+        </dependency>
+      </dependencies>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>build-helper-maven-plugin</artifactId>
+            <version>3.6.0</version>
+            <executions>
+              <execution>
+                <id>add-property-test-source</id>
+                <phase>generate-test-sources</phase>
+                <goals>
+                  <goal>add-test-source</goal>
+                </goals>
+                <configuration>
+                  <sources>
+                    <source>src/test/pbt/java</source>
+                  </sources>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <artifactId>maven-compiler-plugin</artifactId>
+            <version>3.13.0</version>
+            <configuration>
+              <!--
+                Main sources keep the project's usual level; only the test
+                compile is raised, because Hegel's API requires 22.
+              -->
+              <testRelease>22</testRelease>
+            </configuration>
+          </plugin>
+          <plugin>
+            <artifactId>maven-surefire-plugin</artifactId>
+            <version>3.5.3</version>
+            <configuration>
+              <!--
+                Hegel's engine is native. Without this the JVM prints a
+                native-access warning on every run.
+              -->
+              <argLine>--enable-native-access=ALL-UNNAMED</argLine>
             </configuration>
           </plugin>
         </plugins>
