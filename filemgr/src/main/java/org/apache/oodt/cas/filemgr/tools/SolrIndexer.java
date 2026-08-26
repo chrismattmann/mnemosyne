@@ -650,7 +650,7 @@ public class SolrIndexer {
 		} else if (line.hasOption("all") || line.hasOption("product")
 		    || line.hasOption("metFile") || line.hasOption("read")
 		    || line.hasOption("types") || line.hasOption("deleteAll")) {
-			SolrIndexer indexer;
+			SolrIndexer indexer = null;
 			String solrUrl = null;
 			String fmUrl = null;
 			if (line.hasOption("solrUrl")) {
@@ -687,7 +687,29 @@ public class SolrIndexer {
 				LOG.severe("An error occurred indexing: " + e.getMessage());
 				LOG
 				    .severe("If the above message is related to accessing the Solr instance, see the Application Server's log for additional information.");
+			} finally {
+				if (indexer != null) {
+					indexer.close();
+				}
 			}
+		}
+	}
+
+	/**
+	 * Releases the Solr client.
+	 *
+	 * HttpJdkSolrClient runs its executor on non-daemon threads, so a process
+	 * that finishes indexing and returns from main does not exit: it sits with
+	 * DestroyJavaVM waiting on threads nothing will stop. That is what happens
+	 * to bin/drat, which runs this tool and then waits for it before firing the
+	 * mapper, so the whole audit stops after the index step with "Finished
+	 * indexing products." as its last word.
+	 */
+	public void close() {
+		try {
+			server.close();
+		} catch (IOException e) {
+			LOG.warning("Unable to close the Solr client: " + e.getMessage());
 		}
 	}
 
