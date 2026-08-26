@@ -1124,6 +1124,26 @@ mm
       <activation>
         <jdk>[22,)</jdk>
       </activation>
+      <!--
+        pcs/core and pcs/input pin junit 3.8.2 in their own poms. The vintage
+        engine refuses to start against anything older than 4.12 — "Unsupported
+        version of junit:junit: 3.8.2" — and takes the whole module's test run
+        down with it, so those modules ran zero tests rather than some. 4.13.2
+        still executes junit.framework.TestCase, so the JUnit 3 suites keep
+        working; this only raises the floor to something the engine accepts.
+
+        Scoped to this profile, so a JDK 21 build still resolves whatever each
+        module asked for.
+      -->
+      <dependencyManagement>
+        <dependencies>
+          <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>4.13.2</version>
+          </dependency>
+        </dependencies>
+      </dependencyManagement>
       <dependencies>
         <dependency>
           <groupId>dev.hegel</groupId>
