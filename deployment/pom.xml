@@ -35,18 +35,12 @@
     <description>Contains the docker based deployments for OODT</description>
 
     <dependencies>
-        <dependency>
-            <groupId>ai.mattmann.mnemosyne</groupId>
-            <artifactId>cas-filemgr</artifactId>
-            <version>${project.version}</version>
-            <type>zip</type>
-        </dependency>
-        <dependency>
-            <groupId>ai.mattmann.mnemosyne</groupId>
-            <artifactId>cas-workflow</artifactId>
-            <version>${project.version}</version>
-            <type>zip</type>
-        </dependency>
+        <!-- The cas-filemgr and cas-workflow zips are not declared here. They are
+             built with <attach>false</attach> because they are ~159 MB deployment
+             archives rather than library artifacts, so they never reach the local
+             repository and a compile-scope dependency on them cannot resolve. The
+             docker profile below names them directly as dependency-plugin
+             artifactItems, which is the only place they are consumed. -->
         <dependency>
             <groupId>ai.mattmann.mnemosyne</groupId>
             <artifactId>cas-product</artifactId>
