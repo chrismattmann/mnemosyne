@@ -17,12 +17,16 @@
 
 package org.apache.oodt.commons.util;
 
+import static dev.hegel.Generators.booleans;
 import static dev.hegel.Generators.longs;
 import static dev.hegel.Generators.sampledFrom;
+import static dev.hegel.Generators.text;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import dev.hegel.HegelTest;
 import dev.hegel.TestCase;
+import java.text.ParseException;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
@@ -61,6 +65,14 @@ class DateConvertPropertyTest {
           "Pacific/Chatham"); // +12:45
 
   /**
+   * Language tags a JVM is plausibly started in: Turkish for its dotless i,
+   * German and Japanese and Arabic for their month names and digits, and Thai
+   * because its default calendar is not the Gregorian one.
+   */
+  private static final List<String> LOCALES =
+      List.of("en-US", "tr-TR", "de-DE", "ja-JP", "ar-EG", "th-TH");
+
+  /**
    * A timestamp written by {@code isoFormat} must read back as the same instant
    * through {@code isoParse}. The format carries a zone offset, so this has to
    * hold in every zone, not just the one the developer happened to be in.
@@ -92,7 +104,7 @@ class DateConvertPropertyTest {
   @HegelTest
   void isoFormatRoundTripsInEveryLocale(TestCase tc) throws Exception {
     long millis = tc.draw(longs().min(MIN_MILLIS).max(MAX_MILLIS), "millis");
-    String tag = tc.draw(sampledFrom(List.of("en-US", "tr-TR", "de-DE", "ja-JP", "ar-EG")), "locale");
+    String tag = tc.draw(sampledFrom(LOCALES), "locale");
 
     Locale previous = Locale.getDefault();
     TimeZone previousZone = TimeZone.getDefault();
@@ -122,5 +134,117 @@ class DateConvertPropertyTest {
     long millis = tc.draw(longs().min(MIN_MILLIS).max(MAX_MILLIS), "millis");
     Date original = new Date(millis);
     assertEquals(original, DateConvert.tsParse(DateConvert.tsFormat(original)));
+  }
+
+  /**
+   * The DBMS format carries whole seconds, so a round trip cannot promise the
+   * milliseconds back. What it must promise is that re-rendering what it parsed
+   * reproduces the string it was given: anything else means the value drifted
+   * on its way through the database column.
+   */
+  @HegelTest
+  void dbmsFormatRoundTrips(TestCase tc) throws Exception {
+    long millis = tc.draw(longs().min(MIN_MILLIS).max(MAX_MILLIS), "millis");
+    String tag = tc.draw(sampledFrom(LOCALES), "locale");
+
+    Locale previous = Locale.getDefault();
+    try {
+      Locale.setDefault(Locale.forLanguageTag(tag));
+      String written = DateConvert.dbmsFormat(new Date(millis));
+      tc.note("written = " + written);
+
+      assertEquals(written, DateConvert.dbmsFormat(DateConvert.dbmsParse(written)));
+    } finally {
+      Locale.setDefault(previous);
+    }
+  }
+
+  /** The same, for the year-month-day format, which carries whole days. */
+  @HegelTest
+  void ymdFormatRoundTrips(TestCase tc) throws Exception {
+    long millis = tc.draw(longs().min(MIN_MILLIS).max(MAX_MILLIS), "millis");
+    String tag = tc.draw(sampledFrom(LOCALES), "locale");
+
+    Locale previous = Locale.getDefault();
+    try {
+      Locale.setDefault(Locale.forLanguageTag(tag));
+      String written = DateConvert.ymdFormat(new Date(millis));
+      tc.note("written = " + written);
+
+      assertEquals(written, DateConvert.ymdFormat(DateConvert.ymdParse(written)));
+    } finally {
+      Locale.setDefault(previous);
+    }
+  }
+
+  /**
+   * A DBMS timestamp is a wire format: it goes into a column on one host and is
+   * read back on another. So a string written by one JVM has to be readable by
+   * the next one, whatever locale each of them happens to be started in. None
+   * of the formatters in this class pins a Locale, and the DBMS pattern spells
+   * its month out in letters.
+   */
+  @HegelTest
+  void dbmsFormatIsReadableFromAnotherLocale(TestCase tc) throws Exception {
+    long millis = tc.draw(longs().min(MIN_MILLIS).max(MAX_MILLIS), "millis");
+    String writerTag = tc.draw(sampledFrom(LOCALES), "writerLocale");
+    String readerTag = tc.draw(sampledFrom(LOCALES), "readerLocale");
+
+    Locale previous = Locale.getDefault();
+    try {
+      Locale.setDefault(Locale.forLanguageTag(writerTag));
+      Date original = new Date(millis);
+      String written = DateConvert.dbmsFormat(original);
+      tc.note("written = " + written);
+
+      Locale.setDefault(Locale.forLanguageTag(readerTag));
+      Date read = DateConvert.dbmsParse(written);
+
+      Locale.setDefault(Locale.forLanguageTag(writerTag));
+      assertEquals(written, DateConvert.dbmsFormat(read));
+    } finally {
+      Locale.setDefault(previous);
+    }
+  }
+
+  /**
+   * The same crossing for the year-month-day format. This one is all digits, so
+   * it looks locale-proof — but "yyyy" is a year in whatever calendar system the
+   * locale nominates, and not every locale nominates the Gregorian one.
+   */
+  @HegelTest
+  void ymdFormatIsReadableFromAnotherLocale(TestCase tc) throws Exception {
+    long millis = tc.draw(longs().min(MIN_MILLIS).max(MAX_MILLIS), "millis");
+    String writerTag = tc.draw(sampledFrom(LOCALES), "writerLocale");
+    String readerTag = tc.draw(sampledFrom(LOCALES), "readerLocale");
+
+    Locale previous = Locale.getDefault();
+    try {
+      Locale.setDefault(Locale.forLanguageTag(writerTag));
+      String written = DateConvert.ymdFormat(new Date(millis));
+      tc.note("written = " + written);
+
+      Locale.setDefault(Locale.forLanguageTag(readerTag));
+      Date read = DateConvert.ymdParse(written);
+
+      Locale.setDefault(Locale.forLanguageTag(writerTag));
+      assertEquals(written, DateConvert.ymdFormat(read));
+    } finally {
+      Locale.setDefault(previous);
+    }
+  }
+
+  /**
+   * {@code isoParse} documents a {@link java.text.ParseException} "if the string
+   * is null or does not match the date/time format", and its own message names
+   * the null case. A caller handed a value straight out of a nullable catalog
+   * field is entitled to catch what the signature declares.
+   */
+  @HegelTest
+  void isoParseRejectsInputTooShortToBeATimestamp(TestCase tc) {
+    boolean useNull = tc.draw(booleans(), "useNull");
+    String input = useNull ? null : tc.draw(text().maxSize(23), "input");
+
+    assertThrows(ParseException.class, () -> DateConvert.isoParse(input));
   }
 }

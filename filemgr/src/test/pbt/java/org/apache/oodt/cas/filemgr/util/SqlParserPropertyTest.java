@@ -20,11 +20,13 @@ package org.apache.oodt.cas.filemgr.util;
 import static dev.hegel.Generators.sampledFrom;
 import static dev.hegel.Generators.text;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.hegel.Generator;
 import dev.hegel.HegelTest;
 import dev.hegel.TestCase;
+import java.time.Duration;
 import java.util.List;
 import org.apache.oodt.cas.filemgr.structs.BooleanQueryCriteria;
 import org.apache.oodt.cas.filemgr.structs.QueryCriteria;
@@ -139,5 +141,78 @@ class SqlParserPropertyTest {
     String twice = SqlParser.getInfixCriteriaString(SqlParser.parseSqlWhereClause(once));
 
     assertEquals(once, twice, "the criteria string changed on the second pass");
+  }
+
+  /**
+   * Metadata element names that happen to begin with a boolean keyword.
+   * {@code ORBIT}, {@code ANDES} and {@code NOTES} are all names a product type
+   * could reasonably declare, and upper-case element names are the house style
+   * across OODT's own product types.
+   */
+  private static Generator<String> keywordLikeNames() {
+    return sampledFrom(
+        List.of(
+            "ORBIT", "ORB", "OR", "ANDES", "AND", "NOTES", "NOT", "PRODUCT", "GRANULE"));
+  }
+
+  /**
+   * A single term must round-trip whatever its element name is spelled like.
+   *
+   * <p>This is the same contract as {@code termCriteriaRoundTrips} above, but
+   * over element names drawn from realistic upper-case metadata keys rather
+   * than from arbitrary letters, which is where the boolean-keyword scan in
+   * {@code toPostFix} can be reached. The clause has no parentheses, so
+   * issue #108 is not in play here.
+   *
+   * <p>Wrapped in a timeout because the scanner's fallback branch advances
+   * {@code i} from an index it computed itself, and a token it cannot make
+   * sense of can leave it not advancing at all.
+   */
+  @HegelTest
+  void termRoundTripsForKeywordLikeElementNames(TestCase tc) {
+    String name = tc.draw(keywordLikeNames(), "name");
+    String value = tc.draw(values(), "value");
+
+    TermQueryCriteria original = new TermQueryCriteria(name, value);
+    String sql = SqlParser.getInfixCriteriaString(original);
+    tc.note("sql = " + sql);
+
+    assertTimeoutPreemptively(
+        Duration.ofSeconds(5),
+        () -> {
+          QueryCriteria parsed = SqlParser.parseSqlWhereClause(sql);
+          assertTrue(parsed instanceof TermQueryCriteria, "term came back as " + parsed.getClass());
+          TermQueryCriteria back = (TermQueryCriteria) parsed;
+          assertEquals(name, back.getElementName(), "element name changed: " + sql);
+          assertEquals(value, back.getValue(), "value changed: " + sql);
+        });
+  }
+
+  /**
+   * A metadata value containing an apostrophe must survive the round trip.
+   *
+   * <p>Apostrophes turn up in real metadata — a producer name, a place name, a
+   * free-text title — and nothing in {@code TermQueryCriteria} forbids one.
+   * The criteria string is the parser's own output, so if the pair of methods
+   * cannot agree on where a value ends, the fault is theirs and not the
+   * caller's. No parentheses are involved, so this is independent of #108.
+   */
+  @HegelTest
+  void termRoundTripsWhenTheValueContainsAnApostrophe(TestCase tc) {
+    String name = tc.draw(names(), "name");
+    String value = tc.draw(text().minSize(1).maxSize(6).categories("Ll").includeCharacters("'"), "value");
+    tc.assume(value.contains("'"));
+
+    TermQueryCriteria original = new TermQueryCriteria(name, value);
+    String sql = SqlParser.getInfixCriteriaString(original);
+    tc.note("sql = " + sql);
+
+    assertTimeoutPreemptively(
+        Duration.ofSeconds(5),
+        () -> {
+          QueryCriteria parsed = SqlParser.parseSqlWhereClause(sql);
+          assertTrue(parsed instanceof TermQueryCriteria, "term came back as " + parsed.getClass());
+          assertEquals(value, ((TermQueryCriteria) parsed).getValue(), "value changed: " + sql);
+        });
   }
 }
