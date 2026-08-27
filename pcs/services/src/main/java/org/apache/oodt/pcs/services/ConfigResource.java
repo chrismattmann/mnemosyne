@@ -75,30 +75,80 @@ public class ConfigResource extends PCSService {
         new FileInputStream(file), Charset.forName("ISO-8859-1")));
     try {
       List<Map<String, String>> rows = new ArrayList<Map<String, String>>();
+      String logical = null;
       String line;
       while ((line = reader.readLine()) != null) {
-        String trimmed = line.trim();
-        if (trimmed.length() == 0 || trimmed.charAt(0) == '#' || trimmed.charAt(0) == '!') {
-          continue;
+        boolean continued = endsWithContinuation(line);
+        if (continued) {
+          line = line.substring(0, line.length() - 1);
         }
-        if (trimmed.startsWith("include ") || trimmed.startsWith("!include")) {
-          continue;
+        if (logical == null) {
+          String trimmed = line.trim();
+          if (trimmed.length() == 0 || trimmed.charAt(0) == '#' || trimmed.charAt(0) == '!') {
+            continue;
+          }
+          if (trimmed.startsWith("include ") || trimmed.startsWith("!include")) {
+            continue;
+          }
+          logical = line;
+        } else {
+          logical += stripLeadingWhite(line);
         }
-        int eq = indexOfSeparator(trimmed);
-        if (eq <= 0) {
-          continue;
+        if (!continued) {
+          Map<String, String> row = parseAssignment(logical);
+          if (row != null) {
+            rows.add(row);
+          }
+          logical = null;
         }
-        String key = trimmed.substring(0, eq).trim();
-        String value = trimmed.substring(eq + 1).trim();
-        Map<String, String> row = new LinkedHashMap<String, String>();
-        row.put("key", key);
-        row.put("value", redact(key, PathUtils.replaceEnvVariables(value)));
-        rows.add(row);
+      }
+      if (logical != null) {
+        Map<String, String> row = parseAssignment(logical);
+        if (row != null) {
+          rows.add(row);
+        }
       }
       return rows;
     } finally {
       reader.close();
     }
+  }
+
+  private static Map<String, String> parseAssignment(String logical) {
+    String trimmed = logical.trim();
+    if (trimmed.length() == 0) {
+      return null;
+    }
+    int eq = indexOfSeparator(trimmed);
+    if (eq <= 0) {
+      return null;
+    }
+    String key = trimmed.substring(0, eq).trim();
+    String value = trimmed.substring(eq + 1).trim();
+    Map<String, String> row = new LinkedHashMap<String, String>();
+    row.put("key", key);
+    row.put("value", redact(key, PathUtils.replaceEnvVariables(value)));
+    return row;
+  }
+
+  static boolean endsWithContinuation(String line) {
+    int slashes = 0;
+    for (int i = line.length() - 1; i >= 0 && line.charAt(i) == '\\'; i--) {
+      slashes++;
+    }
+    return slashes % 2 == 1;
+  }
+
+  private static String stripLeadingWhite(String line) {
+    int i = 0;
+    while (i < line.length()) {
+      char c = line.charAt(i);
+      if (c != ' ' && c != '\t' && c != '\f') {
+        break;
+      }
+      i++;
+    }
+    return line.substring(i);
   }
 
   static boolean isSecret(String key) {
