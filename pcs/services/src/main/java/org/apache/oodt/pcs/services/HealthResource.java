@@ -235,6 +235,12 @@ public class HealthResource extends PCSService {
       prodMet = new Metadata();
     }
     Map<String, Object> fileOutput = new ConcurrentHashMap<String, Object>();
+    if (p.getProductId() != null) {
+      fileOutput.put("id", p.getProductId());
+    }
+    if (p.getProductName() != null) {
+      fileOutput.put("name", p.getProductName());
+    }
     fileOutput.put("filepath", fm.getFilePath(p));
     fileOutput.put("receivedTime", prodMet.getMetadata("CAS."
         + CoreMetKeys.PRODUCT_RECEVIED_TIME) != null ? prodMet

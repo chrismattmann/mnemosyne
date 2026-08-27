@@ -41,168 +41,78 @@ the License.
   </scm>
   <packaging>war</packaging>
   <name>Process Control System Operator Interface Webapp</name>
-  <description>Web interface for monitoring Mnemosyne file manager products, workflow instances, and resource manager jobs.</description>
-  <properties>
-  </properties>
-  <!-- All dependencies should be listed in core/pom.xml and be ordered alphabetically by package and artifact.
-     Once the dependency is in the core pom, it can then be used in other modules without the version tags.
-     For example, within core/pom.xml:
+  <description>Vue 3 monitoring interface for Mnemosyne file manager products, workflow instances, and lineage. Served at /opsui/. Catalog and workflow JSON come from pcs-services; product downloads overlay cas-product.</description>
 
-      <dependency>
-      <groupId>com.amazonaws</groupId>
-      <artifactId>aws-java-sdk</artifactId>
-      <version>1.7.4</version>
-    </dependency>
-
-     Elsewhere in the platform:
-     <dependency>
-      <groupId>com.amazonaws</groupId>
-      <artifactId>aws-java-sdk</artifactId>
-    </dependency>
-
-     Where possible the same dependency version should be used across the whole platform but if required the version
-     can be overridden in a specific pom and should have a comment explaing why the version has been overridden
-  -->
   <dependencies>
-
-    <!--  JUNIT DEPENDENCY FOR TESTING -->
-    <dependency>
-      <groupId>junit</groupId>
-      <artifactId>junit</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>ch.qos.reload4j</groupId>
-      <artifactId>reload4j</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>ai.mattmann.mnemosyne</groupId>
-      <artifactId>cas-filemgr</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>ai.mattmann.mnemosyne</groupId>
-      <artifactId>cas-metadata</artifactId>
-    </dependency>
     <dependency>
       <groupId>ai.mattmann.mnemosyne</groupId>
       <artifactId>cas-product</artifactId>
       <type>war</type>
     </dependency>
-    <dependency>
-      <groupId>ai.mattmann.mnemosyne</groupId>
-      <artifactId>curator-services</artifactId>
-      <type>war</type>
-    </dependency>
-    <dependency>
-      <groupId>ai.mattmann.mnemosyne</groupId>
-      <artifactId>oodt-webapp-components</artifactId>
-      <exclusions>
-        <exclusion>
-          <groupId>ai.mattmann.mnemosyne</groupId>
-          <artifactId>cas-filemgr</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>ai.mattmann.mnemosyne</groupId>
-          <artifactId>cas-workflow</artifactId>
-        </exclusion>
-      </exclusions>
-    </dependency>
-    <dependency>
-      <groupId>ai.mattmann.mnemosyne</groupId>
-      <artifactId>pcs-core</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.wicket</groupId>
-      <artifactId>wicket</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.wicket</groupId>
-      <artifactId>wicket-extensions</artifactId>
-    </dependency>
-
-    <!--  JETTY DEPENDENCIES FOR TESTING  -->
-    <dependency>
-      <groupId>org.mortbay.jetty</groupId>
-      <artifactId>jetty</artifactId>
-      <scope>provided</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.mortbay.jetty</groupId>
-      <artifactId>jetty-management</artifactId>
-      <scope>provided</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.mortbay.jetty</groupId>
-      <artifactId>jetty-util</artifactId>
-      <scope>provided</scope>
-    </dependency>
-
-    <!-- LOGGING DEPENDENCIES - LOG4J -->
-    <dependency>
-      <groupId>org.slf4j</groupId>
-      <artifactId>slf4j-reload4j</artifactId>
-    </dependency>
   </dependencies>
+
   <build>
-    <resources>
-      <resource>
-        <filtering>false</filtering>
-        <directory>src/main/resources</directory>
-      </resource>
-      <resource>
-        <filtering>false</filtering>
-        <directory>src/main/java</directory>
-        <includes>
-          <include>**</include>
-        </includes>
-        <excludes>
-          <exclude>**/*.java</exclude>
-        </excludes>
-      </resource>
-    </resources>
-    <testResources>
-      <testResource>
-        <filtering>false</filtering>
-        <directory>src/test/java</directory>
-        <includes>
-          <include>**</include>
-        </includes>
-        <excludes>
-          <exclude>**/*.java</exclude>
-        </excludes>
-      </testResource>
-    </testResources>
     <plugins>
       <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-compiler-plugin</artifactId>
-        <inherited>true</inherited>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <version>3.5.0</version>
         <configuration>
-          <source>1.8</source>
-          <target>1.8</target>
-          <optimize>true</optimize>
-          <debug>true</debug>
+          <workingDirectory>src/main/webapp/resources</workingDirectory>
         </configuration>
+        <executions>
+          <execution>
+            <id>npm ci</id>
+            <phase>initialize</phase>
+            <goals>
+              <goal>exec</goal>
+            </goals>
+            <configuration>
+              <executable>npm</executable>
+              <arguments>
+                <argument>ci</argument>
+              </arguments>
+            </configuration>
+          </execution>
+          <execution>
+            <id>npm run build</id>
+            <phase>compile</phase>
+            <goals>
+              <goal>exec</goal>
+            </goals>
+            <configuration>
+              <executable>npm</executable>
+              <arguments>
+                <argument>run</argument>
+                <argument>build</argument>
+              </arguments>
+            </configuration>
+          </execution>
+        </executions>
       </plugin>
       <plugin>
-        <groupId>org.apache.tomcat.maven</groupId>
-        <artifactId>tomcat7-maven-plugin</artifactId>
-        <version>2.2</version>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-war-plugin</artifactId>
+        <version>3.4.0</version>
         <configuration>
-          <port>8181</port>
-          <systemProperties>
-            <CATALINA_OPTS>-Djava.awt.headless=true -Dfile.encoding=UTF-8
-		                                    -server -Xms1536m -Xmx1536m
-		                                    -XX:NewSize=256m -XX:MaxNewSize=256m -XX:PermSize=256m
-		                                    -XX:MaxPermSize=512m -XX:+DisableExplicitGC
-		                                    -XX:+UseConcMarkSweepGC
-		                                    -XX:+CMSIncrementalMode
-		                                    -XX:+CMSIncrementalPacing
-		                                    -XX:CMSIncrementalDutyCycleMin=0
-		                                    -XX:-TraceClassUnloading</CATALINA_OPTS>
-          </systemProperties>
-          <contextFile>${basedir}/src/main/webapp/META-INF/context.xml</contextFile>
-          <path>/${project.build.finalName}</path>
+          <warSourceExcludes>resources/**</warSourceExcludes>
+          <packagingExcludes>resources/**</packagingExcludes>
+          <overlays>
+            <overlay>
+              <groupId>ai.mattmann.mnemosyne</groupId>
+              <artifactId>cas-product</artifactId>
+              <excludes>
+                <exclude>WEB-INF/web.xml</exclude>
+                <exclude>META-INF/context.xml</exclude>
+              </excludes>
+            </overlay>
+          </overlays>
+          <webResources>
+            <resource>
+              <directory>${project.basedir}/src/main/webapp/resources/dist</directory>
+              <targetPath>/</targetPath>
+            </resource>
+          </webResources>
         </configuration>
       </plugin>
     </plugins>
@@ -219,7 +129,12 @@ the License.
             <groupId>org.codehaus.mojo</groupId>
             <artifactId>rat-maven-plugin</artifactId>
             <configuration>
-              <numUnapprovedLicenses>1</numUnapprovedLicenses>
+              <excludes>
+                <exclude>src/main/webapp/resources/package.json</exclude>
+                <exclude>src/main/webapp/resources/package-lock.json</exclude>
+                <exclude>src/main/webapp/resources/node_modules/**</exclude>
+                <exclude>src/main/webapp/resources/dist/**</exclude>
+              </excludes>
             </configuration>
             <executions>
               <execution>
