@@ -204,13 +204,26 @@ public class SqlParser {
             }
         }else if (criteria instanceof RangeQueryCriteria) {
             RangeQueryCriteria rqc = (RangeQueryCriteria) criteria;
-            String opString = rqc.getInclusive() ? "=" : "";
-            if (rqc.getStartValue() != null) {
-                opString = ">" + opString + " '" + rqc.getStartValue() + "'";
-            }else {
-                opString = "<" + opString + " '" + rqc.getEndValue() + "'";
+            String eq = rqc.getInclusive() ? "=" : "";
+            String name = rqc.getElementName();
+            // The branches used to be exclusive, so getEndValue() was
+            // unreachable whenever a start was present and a two-sided range
+            // was written out as its lower bound alone. That widens the query
+            // silently: the caller gets products from outside the range they
+            // asked for. There is no BETWEEN in this grammar, so both bounds
+            // are written as a conjunction, which reads back as the same
+            // question.
+            if (rqc.getStartValue() != null && rqc.getEndValue() != null) {
+                returnString.append("(")
+                        .append(name).append(" >").append(eq).append(" '").append(rqc.getStartValue()).append("'")
+                        .append(" AND ")
+                        .append(name).append(" <").append(eq).append(" '").append(rqc.getEndValue()).append("'")
+                        .append(")");
+            } else if (rqc.getStartValue() != null) {
+                returnString.append(name).append(" >").append(eq).append(" '").append(rqc.getStartValue()).append("'");
+            } else {
+                returnString.append(name).append(" <").append(eq).append(" '").append(rqc.getEndValue()).append("'");
             }
-            returnString.append(rqc.getElementName()).append(" ").append(opString);
         }else if (criteria instanceof TermQueryCriteria) {
             TermQueryCriteria tqc = (TermQueryCriteria) criteria;
             returnString.append(tqc.getElementName()).append(" == '").append(tqc.getValue()).append("'");
@@ -262,7 +275,8 @@ public class SqlParser {
      * Uses "Shunting yard algorithm" (see:
      * http://en.wikipedia.org/wiki/Shunting_yard_algorithm)
      */
-    private static LinkedList<String> toPostFix(String statement) {
+    private static LinkedList<String> toPostFix(String statement)
+            throws QueryFormulationException {
         LinkedList<String> postFix = new LinkedList<String>();
         Stack<String> stack = new Stack<String>();
 
@@ -277,21 +291,24 @@ public class SqlParser {
                 while (!(value = stack.pop()).equals("(")) {
                     postFix.add(value);
                 }
-                if (stack.peek().equals("NOT")) {
+                // peek() on an empty stack throws, and popping the '(' is
+                // exactly what empties it. Every boolean this class writes is
+                // parenthesised, so its own output could not be read back.
+                if (!stack.isEmpty() && stack.peek().equals("NOT")) {
                     postFix.add(stack.pop());
                 }
                 break;
             case ' ':
                 break;
             default:
-                if (statement.substring(i, i + 3).equals("AND")) {
+                if (operatorAt(statement, i, "AND")) {
                     while (!stack.isEmpty()
                             && (stack.peek().equals("AND"))) {
                         postFix.add(stack.pop());
                     }
                     stack.push("AND");
                     i += 2;
-                } else if (statement.substring(i, i + 2).equals("OR")) {
+                } else if (operatorAt(statement, i, "OR")) {
                     while (!stack.isEmpty()
                             && (stack.peek().equals("AND") || stack.peek()
                                     .equals("OR"))) {
@@ -299,12 +316,23 @@ public class SqlParser {
                     }
                     stack.push("OR");
                     i += 1;
-                } else if (statement.substring(i, i + 3).equals("NOT")) {
+                } else if (operatorAt(statement, i, "NOT")) {
                     stack.push("NOT");
                     i += 2;
                 } else {
-                    int endIndex = statement.indexOf('\'', statement.indexOf(
-                            '\'', i) + 1) + 1;
+                    // The end of the value is the second quote. indexOf
+                    // returns -1 when there is none, which made endIndex 0:
+                    // substring(0, 0) is empty, i went to -1, and the loop
+                    // added nothing forever until the heap was gone. An
+                    // unquoted or unterminated value is a malformed clause,
+                    // so say so instead of spinning.
+                    int openQuote = statement.indexOf('\'', i);
+                    int closeQuote = openQuote < 0 ? -1 : statement.indexOf('\'', openQuote + 1);
+                    if (closeQuote < 0) {
+                        throw new QueryFormulationException(
+                                "Unterminated or unquoted value in clause: [" + statement + "]");
+                    }
+                    int endIndex = closeQuote + 1;
                     postFix.add(statement.substring(i, endIndex));
                     i = endIndex - 1;
                 }
@@ -483,5 +511,26 @@ public class SqlParser {
         query = "SELECT * FROM *";
         System.out.println("query: " + query);
         System.out.println("query after : " + unparseSqlQuery(parseSqlQuery(query)));
+    }
+
+    /**
+     * Whether an operator appears at this position as a word of its own.
+     *
+     * The scan used to be an unanchored prefix test, so an element name
+     * beginning AND, OR or NOT was read as the operator: NOTES == 'x' parsed
+     * as NOT applied to ES, silently returning the complement of the query
+     * asked for, and ORBIT and ANDES threw. It also read past the end of the
+     * string near the last few characters.
+     */
+    private static boolean operatorAt(String statement, int i, String operator) {
+        if (!statement.startsWith(operator, i)) {
+            return false;
+        }
+        int end = i + operator.length();
+        return end >= statement.length() || !isNameChar(statement.charAt(end));
+    }
+
+    private static boolean isNameChar(char c) {
+        return Character.isLetterOrDigit(c) || c == '_' || c == '.' || c == '-';
     }
 }
