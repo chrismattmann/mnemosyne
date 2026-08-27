@@ -118,4 +118,98 @@ public class TestMetadataBasedFileVersioner extends TestCase {
 				+ "] is not equal to: [" + expected + "]", expected, r
 				.getDataStoreReference());
 	}
+
+  private static Product flatProductIn(String repoPath) {
+    Product product = new Product();
+    product.setProductStructure(Product.STRUCTURE_FLAT);
+    ProductType type = new ProductType();
+    type.setProductRepositoryPath(repoPath);
+    product.setProductType(type);
+    product.getProductReferences().add(new Reference());
+    return product;
+  }
+
+  private static Metadata metadataWithFilename(String filename) {
+    Metadata metadata = new Metadata();
+    metadata.addMetadata("Filename", filename);
+    return metadata;
+  }
+
+  /**
+   * The substituted values are product metadata, extracted from the file being
+   * ingested, so whoever produces the data has influence over where the
+   * archive writes it. A crawler watching a drop directory is the ordinary
+   * deployment.
+   */
+  public void testTraversalOutOfTheRepositoryIsRejected() {
+    Product product = flatProductIn(productTypePath);
+    Metadata metadata = metadataWithFilename("../../../../../../tmp/pwned");
+
+    try {
+      new MetadataBasedFileVersioner("/[Filename]/out.dat")
+          .createDataStoreReferences(product, metadata);
+      fail("a metadata value walked out of the repository and was accepted: "
+          + ((Reference) product.getProductReferences().get(0)).getDataStoreReference());
+    } catch (VersioningException expected) {
+      // the point
+    }
+  }
+
+  /** A single .. is enough; it does not need to be a long climb. */
+  public void testSingleDotDotIsRejected() {
+    Product product = flatProductIn(productTypePath);
+
+    try {
+      new MetadataBasedFileVersioner("/[Filename]/out.dat")
+          .createDataStoreReferences(product, metadataWithFilename(".."));
+      fail("a .. segment was accepted: "
+          + ((Reference) product.getProductReferences().get(0)).getDataStoreReference());
+    } catch (VersioningException expected) {
+      // the point
+    }
+  }
+
+  /** A traversal written into the spec itself is no more acceptable. */
+  public void testTraversalInTheSpecIsRejected() {
+    Product product = flatProductIn(productTypePath);
+
+    try {
+      new MetadataBasedFileVersioner("/../../etc/[Filename]")
+          .createDataStoreReferences(product, metadataWithFilename("passwd"));
+      fail("a traversal in the path spec was accepted: "
+          + ((Reference) product.getProductReferences().get(0)).getDataStoreReference());
+    } catch (VersioningException expected) {
+      // the point
+    }
+  }
+
+  /** Ordinary values must keep working, dots and all. */
+  public void testOrdinaryFilenameIsUnaffected() throws Exception {
+    Product product = flatProductIn(productTypePath);
+    new MetadataBasedFileVersioner("/[Filename]")
+        .createDataStoreReferences(product, metadataWithFilename("foo.txt"));
+
+    assertEquals("file:/foo/bar/foo.txt",
+        ((Reference) product.getProductReferences().get(0)).getDataStoreReference());
+  }
+
+  /** A dot inside a name is not a traversal and must survive. */
+  public void testDottedFilenameIsUnaffected() throws Exception {
+    Product product = flatProductIn(productTypePath);
+    new MetadataBasedFileVersioner("/[Filename]")
+        .createDataStoreReferences(product, metadataWithFilename("v1.2.3.tar.gz"));
+
+    assertEquals("file:/foo/bar/v1.2.3.tar.gz",
+        ((Reference) product.getProductReferences().get(0)).getDataStoreReference());
+  }
+
+  /** A .. that cancels out stays inside, so it is allowed. */
+  public void testTraversalThatReturnsInsideIsAllowed() throws Exception {
+    Product product = flatProductIn(productTypePath);
+    new MetadataBasedFileVersioner("/sub/../[Filename]")
+        .createDataStoreReferences(product, metadataWithFilename("foo.txt"));
+
+    assertEquals("file:/foo/bar/foo.txt",
+        ((Reference) product.getProductReferences().get(0)).getDataStoreReference());
+  }
 }

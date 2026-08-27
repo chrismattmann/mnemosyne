@@ -19,6 +19,8 @@ package org.apache.oodt.cas.filemgr.versioning;
 
 //JDK imports
 import java.io.File;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -99,7 +101,27 @@ public class MetadataBasedFileVersioner implements Versioner {
         // parse the file path spec
         String filePathRef = parseFilePathSpec(filePathSpec,
                 productTypeRepoPath, metadata);
-        String filePathUri = new File(filePathRef).toURI().toString();
+
+        // The values substituted above are product metadata, and product
+        // metadata is extracted from the file being ingested, so whoever
+        // produces the data has a say in where the archive writes it. A
+        // Filename of ".." walks the destination out of the product type's
+        // repository, and LocalDataTransferer will follow wherever the
+        // reference points. Normalising is not enough on its own: the result
+        // has to still be inside the repository.
+        //
+        // This is lexical on purpose. It does not need the path to exist,
+        // which matters because the destination is being decided here, and it
+        // cannot be defeated by a value that merely looks harmless.
+        Path repositoryRoot = Paths.get(productTypeRepoPath).normalize();
+        Path versionedPath = Paths.get(filePathRef).normalize();
+        if (!versionedPath.startsWith(repositoryRoot)) {
+            throw new VersioningException("Versioned path escapes the product "
+                    + "repository: [" + versionedPath + "] is not under ["
+                    + repositoryRoot + "]");
+        }
+
+        String filePathUri = versionedPath.toFile().toURI().toString();
 
         Reference r = (Reference) product.getProductReferences().get(0);
         LOG.log(Level.INFO, "Generated data store ref: [" + filePathUri
