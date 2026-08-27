@@ -49,8 +49,14 @@ jobs:
       # The reactor builds and tests every module. Deploy and signing live in
       # the release profile and are deliberately not exercised here; a pull
       # request should never need a GPG key to go green.
+      #
+      # install, not test, because that is what the README tells contributors
+      # to run and the two are not the same build. For a pom-packaging module
+      # the test lifecycle never resolves compile-scope dependencies, so a
+      # broken dependency there is invisible: oodt-deployment passed `clean
+      # test` and failed `clean install` on the very same tree.
       - name: Build and test
-        run: mvn -B clean test
+        run: mvn -B clean install
 
       # Several suites in this repository start real servers on fixed ports
       # and write into temporary directories. When one of them fails, the
