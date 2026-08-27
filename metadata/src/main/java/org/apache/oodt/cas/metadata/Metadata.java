@@ -157,7 +157,10 @@ public class Metadata implements Serializable {
   public void removeMetadata(String key) {
     Group removeGroup = this.getGroup(key, false);
     if (removeGroup != null && removeGroup.hasValues()) {
-      if (removeGroup.getChildren().size() > 0) {
+      // The empty key resolves to the root, exactly as null does, and the
+      // root has no parent to be removed from. Clearing its values is the
+      // whole of what removal can mean there.
+      if (removeGroup.getChildren().size() > 0 || removeGroup.getParent() == null) {
         removeGroup.clearValues();
       } else {
         removeGroup.getParent().removeChild(removeGroup.getName());
@@ -211,7 +214,15 @@ public class Metadata implements Serializable {
     Metadata m = new Metadata();
     Group newRoot = this.getGroup(group, false);
     if (newRoot != null) {
-      m.root.addChildren(newRoot.clone().getChildren());
+      Group copy = newRoot.clone();
+      m.root.addChildren(copy.getChildren());
+      // The javadoc promises the group as well as everything below it, but
+      // only the children were copied, so anything held on the group itself
+      // was dropped. Those values belong at the root of the new Metadata,
+      // where the empty key reaches them.
+      if (copy.hasValues()) {
+        m.root.setValues(copy.getValues());
+      }
     }
     return m;
   }
@@ -270,7 +281,15 @@ public class Metadata implements Serializable {
    * @return All keys in this Metadata
    */
   public List<String> getKeys() {
-    return this.getKeys(this.root);
+    List<String> keys = this.getKeys(this.root);
+    // Values sit on the root when the empty key is used, which getGroup
+    // resolves there just as it does null. Enumerating only the root's
+    // children left them stored but unreachable: containsKey said yes and
+    // no listing ever mentioned them.
+    if (this.root.hasValues()) {
+      keys.add(0, "");
+    }
+    return keys;
   }
 
   protected List<String> getKeys(Group group) {
@@ -305,7 +324,15 @@ public class Metadata implements Serializable {
    * @return All keys in this Metadata
    */
   public List<String> getAllKeys() {
-    return this.getAllKeys(this.root);
+    List<String> keys = this.getAllKeys(this.root);
+    // Values sit on the root when the empty key is used, which getGroup
+    // resolves there just as it does null. Enumerating only the root's
+    // children left them stored but unreachable: containsKey said yes and
+    // no listing ever mentioned them.
+    if (this.root.hasValues()) {
+      keys.add(0, "");
+    }
+    return keys;
   }
 
   protected List<String> getAllKeys(Group group) {
