@@ -25,6 +25,7 @@ import org.apache.oodt.cas.workflow.util.DbStructFactory;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.PreparedStatement;
 import java.sql.Statement;
 import java.util.List;
 import java.util.Vector;
@@ -517,6 +518,7 @@ public class DataSourceWorkflowRepository implements WorkflowRepository {
       boolean getConditions) throws RepositoryException {
     Connection conn = null;
     Statement statement = null;
+    PreparedStatement select = null;
     ResultSet rs = null;
 
     List<Workflow> workflows = null;
@@ -526,10 +528,12 @@ public class DataSourceWorkflowRepository implements WorkflowRepository {
       statement = conn.createStatement();
 
       String getWorkflowSql = "SELECT * from workflows, event_workflow_map WHERE event_workflow_map.workflow_id = workflows.workflow_id  "
-          + "AND event_workflow_map.event_name = '" + eventName + "'";
+          + "AND event_workflow_map.event_name = ?";
 
       LOG.log(Level.FINE, "getWorkflowsForEvent: Executing: " + getWorkflowSql);
-      rs = statement.executeQuery(getWorkflowSql);
+      select = conn.prepareStatement(getWorkflowSql);
+      select.setString(1, eventName);
+      rs = select.executeQuery();
       workflows = new Vector();
 
       while (rs.next()) {
@@ -573,6 +577,13 @@ public class DataSourceWorkflowRepository implements WorkflowRepository {
         } catch (SQLException ignore) {
         }
 
+      }
+
+      if (select != null) {
+        try {
+          select.close();
+        } catch (SQLException ignore) {
+        }
       }
 
       if (statement != null) {
@@ -1399,6 +1410,7 @@ public class DataSourceWorkflowRepository implements WorkflowRepository {
   private String commitWorkflow(Workflow workflow) throws RepositoryException {
     Connection conn = null;
     Statement statement = null;
+    PreparedStatement insert = null;
     ResultSet rs = null;
     String workflowId = null;
 
@@ -1407,11 +1419,15 @@ public class DataSourceWorkflowRepository implements WorkflowRepository {
       conn.setAutoCommit(false);
       statement = conn.createStatement();
 
-      String sql = "INSERT INTO workflows (workflow_id, workflow_name) VALUES ('"+workflow.getId()+"','"
-          + workflow.getName() + "')";
-
+      // Bound, not concatenated. A workflow name comes from a policy file,
+      // so an apostrophe in ordinary text closed the literal and a value
+      // carrying its own SQL was executed as SQL.
+      String sql = "INSERT INTO workflows (workflow_id, workflow_name) VALUES (?, ?)";
       LOG.log(Level.FINE, "commitWorkflowToDB: Executing: " + sql);
-      statement.execute(sql);
+      insert = conn.prepareStatement(sql);
+      insert.setString(1, workflow.getId());
+      insert.setString(2, workflow.getName());
+      insert.execute();
 
       sql = "SELECT MAX(workflow_id) AS max_id FROM workflows";
       rs = statement.executeQuery(sql);
@@ -1454,7 +1470,15 @@ public class DataSourceWorkflowRepository implements WorkflowRepository {
 
       }
 
-      if (statement != null) {
+            if (insert != null) {
+        try {
+          insert.close();
+        } catch (SQLException ignore) {
+        }
+
+      }
+
+if (statement != null) {
         try {
           statement.close();
         } catch (SQLException ignore) {
