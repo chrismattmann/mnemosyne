@@ -45,7 +45,6 @@ the License.
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     <jena.version>3.0.0</jena.version>
-    <wicket.version>1.4.17</wicket.version>
     <jetty.version>6.1.25</jetty.version>
     <sonar.language>java</sonar.language>
     <!--
@@ -157,9 +156,8 @@ the License.
       <!--
         4.5.13 is where CVE-2020-13956 was fixed: URIUtils.extractHost
         mis-parsed authority components, so a URI could be made to resolve to a
-        different host than it appeared to name. curator/sso calls exactly that
-        method. Pinned here rather than per module so nothing can drag an
-        earlier one back in transitively.
+        different host than it appeared to name. Pinned here rather than per
+        module so nothing can drag an earlier one back in transitively.
       -->
       <dependency>
        <groupId>org.apache.httpcomponents</groupId>
@@ -425,12 +423,6 @@ the License.
       </dependency>
       <dependency>
         <groupId>ai.mattmann.mnemosyne</groupId>
-        <artifactId>curator-services</artifactId>
-        <version>${project.parent.version}</version>
-        <type>war</type>
-      </dependency>
-      <dependency>
-        <groupId>ai.mattmann.mnemosyne</groupId>
         <artifactId>oodt-commons</artifactId>
         <version>${project.parent.version}</version>
       </dependency>
@@ -447,11 +439,6 @@ the License.
       <dependency>
         <groupId>ai.mattmann.mnemosyne</groupId>
         <artifactId>oodt-profile</artifactId>
-        <version>${project.parent.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>ai.mattmann.mnemosyne</groupId>
-        <artifactId>oodt-webapp-components</artifactId>
         <version>${project.parent.version}</version>
       </dependency>
       <dependency>
@@ -529,16 +516,6 @@ the License.
         <groupId>org.apache.velocity</groupId>
         <artifactId>velocity</artifactId>
         <version>1.7</version>
-      </dependency>
-      <dependency>
-        <groupId>org.apache.wicket</groupId>
-        <artifactId>wicket</artifactId>
-        <version>${wicket.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>org.apache.wicket</groupId>
-        <artifactId>wicket-extensions</artifactId>
-        <version>${wicket.version}</version>
       </dependency>
       <dependency>
         <groupId>org.codehaus.jettison</groupId>
@@ -1106,10 +1083,6 @@ the License.
               <excludeArtifacts>
                 <excludeArtifact>oodt</excludeArtifact>
                 <excludeArtifact>oodt-webapps</excludeArtifact>
-                <excludeArtifact>oodt-webapp-components</excludeArtifact>
-                <excludeArtifact>curator-services</excludeArtifact>
-                <excludeArtifact>fmbrowser</excludeArtifact>
-                <excludeArtifact>wmonitor</excludeArtifact>
                 <excludeArtifact>workflow-services</excludeArtifact>
                 <excludeArtifact>maven-cas-install-plugin</excludeArtifact>
                 <excludeArtifact>archetypes</excludeArtifact>
