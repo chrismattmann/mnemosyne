@@ -18,6 +18,8 @@
 package org.apache.oodt.cas.resource.system;
 
 import org.apache.commons.io.FileUtils;
+import org.apache.oodt.cas.resource.structs.Job;
+import org.apache.oodt.cas.resource.structs.NameValueJobInput;
 import org.apache.oodt.cas.resource.structs.ResourceNode;
 import org.apache.oodt.cas.resource.structs.exceptions.JobQueueException;
 import org.apache.oodt.cas.resource.structs.exceptions.JobRepositoryException;
@@ -43,7 +45,9 @@ import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.nullValue;
 import static org.hamcrest.core.IsNot.not;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 /**
@@ -180,8 +184,54 @@ public class TestAvroRpcResourceManagerClient {
         List jobs = rmc.getQueuedJobs();
 
         assertThat(jobs, is(not(nullValue())));
+    }
 
-        //TODO queue a job
+    /**
+     * The empty case above passed throughout, which is why this went unnoticed:
+     * the client returned the proxy's List<AvroJob> unconverted, wearing a
+     * List<Job> declaration, and erasure means nothing complains until an
+     * element is read. resmgr-client --getQueuedJobs therefore failed exactly
+     * when the queue was not empty.
+     *
+     * The job asks for more load than the only node has capacity for, so the
+     * scheduler can never dispatch it and it stays queued. Adding a queue
+     * would have done the job too, but the queue set is shared state that
+     * testQueues asserts on, and these tests share one server.
+     */
+    @Test
+    public void testQueuedJobsAreJobsAndNotAvroJobs() throws Exception {
+        Job job = new Job();
+        job.setId("queued-job-1");
+        job.setName("queued-job-1");
+        job.setJobInstanceClassName(
+                "org.apache.oodt.cas.resource.examples.HelloWorldJob");
+        job.setJobInputClassName(
+                "org.apache.oodt.cas.resource.structs.NameValueJobInput");
+        // the single test node has capacity 8
+        job.setLoadValue(1000);
+        job.setQueueName("high");
+
+        NameValueJobInput input = new NameValueJobInput();
+        input.setNameValuePair("name", "world");
+
+        String assignedId = rmc.submitJob(job, input);
+
+        List queued = rmc.getQueuedJobs();
+        assertNotNull(queued);
+        assertEquals("expected the submitted job to still be queued", 1, queued.size());
+
+        // the for-each in GetQueuedJobsCliAction is this cast
+        for (Object element : queued) {
+            assertTrue("the client handed back " + element.getClass().getName()
+                            + " where the interface promises Job",
+                    element instanceof Job);
+        }
+
+        // the manager assigns its own id; submitJob hands it back
+        Job returned = (Job) queued.get(0);
+        assertEquals(assignedId, returned.getId());
+        assertEquals("queued-job-1", returned.getName());
+        assertEquals("high", returned.getQueueName());
     }
 
     @Test
