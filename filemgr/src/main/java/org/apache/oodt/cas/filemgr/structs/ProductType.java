@@ -42,6 +42,8 @@ import org.apache.oodt.cas.metadata.Metadata;
  */
 public class ProductType implements Serializable {
 
+    private static final long serialVersionUID = 1L;
+
     /* the unique ID representing this product type */
     private String productTypeId = null;
 
