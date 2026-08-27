@@ -27,6 +27,7 @@ import org.apache.oodt.cas.resource.queuerepo.XmlQueueRepositoryFactory;
 import org.apache.oodt.cas.resource.util.GenericResourceManagerObjectFactory;
 import org.apache.oodt.cas.resource.jobqueue.JobQueue;
 import org.apache.oodt.cas.resource.monitor.Monitor;
+import org.apache.oodt.cas.resource.batchmgr.AvroRpcBatchMgrFactory;
 import org.apache.oodt.cas.resource.batchmgr.Batchmgr;
 
 /**
@@ -65,7 +66,7 @@ public class LRUSchedulerFactory implements SchedulerFactory {
 				XmlQueueRepositoryFactory.class.getCanonicalName());
 		String batchmgrClassStr = System
 				.getProperty("resource.batchmgr.factory",
-						"org.apache.oodt.cas.resource.batchmgr.XmlRpcBatchmgrFactory");
+						AvroRpcBatchMgrFactory.class.getCanonicalName());
 		String monitorClassStr = System
 				.getProperty("resource.monitor.factory",
 						"org.apache.oodt.cas.resource.monitor.AssignmentMonitorFactory");

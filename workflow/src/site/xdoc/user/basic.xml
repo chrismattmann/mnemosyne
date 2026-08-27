@@ -218,7 +218,7 @@ bin/ etc/ logs/ doc/ lib/ policy/ LICENSE.txt CHANGES.txt
 > ./wmgr start
       </source> 
        
-      <p>This will startup the workflow manager XML-RPC server interface. Your Workflow Manager 
+      <p>This will startup the workflow manager Avro RPC server interface. Your Workflow Manager 
       is now ready to run! You can test out the workflow manager by running a command that 
       will execute our preconfigured hello world workflow.</p>
 

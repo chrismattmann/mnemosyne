@@ -51,7 +51,7 @@ the License.
       data flow, that must execute in some ordered fashion. Workflows typically generate 
       output data, perform routine management tasks (such as email, etc.), or describe a 
       business's internal routine practices. The Workflow Manager is an extensible 
-      software component that provides an XML-RPC external interface, and a fully 
+      software component that provides an Avro RPC external interface, and a fully 
       tailorable Java-based API for workflow management.</p>
       </section>
       
@@ -146,9 +146,8 @@ the License.
         and vice-versa.</p>
           
         <p><strong>Standard communication protocols.</strong> The Workflow Manager uses 
-        XML-RPC as its main external interface between the File Manager client and 
-        server. XML-RPC, the little brother of SOAP, is fast, extensible, and uses 
-        the underlying HTTP protocol for data transfer.</p>
+        Avro RPC as its main external interface between the Workflow Manager client and 
+        server.</p>
           
         <p><strong>Event-Driven Execution.</strong> Workflows are triggered by events 
         that can include arbitrary Metadata parameters, provided as a shared context
@@ -276,13 +275,12 @@ the License.
         
         <subsection name="System (Workflow Manager client and Workflow Manager server)">
           <ul>
-             <li><strong>XML-RPC based Workflow Manager Server.</strong> An implementation 
-             of the external server interface for the Workflow Manager that uses XML-RPC 
+             <li><strong>Avro RPC Workflow Manager Server.</strong> An implementation 
+             of the external server interface for the Workflow Manager that uses Avro RPC 
              as the transportation medium.</li>
              
-             <li><strong>XML-RPC based Workflow Manager Client.</strong> An implementation 
-             of the client interface for the XML-RPC Workflow Manager server that uses 
-             XML-RPC as the transportation medium.</li>
+             <li><strong>Avro RPC Workflow Manager Client.</strong> An implementation 
+             of the client interface for the Avro Workflow Manager server.</li>
           </ul>
         </subsection>
       </section>

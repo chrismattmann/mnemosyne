@@ -27,8 +27,8 @@ import org.apache.oodt.cas.filemgr.cli.action.FileManagerCliAction;
 import org.apache.oodt.cas.filemgr.system.MockFileManagerClient;
 
 /**
- * A {@link SpringCmdLineActionStore} which sets {@link WorkflowCliAction}s
- * to use a {@link MockXmlRpcWorkflowManagerClient}.
+ * A {@link SpringCmdLineActionStore} which sets {@link FileManagerCliAction}s
+ * to use a {@link MockFileManagerClient}.
  *
  * @author bfoster (Brian Foster)
  */

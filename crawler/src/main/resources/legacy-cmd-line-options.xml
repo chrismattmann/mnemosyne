@@ -423,7 +423,7 @@
 		<property name="shortOption" value="dp" />
 		<property name="longOption" value="daemonPort" />
 		<property name="type" value="int" />
-		<property name="description" value="Cause crawler to become a daemon with a XML-RPC webserver started on the given port number" />
+		<property name="description" value="Cause crawler to become a daemon with an Avro RPC server started on the given port number" />
 		<property name="hasArgs" value="true" />
 		<property name="argsDescription" value="portNum" />
 		<property name="requirementRules">

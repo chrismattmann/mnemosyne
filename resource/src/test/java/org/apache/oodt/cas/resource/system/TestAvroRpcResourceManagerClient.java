@@ -51,7 +51,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 /**
- * Tests for the XmlRpcResourceManagerClient to ensure communications between client and server operate correctly.
+ * Tests for the Avro resource manager client to ensure communications between client and server operate correctly.
  */
 public class TestAvroRpcResourceManagerClient {
 

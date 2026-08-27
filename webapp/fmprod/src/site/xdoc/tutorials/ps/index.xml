@@ -240,13 +240,11 @@ Thu Feb 24 14:10:25 CST 2005: no objects registered</source>
 	  <li><a href="/edm-query/">EDM Query Expression</a>.  This
 	  component encapsulates the implementation of an OODT query
 	  and also contains some product retrieval utilities.</li>
-	  <li><a href="http://ws.apache.org/xmlrpc">Apache
-	  XML-RPC</a>.  This is used internally by OODT services.
-	  Download version 1.1, not a later version!  If you prefer,
-	  you can <a
-	  href="http://ibiblio.org/maven/xmlrpc/jars/xmlrpc-1.1.jar">fetch
-	  the jar file directly</a>.</li>
 	</ul>
+
+	<p>Mnemosyne services use Avro RPC. Apache XML-RPC is no longer
+	  on the classpath and should not be added here.
+	</p>
 
 	<p>As before, put these jars into the
 	  <code>$PS_HOME/lib</code> directory:
@@ -257,8 +255,7 @@ total 376
 -rw-r--r--  1 kelly  kelly  149503 24 Feb 14:06 edm-commons-2.2.5.jar
 -rw-r--r--  1 kelly  kelly   43879 24 Feb 14:35 edm-query-2.0.2.jar
 -rw-r--r--  1 kelly  kelly  120844 24 Feb 14:07 grid-product-3.0.3.jar
--rw-r--r--  1 kelly  kelly    8055 24 Feb 14:07 rmi-registry-1.0.0.jar
--rw-r--r--  1 kelly  kelly   53978 24 Feb 14:35 xmlrpc-1.1.jar</source>
+-rw-r--r--  1 kelly  kelly    8055 24 Feb 14:07 rmi-registry-1.0.0.jar</source>
       </subsection>
 
       <subsection name="Writing the Product Server Script">

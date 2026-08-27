@@ -182,9 +182,8 @@ the License.
           <li>Ability to plug in Met Extraction rules - A user can leverage a custom developed Met Extractor to generate Product metadata
           used by the crawler during the ingestion process. Met Extractors are easily plugged in using Java's class loading mechanism
           the capabilities of the <a href="../../metadata/">CAS Metadata Framework</a>.</li>
-          <li>Communication over lightweight, standard protocols – The Crawler Framework uses XML-RPC, as its main 
-          external interface, when the Crawler runs in Daemon mode. XML-RPC, the little brother of SOAP, is 
-          fast, extensible, and uses the underlying HTTP protocol for data transfer.</li>
+          <li>Communication over lightweight, standard protocols – The Crawler Framework uses Avro RPC as its main 
+          external interface when the Crawler runs in Daemon mode.</li>
          </ol>
           
           <p>This capability set is not exhaustive, and is meant to give the user a &quot;feel&quot; for what 
@@ -219,8 +218,8 @@ the License.
            </li>
            <li><b>Crawler Daemons (Controller and Daemon)</b><br/>
              <ol>
-               <li>XML-RPC – The default implementation of the Crawl Daemon Controller and the Crawler Daemon leverage
-               XML-RPC, the little brother of SOAP, as their mode of communication.
+               <li>Avro RPC – The default implementation of the Crawl Daemon Controller and the Crawler Daemon communicate
+               over Avro RPC.
                </li>
              </ol>
            </li>  	

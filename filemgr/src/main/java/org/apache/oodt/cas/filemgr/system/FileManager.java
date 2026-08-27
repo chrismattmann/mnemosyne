@@ -937,7 +937,7 @@ public class FileManager {
                 }
                 return productList;
             } else {
-                return new Vector<Product>(); // null values not supported by XML-RPC
+                return new Vector<Product>(); // empty list rather than null
             }
         } catch (Exception e) {
             e.printStackTrace();
