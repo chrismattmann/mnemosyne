@@ -203,11 +203,14 @@ public class CacheMap implements Map {
 		  return false;
 		}
 		CacheMap obj = (CacheMap) rhs;
-		return obj.cache.equals(cache);
+		// Map specifies equality over the mappings. This compared `cache`,
+		// which is only the LRU key order, so two caches holding different
+		// values for the same key compared equal.
+		return obj.map.equals(map);
 	}
 
 	public int hashCode() {
-		return cache.hashCode();
+		return map.hashCode();
 	}
 
 	/** Advance the given key to the front of the cache.
