@@ -1016,7 +1016,11 @@ public class TestLuceneCatalog extends TestCase {
 
     public void testCreateCatalogException(){
 
-        //TODO Use the TestAppender to make sure that an exception thrown is caught and logged.
+        //TODO Assert that an exception thrown here is caught and logged.
+        // There used to be a TestAppender helper alongside this class for
+        // that, written against log4j 1.x. It captured nothing useful: this
+        // component logs through JUL and slf4j onto log4j2, so a log4j 1.x
+        // appender never saw those events. Nothing ever instantiated it.
     }
 
     private static Product getTestProduct() {

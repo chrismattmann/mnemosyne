@@ -510,6 +510,22 @@ the License.
         <groupId>org.apache.tika</groupId>
         <artifactId>tika-parsers</artifactId>
         <version>1.13</version>
+        <exclusions>
+          <!--
+            log4j 1.x reaches the runtime classpath as
+            tika-parsers to poi to log4j:log4j:1.2.14. That release is from
+            2006 and carries CVE-2019-17571 (CVSS 9.8), where SocketServer
+            deserialises untrusted input. Log4j 1.x went end of life in 2015
+            and 1.2.17, the last release, is affected as well, so there is no
+            version to move to. POI does not need it: POI logs through
+            POILogger, which defaults to a null logger, and nothing in this
+            project calls log4j 1.x itself.
+          -->
+          <exclusion>
+            <groupId>log4j</groupId>
+            <artifactId>log4j</artifactId>
+          </exclusion>
+        </exclusions>
       </dependency>
       <dependency>
         <groupId>org.apache.velocity</groupId>
