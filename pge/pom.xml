@@ -141,7 +141,7 @@
           </execution>
         </executions>
       </plugin>
-    <plugin><artifactId>maven-surefire-plugin</artifactId><version>2.22.2</version><configuration><argLine>${coverageArgLine} --add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.base/java.util=ALL-UNNAMED</argLine></configuration></plugin></plugins>
+    <plugin><artifactId>maven-surefire-plugin</artifactId><version>2.22.2</version><configuration><argLine>--add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.base/java.util=ALL-UNNAMED</argLine></configuration></plugin></plugins>
   </build>
   <profiles>
     <profile>

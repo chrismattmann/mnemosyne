@@ -249,7 +249,7 @@
         <configuration>
           <forkMode>pertest</forkMode>
           
-          <argLine>${coverageArgLine} -enableassertions --add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.base/java.util=ALL-UNNAMED</argLine>
+          <argLine>-enableassertions --add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.base/java.util=ALL-UNNAMED</argLine>
           <useSystemClassLoader>false</useSystemClassLoader>
           <systemProperties>
             <property>
