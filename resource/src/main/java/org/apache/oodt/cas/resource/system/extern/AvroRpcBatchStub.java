@@ -18,6 +18,9 @@
 package org.apache.oodt.cas.resource.system.extern;
 
 import org.apache.avro.AvroRemoteException;
+import org.apache.oodt.cas.resource.structs.avrotypes.OodtError;
+import org.apache.oodt.cas.resource.structs.avrotypes.OodtFailureKind;
+import org.apache.oodt.commons.rpc.FailureKinds;
 import java.util.concurrent.Executors;
 import org.jboss.netty.channel.socket.nio.NioServerSocketChannelFactory;
 import org.jboss.netty.handler.execution.ExecutionHandler;
@@ -117,7 +120,7 @@ public class AvroRpcBatchStub implements AvroIntrBatchmgr {
         try {
             return genericExecuteJob(avroJob,jobInput);
         } catch (JobException e) {
-            throw new AvroRemoteException(e);
+            throw oodtError(e);
         }
     }
 
@@ -250,4 +253,19 @@ public class AvroRpcBatchStub implements AvroIntrBatchmgr {
     }
 
 
+
+    /**
+     * Describe a server-side failure in the shape the protocol declares.
+     *
+     * The kind lets a caller branch without reading prose; the class name goes
+     * alongside it so the exact exception is still visible when the kind is
+     * coarse. FailureKinds owns the vocabulary, shared by every protocol.
+     */
+    private static OodtError oodtError(Throwable cause) {
+        OodtError error = new OodtError();
+        error.setKind(OodtFailureKind.valueOf(FailureKinds.classify(cause)));
+        error.setType(cause.getClass().getName());
+        error.setDetail(cause.getMessage());
+        return error;
+    }
 }

@@ -18,6 +18,9 @@
 package org.apache.oodt.cas.resource.system;
 
 import org.apache.avro.AvroRemoteException;
+import org.apache.oodt.cas.resource.structs.avrotypes.OodtError;
+import org.apache.oodt.cas.resource.structs.avrotypes.OodtFailureKind;
+import org.apache.oodt.commons.rpc.FailureKinds;
 import java.util.concurrent.Executors;
 import org.jboss.netty.channel.socket.nio.NioServerSocketChannelFactory;
 import org.jboss.netty.handler.execution.ExecutionHandler;
@@ -132,7 +135,7 @@ public class AvroRpcResourceManager implements org.apache.oodt.cas.resource.stru
         try {
             return this.scheduler.getJobQueue().getSize();
         } catch (Exception e) {
-            throw new AvroRemoteException(new JobRepositoryException("Failed to get size of JobQueue : " + e.getMessage(), e));
+            throw oodtError(new JobRepositoryException("Failed to get size of JobQueue : " + e.getMessage(), e));
         }
     }
 
@@ -142,7 +145,7 @@ public class AvroRpcResourceManager implements org.apache.oodt.cas.resource.stru
         try {
             return this.scheduler.getJobQueue().getCapacity();
         } catch (Exception e) {
-            throw new AvroRemoteException(new JobRepositoryException("Failed to get capacity of JobQueue : " + e.getMessage(), e));
+            throw oodtError(new JobRepositoryException("Failed to get capacity of JobQueue : " + e.getMessage(), e));
         }
     }
 
@@ -154,7 +157,7 @@ public class AvroRpcResourceManager implements org.apache.oodt.cas.resource.stru
             return scheduler.getJobQueue().getJobRepository().jobFinished(spec);
 
         } catch (JobRepositoryException e) {
-            throw new AvroRemoteException(e);
+            throw oodtError(e);
         }
     }
 
@@ -167,7 +170,7 @@ public class AvroRpcResourceManager implements org.apache.oodt.cas.resource.stru
                     .getJobById(jobId);
         } catch (JobRepositoryException e) {
             logger.warn("Exception communicating with job repository for job: [{}]: Message: {}", jobId, e.getMessage());
-            throw new AvroRemoteException(new JobRepositoryException("Unable to get job: [" + jobId
+            throw oodtError(new JobRepositoryException("Unable to get job: [" + jobId
                     + "] from repository!"));
         }
 
@@ -179,7 +182,7 @@ public class AvroRpcResourceManager implements org.apache.oodt.cas.resource.stru
         try {
             return genericHandleJob(exec, into);
         } catch (SchedulerException e) {
-            throw new AvroRemoteException(e);
+            throw oodtError(e);
         }
     }
 
@@ -188,7 +191,7 @@ public class AvroRpcResourceManager implements org.apache.oodt.cas.resource.stru
         try {
             return genericHandleJob(exec, in, hostUrl);
         } catch (JobExecutionException e) {
-            throw new AvroRemoteException(e);
+            throw oodtError(e);
         }
     }
 
@@ -199,7 +202,7 @@ public class AvroRpcResourceManager implements org.apache.oodt.cas.resource.stru
         try {
             resNodes = scheduler.getMonitor().getNodes();
         } catch (MonitorException e) {
-            throw new AvroRemoteException(e);
+            throw oodtError(e);
         }
 
         return AvroTypeFactory.getListAvroResourceNode(resNodes);
@@ -211,7 +214,7 @@ public class AvroRpcResourceManager implements org.apache.oodt.cas.resource.stru
         try {
             node = scheduler.getMonitor().getNodeById(nodeId);
         } catch (MonitorException e) {
-            throw new AvroRemoteException(e);
+            throw oodtError(e);
         }
         return AvroTypeFactory.getAvroResourceNode(node);
     }
@@ -227,7 +230,7 @@ public class AvroRpcResourceManager implements org.apache.oodt.cas.resource.stru
         try {
             node = scheduler.getMonitor().getNodeById(resNodeId);
         } catch (MonitorException e) {
-            throw new AvroRemoteException(e);
+            throw oodtError(e);
         }
         return scheduler.getBatchmgr().killJob(jobId, node);
 
@@ -336,7 +339,7 @@ public class AvroRpcResourceManager implements org.apache.oodt.cas.resource.stru
         try {
             return this.scheduler.getQueueManager().getQueues();
         } catch (Exception e) {
-            throw new AvroRemoteException(e);
+            throw oodtError(e);
         }
     }
 
@@ -356,7 +359,7 @@ public class AvroRpcResourceManager implements org.apache.oodt.cas.resource.stru
         try {
             this.scheduler.getQueueManager().removeQueue(queueName);
         } catch (Exception e) {
-            throw new AvroRemoteException(e);
+            throw oodtError(e);
         }
         return true;
 
@@ -367,7 +370,7 @@ public class AvroRpcResourceManager implements org.apache.oodt.cas.resource.stru
         try {
             this.scheduler.getMonitor().addNode(AvroTypeFactory.getResourceNode(node));
         } catch (MonitorException e) {
-            throw new AvroRemoteException(e);
+            throw oodtError(e);
         }
         return true;
     }
@@ -380,7 +383,7 @@ public class AvroRpcResourceManager implements org.apache.oodt.cas.resource.stru
             }
             this.scheduler.getMonitor().removeNodeById(nodeId);
         } catch (Exception e) {
-            throw new AvroRemoteException(new MonitorException(e.getMessage(), e));
+            throw oodtError(new MonitorException(e.getMessage(), e));
         }
 
         return true;
@@ -391,7 +394,7 @@ public class AvroRpcResourceManager implements org.apache.oodt.cas.resource.stru
         try {
             this.scheduler.getQueueManager().addNodeToQueue(nodeId, queueName);
         } catch (QueueManagerException e) {
-            throw new AvroRemoteException(e);
+            throw oodtError(e);
         }
         return true;
 
@@ -402,7 +405,7 @@ public class AvroRpcResourceManager implements org.apache.oodt.cas.resource.stru
         try {
             this.scheduler.getQueueManager().removeNodeFromQueue(nodeId, queueName);
         } catch (QueueManagerException e) {
-            throw new AvroRemoteException(e);
+            throw oodtError(e);
         }
         return true;
 
@@ -413,7 +416,7 @@ public class AvroRpcResourceManager implements org.apache.oodt.cas.resource.stru
         try {
             return this.scheduler.getQueueManager().getNodes(queueName);
         } catch (QueueManagerException e) {
-            throw new AvroRemoteException(e);
+            throw oodtError(e);
         }
     }
 
@@ -422,7 +425,7 @@ public class AvroRpcResourceManager implements org.apache.oodt.cas.resource.stru
         try {
             return this.scheduler.getQueueManager().getQueues(nodeId);
         } catch (Exception e) {
-            throw new AvroRemoteException(e);
+            throw oodtError(e);
         }
     }
 
@@ -449,7 +452,7 @@ public class AvroRpcResourceManager implements org.apache.oodt.cas.resource.stru
             int load = (this.scheduler.getMonitor().getLoad(node)) * -1 + capacity;
             return load + "/" + capacity;
         } catch (MonitorException e) {
-            throw new AvroRemoteException(e);
+            throw oodtError(e);
         }
     }
 
@@ -542,4 +545,30 @@ public class AvroRpcResourceManager implements org.apache.oodt.cas.resource.stru
         return url;
     }
 
+
+    /**
+     * Describe a server-side failure in the shape the protocol declares.
+     *
+     * The kind lets a caller branch without reading prose; the class name goes
+     * alongside it so the exact exception is still visible when the kind is
+     * coarse. FailureKinds owns the vocabulary, shared by every protocol.
+     */
+    private static OodtError oodtError(Throwable cause) {
+        OodtError error = new OodtError();
+        error.setKind(OodtFailureKind.valueOf(FailureKinds.classify(cause)));
+        error.setType(cause.getClass().getName());
+        error.setDetail(cause.getMessage());
+        return error;
+    }
+
+    /**
+     * As above, but keeping a message the caller composed. The kind and the
+     * class name still come from the cause, so context is added rather than
+     * traded for it.
+     */
+    private static OodtError oodtError(Throwable cause, String detail) {
+        OodtError error = oodtError(cause);
+        error.setDetail(detail);
+        return error;
+    }
 }

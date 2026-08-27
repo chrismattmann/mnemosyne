@@ -6,72 +6,87 @@ import schema "AvroWorkflow.avsc";
 import schema "AvroWorkflowInstance.avsc";
 import schema "AvroWorkflowInstancePage.avsc";
 
-    boolean refreshRepository();
+    /**
+     * What kind of failure this was, so a caller can branch on it without
+     * reading the message. The vocabulary is defined once in
+     * org.apache.oodt.commons.rpc.FailureKinds; each protocol declares its own
+     * copy because a protocol's types live in its own namespace, and
+     * generating one shared class from several modules would put duplicate
+     * classes on the classpath. TestFailureKindVocabulary keeps them in step.
+     */
+    enum OodtFailureKind {
+        CATALOG,
+        INSTANCE_REPOSITORY,
+        INTERRUPTED,
+        IO,
+        JOB,
+        JOB_EXECUTION,
+        JOB_INPUT,
+        JOB_QUEUE,
+        JOB_REPOSITORY,
+        MONITOR,
+        NOT_FOUND,
+        QUERY,
+        QUEUE,
+        REPOSITORY,
+        SCHEDULER,
+        TRANSFER,
+        UNKNOWN,
+        VALIDATION,
+        VERSIONING,
+        WORKFLOW_REPOSITORY
+    }
 
-    string executeDynamicWorkflow(array<string> taskIds, map<union {string, array<string>}> metadata);
+    /**
+     * A server-side failure, in a shape Avro can write.
+     *
+     * Without a declared error type the error schema is the implicit
+     * ["string"], which no exception matches, so Avro failed while reporting
+     * the failure. `type` carries the original exception's class name
+     * alongside the coarse `kind`, so nothing is lost when the kind lumps
+     * several exceptions together.
+     */
+    error OodtError {
+        OodtFailureKind kind;
+        string type;
+        union { null, string } detail;
+    }
 
-    array<string> getRegisteredEvents();
-
-    AvroWorkflowInstancePage getFirstPage();
-
-    AvroWorkflowInstancePage getNextPage(AvroWorkflowInstancePage currentPage);
-
-    AvroWorkflowInstancePage getPrevPage(AvroWorkflowInstancePage currentPage);
-
-    AvroWorkflowInstancePage getLastPage();
-
-    AvroWorkflowInstancePage paginateWorkflowInstancesOfStatus(int pageNum, string status);
-
-    AvroWorkflowInstancePage paginateWorkflowInstances(int pageNum);
-
-    array<AvroWorkflow> getWorkflowsByEvent(string eventName);
-
+    boolean refreshRepository() throws OodtError;
+    string executeDynamicWorkflow(array<string> taskIds, map<union {string, array<string>}> metadata) throws OodtError;
+    array<string> getRegisteredEvents() throws OodtError;
+    AvroWorkflowInstancePage getFirstPage() throws OodtError;
+    AvroWorkflowInstancePage getNextPage(AvroWorkflowInstancePage currentPage) throws OodtError;
+    AvroWorkflowInstancePage getPrevPage(AvroWorkflowInstancePage currentPage) throws OodtError;
+    AvroWorkflowInstancePage getLastPage() throws OodtError;
+    AvroWorkflowInstancePage paginateWorkflowInstancesOfStatus(int pageNum, string status) throws OodtError;
+    AvroWorkflowInstancePage paginateWorkflowInstances(int pageNum) throws OodtError;
+    array<AvroWorkflow> getWorkflowsByEvent(string eventName) throws OodtError;
     map<union {string, array<string>}> getWorkflowInstanceMetadata(string wInstId);
 
-    boolean handleEvent(string eventName, map<union {string, array<string>}> metadata);
-
-    AvroWorkflowInstance getWorkflowInstanceById(string wInstId);
-
-    boolean stopWorkflowInstance(string workflowInstId);
-
-    boolean pauseWorkflowInstance(string workflowInstId);
-
-    boolean resumeWorkflowInstance(string workflowInstId);
-
-    double getWorkflowWallClockMinutes(string workflowInstId);
-
-    double getWorkflowCurrentTaskWallClockMinutes(string workflowInstId);
-
-    int getNumWorkflowInstancesByStatus(string status);
-
-    int getNumWorkflowInstances();
-
-    array<AvroWorkflowInstance> getWorkflowInstancesByStatus(string status);
-
-    array<AvroWorkflowInstance> getWorkflowInstances();
-
-    array<AvroWorkflow> getWorkflows();
-
-    AvroWorkflowTask getTaskById(string taskId);
-
-    AvroWorkflowCondition getConditionById(string conditionId);
-
-    AvroWorkflow getWorkflowById(string workflowId);
-
+    boolean handleEvent(string eventName, map<union {string, array<string>}> metadata) throws OodtError;
+    AvroWorkflowInstance getWorkflowInstanceById(string wInstId) throws OodtError;
+    boolean stopWorkflowInstance(string workflowInstId) throws OodtError;
+    boolean pauseWorkflowInstance(string workflowInstId) throws OodtError;
+    boolean resumeWorkflowInstance(string workflowInstId) throws OodtError;
+    double getWorkflowWallClockMinutes(string workflowInstId) throws OodtError;
+    double getWorkflowCurrentTaskWallClockMinutes(string workflowInstId) throws OodtError;
+    int getNumWorkflowInstancesByStatus(string status) throws OodtError;
+    int getNumWorkflowInstances() throws OodtError;
+    array<AvroWorkflowInstance> getWorkflowInstancesByStatus(string status) throws OodtError;
+    array<AvroWorkflowInstance> getWorkflowInstances() throws OodtError;
+    array<AvroWorkflow> getWorkflows() throws OodtError;
+    AvroWorkflowTask getTaskById(string taskId) throws OodtError;
+    AvroWorkflowCondition getConditionById(string conditionId) throws OodtError;
+    AvroWorkflow getWorkflowById(string workflowId) throws OodtError;
     boolean updateMetadataForWorkflow(
-            string workflowInstId, map<union {string, array<string>}> metadata);
-
-    boolean updateWorkflowInstance(AvroWorkflowInstance instance);
-
+            string workflowInstId, map<union {string, array<string>}> metadata) throws OodtError;
+    boolean updateWorkflowInstance(AvroWorkflowInstance instance) throws OodtError;
     boolean setWorkflowInstanceCurrentTaskStartDateTime(
-            string wInstId, string startDateTimeIsoStr);
-
+            string wInstId, string startDateTimeIsoStr) throws OodtError;
     boolean setWorkflowInstanceCurrentTaskEndDateTime(
-            string wInstId, string endDateTimeIsoStr);
-
+            string wInstId, string endDateTimeIsoStr) throws OodtError;
     boolean updateWorkflowInstanceStatus(
-            string workflowInstId, string status);
-
-    boolean isAlive();
-
+            string workflowInstId, string status) throws OodtError;
+    boolean isAlive() throws OodtError;
 }

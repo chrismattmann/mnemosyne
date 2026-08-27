@@ -9,23 +9,63 @@
  * the lights are off.
  */
 protocol AvroCrawlDaemon {
+    /**
+     * What kind of failure this was, so a caller can branch on it without
+     * reading the message. The vocabulary is defined once in
+     * org.apache.oodt.commons.rpc.FailureKinds; each protocol declares its own
+     * copy because a protocol's types live in its own namespace, and
+     * generating one shared class from several modules would put duplicate
+     * classes on the classpath. TestFailureKindVocabulary keeps them in step.
+     */
+    enum OodtFailureKind {
+        CATALOG,
+        INSTANCE_REPOSITORY,
+        INTERRUPTED,
+        IO,
+        JOB,
+        JOB_EXECUTION,
+        JOB_INPUT,
+        JOB_QUEUE,
+        JOB_REPOSITORY,
+        MONITOR,
+        NOT_FOUND,
+        QUERY,
+        QUEUE,
+        REPOSITORY,
+        SCHEDULER,
+        TRANSFER,
+        UNKNOWN,
+        VALIDATION,
+        VERSIONING,
+        WORKFLOW_REPOSITORY
+    }
+
+    /**
+     * A server-side failure, in a shape Avro can write.
+     *
+     * Without a declared error type the error schema is the implicit
+     * ["string"], which no exception matches, so Avro failed while reporting
+     * the failure. `type` carries the original exception's class name
+     * alongside the coarse `kind`, so nothing is lost when the kind lumps
+     * several exceptions together.
+     */
+    error OodtError {
+        OodtFailureKind kind;
+        string type;
+        union { null, string } detail;
+    }
+
 
     /** Mean time spent in a single crawl, in seconds. */
-    double getAverageCrawlTime();
-
+    double getAverageCrawlTime() throws OodtError;
     /** Total time spent crawling, in milliseconds. */
-    int getMilisCrawling();
-
+    int getMilisCrawling() throws OodtError;
     /** How many crawls have completed. */
-    int getNumCrawls();
-
+    int getNumCrawls() throws OodtError;
     /** Seconds the daemon waits between crawls. */
-    int getWaitInterval();
-
+    int getWaitInterval() throws OodtError;
     /** Whether the daemon is still crawling. */
-    boolean isRunning();
-
+    boolean isRunning() throws OodtError;
     /** Asks the daemon to stop after the current crawl. */
-    boolean stop();
-
+    boolean stop() throws OodtError;
 }

@@ -22,6 +22,7 @@ import org.apache.avro.AvroRemoteException;
 import org.apache.avro.Schema;
 import org.apache.avro.io.Encoder;
 import org.apache.avro.ipc.specific.SpecificResponder;
+import org.apache.avro.specific.SpecificExceptionBase;
 
 /**
  * A {@link SpecificResponder} that writes the value carried by an
@@ -61,10 +62,23 @@ public class ErrorUnwrappingResponder extends SpecificResponder {
     @Override
     public void writeError(Schema schema, Object error, Encoder out)
             throws IOException {
-        super.writeError(schema,
-                error instanceof AvroRemoteException
-                        ? ((AvroRemoteException) error).getValue()
-                        : error,
-                out);
+        super.writeError(schema, datumFor(error), out);
+    }
+
+    /**
+     * A declared error is written as itself: the protocol has a schema for it,
+     * which is the whole point of declaring it, and unwrapping it here would
+     * hand the writer the record's {@code value} instead of the record.
+     * Anything else is an undeclared failure whose only writable form is the
+     * string inside it.
+     */
+    private static Object datumFor(Object error) {
+        if (error instanceof SpecificExceptionBase) {
+            return error;
+        }
+        if (error instanceof AvroRemoteException) {
+            return ((AvroRemoteException) error).getValue();
+        }
+        return error;
     }
 }

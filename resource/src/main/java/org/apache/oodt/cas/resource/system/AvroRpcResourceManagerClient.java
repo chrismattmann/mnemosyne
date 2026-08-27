@@ -18,6 +18,7 @@
 package org.apache.oodt.cas.resource.system;
 
 import org.apache.avro.AvroRemoteException;
+import org.apache.oodt.cas.resource.structs.avrotypes.OodtError;
 import org.apache.avro.ipc.NettyTransceiver;
 import org.apache.avro.ipc.Transceiver;
 import org.apache.avro.ipc.specific.SpecificRequestor;
@@ -395,5 +396,22 @@ public class AvroRpcResourceManagerClient implements ResourceManagerClient {
                 return thread;
             }
         };
+    }
+
+    /**
+     * The text to carry into the local exception.
+     *
+     * A declared OodtError keeps its text in its own `detail` field. It is a
+     * record, so the Throwable message getMessage() returns is null, and
+     * reading that would quietly turn every server message into null. The
+     * class name goes in front so the exact failure stays legible once it has
+     * been repacked into a local exception type.
+     */
+    private static String describe(AvroRemoteException cause) {
+        if (cause instanceof OodtError) {
+            OodtError error = (OodtError) cause;
+            return error.getType() + ": " + error.getDetail();
+        }
+        return cause.getMessage();
     }
 }
