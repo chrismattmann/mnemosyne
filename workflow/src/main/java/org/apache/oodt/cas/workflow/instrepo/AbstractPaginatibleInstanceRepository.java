@@ -121,7 +121,10 @@ public abstract class AbstractPaginatibleInstanceRepository implements
             return getFirstPage();
         }
 
-        if (currentPage.isLastPage()) {
+        // isLastPage where it means isFirstPage: paging back from the last
+        // page returned that same page, and paging back from page 1 asked for
+        // page 0. All three repositories inherit this.
+        if (currentPage.isFirstPage()) {
             return currentPage;
         }
 
