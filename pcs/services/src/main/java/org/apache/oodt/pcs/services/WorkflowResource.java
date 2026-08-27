@@ -19,9 +19,11 @@ package org.apache.oodt.pcs.services;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.logging.Logger;
 
 import javax.ws.rs.DefaultValue;
@@ -38,6 +40,7 @@ import org.apache.oodt.cas.workflow.structs.WorkflowCondition;
 import org.apache.oodt.cas.workflow.structs.WorkflowInstance;
 import org.apache.oodt.cas.workflow.structs.WorkflowInstancePage;
 import org.apache.oodt.cas.workflow.structs.WorkflowTask;
+import org.apache.oodt.cas.workflow.structs.WorkflowTaskConfiguration;
 import org.apache.oodt.cas.workflow.system.WorkflowManagerClient;
 import org.apache.oodt.cas.workflow.system.rpc.RpcCommunicationFactory;
 
@@ -225,6 +228,10 @@ public class WorkflowResource extends PCSService {
     row.put("id", nullToEmpty(task.getTaskId()));
     row.put("name", nullToEmpty(task.getTaskName()));
     row.put("className", nullToEmpty(task.getTaskInstanceClassName()));
+    row.put("properties", encodeTaskProperties(task.getTaskConfig()));
+    row.put("requiredMetFields", encodeStringList(task.getRequiredMetFields()));
+    row.put("preConditions", encodeConditionList(task.getPreConditions()));
+    row.put("postConditions", encodeConditionList(task.getPostConditions()));
     return row;
   }
 
@@ -233,9 +240,50 @@ public class WorkflowResource extends PCSService {
     if (cond == null) {
       return row;
     }
+    row.put("id", nullToEmpty(cond.getConditionId()));
     row.put("name", nullToEmpty(cond.getConditionName()));
     row.put("className", nullToEmpty(cond.getConditionInstanceClassName()));
     return row;
+  }
+
+  static Map<String, String> encodeTaskProperties(WorkflowTaskConfiguration config) {
+    Map<String, String> out = new LinkedHashMap<String, String>();
+    if (config == null || config.getProperties() == null) {
+      return out;
+    }
+    Properties props = config.getProperties();
+    List<String> names = new ArrayList<String>(props.stringPropertyNames());
+    Collections.sort(names, String.CASE_INSENSITIVE_ORDER);
+    for (int i = 0; i < names.size(); i++) {
+      String name = names.get(i);
+      out.put(name, nullToEmpty(props.getProperty(name)));
+    }
+    return out;
+  }
+
+  static List<Map<String, Object>> encodeConditionList(List<WorkflowCondition> conditions) {
+    List<Map<String, Object>> out = new ArrayList<Map<String, Object>>();
+    if (conditions == null) {
+      return out;
+    }
+    for (int i = 0; i < conditions.size(); i++) {
+      out.add(encodeCondition(conditions.get(i)));
+    }
+    return out;
+  }
+
+  static List<String> encodeStringList(List raw) {
+    List<String> out = new ArrayList<String>();
+    if (raw == null) {
+      return out;
+    }
+    for (int i = 0; i < raw.size(); i++) {
+      Object item = raw.get(i);
+      if (item != null) {
+        out.add(String.valueOf(item));
+      }
+    }
+    return out;
   }
 
   private static String json(String key, Object value) {

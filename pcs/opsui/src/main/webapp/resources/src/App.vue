@@ -42,7 +42,7 @@
     <InstancesView v-else-if="route.view === 'instances'" :payload="instancePayload" :status="route.status || 'ALL'" :loading="loading" @status="openInstances" @page="openInstancesPage" @open-workflow="openWorkflow" @open-task="openTask"/>
     <WorkflowsView v-else-if="route.view === 'workflows'" :workflows="workflows" :loading="loading" @open="openWorkflow"/>
     <WorkflowView v-else-if="route.view === 'workflow'" :payload="workflowPayload" :loading="loading" @open-task="openTask" @back="go({ view: 'workflows' })"/>
-    <TaskView v-else-if="route.view === 'task'" :payload="taskPayload" :loading="loading" @back="go({ view: 'workflows' })"/>
+    <TaskView v-else-if="route.view === 'task'" :payload="taskPayload" :loading="loading" @open-condition="openCondition" @back="go({ view: 'workflows' })"/>
     <ConditionView v-else-if="route.view === 'condition'" :payload="conditionPayload" :loading="loading" @back="go({ view: 'workflows' })"/>
 
     <p v-if="error" class="banner">{{ error }}</p>
@@ -218,6 +218,10 @@ export default {
       go({ view: 'task', id })
     }
 
+    function openCondition(id) {
+      go({ view: 'condition', id })
+    }
+
     async function load() {
       loading.value = true
       try {
@@ -288,7 +292,7 @@ export default {
       route, loading, error, health, types, typePayload, productPayload,
       pedigree, instancePayload, workflows, workflowPayload, taskPayload,
       conditionPayload, go, openType, openTypePage, openProduct,
-      openProductByPath, openInstances, openInstancesPage, openWorkflow, openTask
+      openProductByPath, openInstances, openInstancesPage, openWorkflow, openTask, openCondition
     }
   }
 }
