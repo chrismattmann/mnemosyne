@@ -69,8 +69,8 @@
                     {{ crawler.status || '—' }}
                   </span>
                 </td>
-                <td>{{ crawler.numCrawls != null ? crawler.numCrawls : '—' }}</td>
-                <td>{{ crawler.avgCrawlTime != null ? crawler.avgCrawlTime : '—' }}</td>
+                <td>{{ crawlCount(crawler) }}</td>
+                <td>{{ avgTime(crawler) }}</td>
               </tr>
             </tbody>
           </table>
@@ -132,6 +132,18 @@ export default {
   setup(props) {
     function up(status) {
       return String(status || '').toUpperCase() === 'UP'
+    }
+
+    function missingStat(value) {
+      return value == null || value < 0
+    }
+
+    function crawlCount(crawler) {
+      return missingStat(crawler.numCrawls) ? 'None' : crawler.numCrawls
+    }
+
+    function avgTime(crawler) {
+      return missingStat(crawler.avgCrawlTime) ? 'N/A' : crawler.avgCrawlTime
     }
 
     const generated = computed(() => (props.report && props.report.generated) || '')
@@ -198,8 +210,8 @@ export default {
     })
 
     return {
-      up, generated, daemons, stubs, jobs, sortedJobs, jobSort, jobDir, sortJobs,
-      crawlers, files
+      up, crawlCount, avgTime, generated, daemons, stubs, jobs, sortedJobs,
+      jobSort, jobDir, sortJobs, crawlers, files
     }
   }
 }
