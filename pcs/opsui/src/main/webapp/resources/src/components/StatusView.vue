@@ -23,8 +23,10 @@
     <p v-if="loading && !report" class="empty">Loading health report…</p>
     <template v-else-if="report">
       <div class="grid">
-        <article v-for="daemon in daemons" :key="daemon.key" class="card">
-          <h3>{{ daemon.label }}</h3>
+        <article v-for="daemon in daemons" :key="daemon.key" class="card daemon">
+          <h3>
+            <a href="#" @click.prevent="$emit('open-config', daemon.key)">{{ daemon.label }}</a>
+          </h3>
           <p>
             <span class="pill" :class="up(daemon.status) ? 'up' : 'down'">{{ daemon.status || 'unknown' }}</span>
           </p>
@@ -128,7 +130,7 @@ export default {
     report: { type: Object, default: null },
     loading: { type: Boolean, default: false }
   },
-  emits: ['open-product', 'open-instances'],
+  emits: ['open-product', 'open-instances', 'open-config'],
   setup(props) {
     function up(status) {
       return String(status || '').toUpperCase() === 'UP'
@@ -251,6 +253,10 @@ h2, h3 {
 .url {
   word-break: break-all;
   font-size: 0.82rem;
+}
+
+.daemon h3 {
+  margin-bottom: 0.45rem;
 }
 
 @media (max-width: 800px) {
