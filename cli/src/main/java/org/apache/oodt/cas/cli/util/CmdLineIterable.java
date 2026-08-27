@@ -48,7 +48,9 @@ public class CmdLineIterable<T> implements Iterable<T> {
    }
 
    public List<T> getArgsLeft() {
-      return args.subList(curIndex, args.size());
+      // subList threw for a fresh iterable, where curIndex is -1 and nothing
+      // has been consumed, so everything is left.
+      return args.subList(Math.max(curIndex, 0), args.size());
    }
 
    public int getCurrentIndex() {
@@ -62,7 +64,12 @@ public class CmdLineIterable<T> implements Iterable<T> {
    }
 
    public void descrementIndex() {
-      if (curIndex > 0) {
+      // The constructor establishes -1 as a real state, so clamping at 0 made
+      // this asymmetric with incrementIndex: increment then decrement from a
+      // fresh iterable landed on 0 rather than back at -1, and
+      // StdCmdLineConstructor.getValues uses exactly that pair to put an
+      // argument back.
+      if (curIndex > -1) {
          curIndex--;
       }
    }
@@ -73,6 +80,9 @@ public class CmdLineIterable<T> implements Iterable<T> {
    }
 
    public T getAndIncrement() {
+      if (curIndex == -1) {
+         incrementIndex();
+      }
       T next = getCurrentArg();
       incrementIndex();
       return next;
@@ -92,7 +102,10 @@ public class CmdLineIterable<T> implements Iterable<T> {
 
    public T getCurrentArg() {
       if (curIndex == -1) {
-         return incrementAndGet();
+         // Reading used to advance, so peeking consumed: hasNext() answered
+         // true before the call and false after. Nothing has been taken yet,
+         // so there is no current argument.
+         return null;
       } else if (curIndex > -1 && curIndex < args.size()) {
          return args.get(curIndex);
       } else {

@@ -66,7 +66,24 @@ public class StdCmdLineParser implements CmdLineParser {
 
    @VisibleForTesting
    /* package */static boolean isOption(String arg) {
-      return (arg.startsWith("-"));
+      if (arg == null || !arg.startsWith("-")) {
+         return false;
+      }
+      // A negative number is a value. convertToType supports Integer, Long
+      // and Double, so passing one is a supported thing to want, and there is
+      // no escape hatch: this parser implements no end-of-options marker and
+      // no --opt=value form, and quoting does not help because "-5" still
+      // arrives as -5 in argv. A bare hyphen is conventionally a value too.
+      return !arg.equals("-") && !arg.equals("--") && !isNegativeNumber(arg);
+   }
+
+   private static boolean isNegativeNumber(String arg) {
+      try {
+         Double.parseDouble(arg);
+         return true;
+      } catch (NumberFormatException notANumber) {
+         return false;
+      }
    }
 
    @VisibleForTesting
