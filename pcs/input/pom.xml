@@ -116,9 +116,14 @@ the License.
     -->
     <profile>
       <id>hegel</id>
-      <activation>
-        <jdk>[22,)</jdk>
-      </activation>
+      <!--
+        Not activated automatically. The suite is deliberately red: 172 of its
+        properties fail because they found real defects, so auto-activating on
+        JDK 22+ meant `mvn clean install` failed for anyone on a current JDK.
+        It stopped at the second module, which left them unable to install the
+        artifacts at all. Run it with `mvn test -P hegel` on JDK 22+, which is
+        what the suite's own documentation says to do.
+      -->
       <build>
         <plugins>
           <plugin>
