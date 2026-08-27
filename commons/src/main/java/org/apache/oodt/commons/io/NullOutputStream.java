@@ -70,7 +70,9 @@ public class NullOutputStream extends OutputStream {
 	 * @throws IOException If the stream is already closed.
 	 */
 	public void close() throws IOException {
-		checkOpen();
+		// Closeable specifies that closing an already closed stream has no
+		// effect. Throwing here broke try-with-resources over a stream the
+		// body had already closed.
 		open = false;
 	}
 

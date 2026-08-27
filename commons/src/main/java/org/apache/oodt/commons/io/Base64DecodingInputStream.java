@@ -106,6 +106,12 @@ public class Base64DecodingInputStream extends FilterInputStream {
 		if (in == null) {
 		  throw new IOException("Can't read from a closed stream");
 		}
+		// InputStream specifies that a zero length reads nothing and returns
+		// 0. This used to call read() first, so it consumed a byte and
+		// reported having read one.
+		if (length == 0) {
+		  return 0;
+		}
 
 		int c = read();
 		if (c == -1) {

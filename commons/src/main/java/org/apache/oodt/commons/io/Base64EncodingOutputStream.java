@@ -66,6 +66,12 @@ public class Base64EncodingOutputStream extends FilterOutputStream {
 		if (b == null) {
 		  throw new IllegalArgumentException("Can't write a null array");
 		}
+		if (length == 0) {
+		  // Legal, and writes nothing. The bounds test below rejects it for an
+		  // empty array or an offset at the end, where the JDK's own
+		  // checkFromIndexSize(0, 0, 0) accepts it.
+		  return;
+		}
 		if (offset < 0 || offset >= b.length) {
 		  throw new IndexOutOfBoundsException("Can't get bytes at " + offset + " in array with indexes 0.."
 											  + (b.length - 1));
