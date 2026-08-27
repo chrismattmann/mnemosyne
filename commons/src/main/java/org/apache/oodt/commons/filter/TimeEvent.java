@@ -71,7 +71,9 @@ public class TimeEvent implements Comparable<TimeEvent> {
 
     @Override
     public boolean equals(Object obj) {
-        if (obj instanceof TimeEvent) {
+        // instanceof made this asymmetric with ObjectTimeEvent: a plain
+        // TimeEvent equalled one carrying a payload, but not the reverse.
+        if (obj != null && getClass() == obj.getClass()) {
             TimeEvent te = (TimeEvent) obj;
             return te.startTime == this.startTime && te.endTime == this.endTime;
         } else {
@@ -102,13 +104,10 @@ public class TimeEvent implements Comparable<TimeEvent> {
 
     @Override
     public int hashCode() {
-        int result;
-        long temp;
-        result = (int) (startTime ^ (startTime >>> 32));
+        // Over exactly what equals compares. Mixing in dur and priority gave
+        // equal events different hashes, so a HashSet kept both.
+        int result = (int) (startTime ^ (startTime >>> 32));
         result = 31 * result + (int) (endTime ^ (endTime >>> 32));
-        result = 31 * result + (int) (dur ^ (dur >>> 32));
-        temp = Double.doubleToLongBits(priority);
-        result = 31 * result + (int) (temp ^ (temp >>> 32));
         return result;
     }
 }

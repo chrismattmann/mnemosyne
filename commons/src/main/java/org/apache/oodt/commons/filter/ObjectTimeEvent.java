@@ -46,9 +46,13 @@ public class ObjectTimeEvent<objType> extends TimeEvent {
 
     @Override
     public boolean equals(Object obj) {
-        if (obj instanceof ObjectTimeEvent) {
+        if (obj != null && getClass() == obj.getClass()) {
             ObjectTimeEvent<?> ote = (ObjectTimeEvent<?>) obj;
-            return super.equals(obj) && this.timeObj.equals(ote.timeObj);
+            // The payload may be null, which hashCode below already allowed
+            // for; this dereferenced it.
+            return super.equals(obj)
+                    && (this.timeObj == null ? ote.timeObj == null
+                                             : this.timeObj.equals(ote.timeObj));
         } else {
             return false;
         }
@@ -61,6 +65,8 @@ public class ObjectTimeEvent<objType> extends TimeEvent {
 
     @Override
     public int hashCode() {
-        return timeObj != null ? timeObj.hashCode() : 0;
+        // equals compares the times as well as the payload, so the hash has
+        // to take both into account.
+        return 31 * super.hashCode() + (timeObj != null ? timeObj.hashCode() : 0);
     }
 }

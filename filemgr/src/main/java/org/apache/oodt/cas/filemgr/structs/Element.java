@@ -75,8 +75,34 @@ public class Element {
     }
 
     @Override
+    public boolean equals(Object obj) {
+        // hashCode was overridden without this, so two identical definitions
+        // occupied two slots in a set and a lookup missed one that was present.
+        if (this == obj) {
+            return true;
+        }
+        if (obj == null || getClass() != obj.getClass()) {
+            return false;
+        }
+        Element other = (Element) obj;
+        return equal(elementId, other.elementId)
+                && equal(elementName, other.elementName)
+                && equal(dcElement, other.dcElement)
+                && equal(description, other.description);
+    }
+
+    private static boolean equal(Object a, Object b) {
+        return a == null ? b == null : a.equals(b);
+    }
+
+    @Override
     public int hashCode() {
-       return this.elementId.hashCode();
+       // A freshly constructed Element has no id yet, and this dereferenced it.
+       int result = elementId != null ? elementId.hashCode() : 0;
+       result = 31 * result + (elementName != null ? elementName.hashCode() : 0);
+       result = 31 * result + (dcElement != null ? dcElement.hashCode() : 0);
+       result = 31 * result + (description != null ? description.hashCode() : 0);
+       return result;
     }
     
     /**
