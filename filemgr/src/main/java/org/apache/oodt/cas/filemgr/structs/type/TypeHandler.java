@@ -17,6 +17,8 @@
 
 package org.apache.oodt.cas.filemgr.structs.type;
 
+import java.io.Serializable;
+
 //JDK imports
 import java.util.LinkedList;
 
@@ -40,7 +42,14 @@ import org.apache.oodt.cas.metadata.Metadata;
  * @version $Revision$
  * 
  */
-public abstract class TypeHandler {
+public abstract class TypeHandler implements Serializable {
+
+    /**
+     * ProductType holds a List of these and declares Serializable, so a handler
+     * that cannot be written makes the ProductType unwritable (OODT-995).
+     * Subclasses carrying their own state should declare their own UID.
+     */
+    private static final long serialVersionUID = 1L;
     
     protected String elementName;
 

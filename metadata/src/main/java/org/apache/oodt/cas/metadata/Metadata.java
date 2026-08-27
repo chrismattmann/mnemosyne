@@ -16,6 +16,7 @@
 package org.apache.oodt.cas.metadata;
 
 import java.util.Collections;
+import java.io.Serializable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.Hashtable;
 import java.util.List;
@@ -35,7 +36,15 @@ import java.util.Vector;
  * @version $Revision$
  * 
  */
-public class Metadata {
+public class Metadata implements Serializable {
+
+  /**
+   * ProductType declares Serializable and holds a Metadata, so a Metadata that
+   * cannot be written makes the whole ProductType unwritable. Wicket serialises
+   * pages into the session, which is where OPSUI hit it: a page holding a
+   * ProductType could not be stored at all (OODT-995).
+   */
+  private static final long serialVersionUID = 1L;
 
   private Group root;
 
@@ -472,7 +481,9 @@ public class Metadata {
     return new Group(Group.ROOT_GROUP_NAME);
   }
 
-  protected class Group {
+  protected class Group implements Serializable {
+
+    private static final long serialVersionUID = 1L;
 
     private static final String ROOT_GROUP_NAME = "root";
 
