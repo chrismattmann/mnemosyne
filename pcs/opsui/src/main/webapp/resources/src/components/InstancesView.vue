@@ -31,15 +31,16 @@
       <thead>
         <tr>
           <th>ID</th>
-          <th>Workflow</th>
-          <th>Status</th>
-          <th>Current task</th>
-          <th>Started</th>
-          <th>Ended</th>
+          <SortHead field="workflow" :sort="sort" :dir="dir" @sort="onSort">Workflow</SortHead>
+          <SortHead field="status" :sort="sort" :dir="dir" @sort="onSort">Status</SortHead>
+          <SortHead field="task" :sort="sort" :dir="dir" @sort="onSort">Current task</SortHead>
+          <SortHead field="start" :sort="sort" :dir="dir" @sort="onSort">Started</SortHead>
+          <SortHead field="end" :sort="sort" :dir="dir" @sort="onSort">Ended</SortHead>
+          <SortHead field="wall" :sort="sort" :dir="dir" @sort="onSort">Wall clock</SortHead>
         </tr>
       </thead>
       <tbody>
-        <tr v-for="inst in instances" :key="inst.id">
+        <tr v-for="inst in rows" :key="inst.id">
           <td class="mono">{{ inst.id }}</td>
           <td>
             <a v-if="inst.workflowId" href="#" @click.prevent="$emit('open-workflow', inst.workflowId)">
@@ -58,6 +59,7 @@
           </td>
           <td>{{ inst.startDateTime || '—' }}</td>
           <td>{{ inst.endDateTime || '—' }}</td>
+          <td class="mono">{{ formatWallClock(inst.wallMs) }}</td>
         </tr>
       </tbody>
     </table>
@@ -66,8 +68,10 @@
 </template>
 
 <script>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import Pager from './Pager.vue'
+import SortHead from './SortHead.vue'
+import { formatWallClock, parseStamp, sortRows, toggleSort, wallClockMs } from '../sort.js'
 
 const STATUSES = [
   'ALL', 'QUEUED', 'RSUBMIT', 'BUILDING CONFIG FILE', 'PGE EXEC', 'CRAWLING',
@@ -77,7 +81,7 @@ const STATUSES = [
 
 export default {
   name: 'InstancesView',
-  components: { Pager },
+  components: { Pager, SortHead },
   props: {
     payload: { type: Object, default: null },
     status: { type: String, default: 'ALL' },
@@ -86,7 +90,28 @@ export default {
   emits: ['status', 'page', 'open-workflow', 'open-task'],
   setup(props) {
     const pageBody = computed(() => (props.payload && props.payload.page) || {})
-    const instances = computed(() => pageBody.value.instances || [])
+    const sort = ref('')
+    const dir = ref('asc')
+    const now = computed(() => Date.now())
+    const instances = computed(() => {
+      return (pageBody.value.instances || []).map((inst) => Object.assign({}, inst, {
+        wallMs: wallClockMs(inst.startDateTime, inst.endDateTime, now.value)
+      }))
+    })
+    const getters = {
+      workflow: (row) => row.workflowName || row.workflowId || '',
+      status: (row) => row.status || '',
+      task: (row) => row.currentTaskName || row.currentTaskId || '',
+      start: (row) => parseStamp(row.startDateTime),
+      end: (row) => parseStamp(row.endDateTime),
+      wall: (row) => row.wallMs
+    }
+    const rows = computed(() => {
+      if (!sort.value) {
+        return instances.value
+      }
+      return sortRows(instances.value, getters[sort.value] || getters.workflow, dir.value)
+    })
     const statuses = computed(() => {
       const current = props.status
       if (current && STATUSES.indexOf(current) === -1) {
@@ -94,6 +119,12 @@ export default {
       }
       return STATUSES
     })
+
+    function onSort(field) {
+      const next = toggleSort(field, sort.value, dir.value)
+      sort.value = next.field
+      dir.value = next.dir
+    }
 
     function pillClass(status) {
       const value = String(status || '').toUpperCase()
@@ -112,6 +143,11 @@ export default {
     return {
       statuses,
       instances,
+      rows,
+      sort,
+      dir,
+      onSort,
+      formatWallClock,
       page: computed(() => pageBody.value.page || 1),
       totalPages: computed(() => pageBody.value.totalPages || 1),
       pillClass

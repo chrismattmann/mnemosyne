@@ -23,13 +23,13 @@
     <table v-else>
       <thead>
         <tr>
-          <th>Name</th>
+          <SortHead field="name" :sort="sort" :dir="dir" @sort="onSort">Name</SortHead>
           <th>ID</th>
-          <th>Tasks</th>
+          <SortHead field="taskCount" :sort="sort" :dir="dir" @sort="onSort">Tasks</SortHead>
         </tr>
       </thead>
       <tbody>
-        <tr v-for="workflow in workflows" :key="workflow.id">
+        <tr v-for="workflow in rows" :key="workflow.id">
           <td>
             <a href="#" @click.prevent="$emit('open', workflow.id)">{{ workflow.name }}</a>
           </td>
@@ -42,13 +42,37 @@
 </template>
 
 <script>
+import { computed, ref } from 'vue'
+import SortHead from './SortHead.vue'
+import { sortRows, toggleSort } from '../sort.js'
+
 export default {
   name: 'WorkflowsView',
+  components: { SortHead },
   props: {
     workflows: { type: Array, default: () => [] },
     loading: { type: Boolean, default: false }
   },
-  emits: ['open']
+  emits: ['open'],
+  setup(props) {
+    const sort = ref('')
+    const dir = ref('asc')
+    const rows = computed(() => {
+      if (!sort.value) {
+        return props.workflows
+      }
+      const getter = sort.value === 'taskCount'
+        ? (row) => Number(row.taskCount) || 0
+        : (row) => row.name || ''
+      return sortRows(props.workflows, getter, dir.value)
+    })
+    function onSort(field) {
+      const next = toggleSort(field, sort.value, dir.value)
+      sort.value = next.field
+      dir.value = next.dir
+    }
+    return { sort, dir, rows, onSort }
+  }
 }
 </script>
 
