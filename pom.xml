@@ -60,8 +60,6 @@ the License.
     <module>pcs/core</module>
     <module>pcs/opsui</module>
     <module>pcs/services</module>
-    <module>deployment</module>
-    <module>react-components/oodt_opsui_sample_app</module>
   </modules>
 
   <scm>

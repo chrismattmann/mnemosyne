@@ -451,12 +451,6 @@ the License.
       </dependency>
       <dependency>
         <groupId>ai.mattmann.mnemosyne</groupId>
-        <artifactId>oodt-reactjs-opsui</artifactId>
-        <version>${project.parent.version}</version>
-        <type>pom</type>
-      </dependency>
-      <dependency>
-        <groupId>ai.mattmann.mnemosyne</groupId>
         <artifactId>curator-sso</artifactId>
         <version>${project.parent.version}</version>
       </dependency>
@@ -1130,11 +1124,7 @@ mm
               -->
               <excludeArtifacts>
                 <excludeArtifact>oodt</excludeArtifact>
-                <excludeArtifact>oodt-deployment</excludeArtifact>
                 <excludeArtifact>oodt-webapps</excludeArtifact>
-                <excludeArtifact>oodt-reactjs-opsui</excludeArtifact>
-                <excludeArtifact>oodt-streaming</excludeArtifact>
-                <excludeArtifact>cas-streaming-resource</excludeArtifact>
                 <excludeArtifact>oodt-webapp-components</excludeArtifact>
                 <excludeArtifact>curator-services</excludeArtifact>
                 <excludeArtifact>curator-sso</excludeArtifact>
