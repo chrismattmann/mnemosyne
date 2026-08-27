@@ -20,7 +20,6 @@ package org.apache.oodt.cas.curation.service;
 //OODT imports
 import org.apache.commons.lang.StringUtils;
 import org.apache.oodt.cas.curation.metadata.CuratorConfMetKeys;
-import org.apache.oodt.security.sso.SingleSignOn;
 
 import net.sf.json.JSONArray;
 
@@ -69,7 +68,6 @@ public class CurationService extends HttpServlet implements CuratorConfMetKeys {
   
   protected final static String UNKNOWN_OUT_FORMAT = "Unsupported Output Format!";
   
-  protected SingleSignOn sso;
 
   /**
    * Default Constructor.

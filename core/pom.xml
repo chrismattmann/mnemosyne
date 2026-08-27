@@ -451,11 +451,6 @@ the License.
       </dependency>
       <dependency>
         <groupId>ai.mattmann.mnemosyne</groupId>
-        <artifactId>curator-sso</artifactId>
-        <version>${project.parent.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>ai.mattmann.mnemosyne</groupId>
         <artifactId>oodt-webapp-components</artifactId>
         <version>${project.parent.version}</version>
       </dependency>
@@ -1127,8 +1122,6 @@ mm
                 <excludeArtifact>oodt-webapps</excludeArtifact>
                 <excludeArtifact>oodt-webapp-components</excludeArtifact>
                 <excludeArtifact>curator-services</excludeArtifact>
-                <excludeArtifact>curator-sso</excludeArtifact>
-                <excludeArtifact>cas-curator</excludeArtifact>
                 <excludeArtifact>fmbrowser</excludeArtifact>
                 <excludeArtifact>wmonitor</excludeArtifact>
                 <excludeArtifact>workflow-services</excludeArtifact>
