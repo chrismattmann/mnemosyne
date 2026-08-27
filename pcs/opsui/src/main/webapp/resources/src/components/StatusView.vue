@@ -38,10 +38,13 @@
           <p v-if="!jobs.length" class="empty">No job counts yet.</p>
           <table v-else>
             <thead>
-              <tr><th>State</th><th>Count</th></tr>
+              <tr>
+                <SortHead field="state" :sort="jobSort" :dir="jobDir" @sort="sortJobs">State</SortHead>
+                <SortHead field="count" :sort="jobSort" :dir="jobDir" @sort="sortJobs">Count</SortHead>
+              </tr>
             </thead>
             <tbody>
-              <tr v-for="job in jobs" :key="job.state">
+              <tr v-for="job in sortedJobs" :key="job.state">
                 <td>
                   <a href="#" @click.prevent="$emit('open-instances', job.state)">{{ job.state }}</a>
                 </td>
@@ -114,10 +117,13 @@
 </template>
 
 <script>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import SortHead from './SortHead.vue'
+import { sortRows, toggleSort } from '../sort.js'
 
 export default {
   name: 'StatusView',
+  components: { SortHead },
   props: {
     report: { type: Object, default: null },
     loading: { type: Boolean, default: false }
@@ -155,6 +161,22 @@ export default {
     })
 
     const jobs = computed(() => (props.report && props.report.jobHealth) || [])
+    const jobSort = ref('')
+    const jobDir = ref('asc')
+    const sortedJobs = computed(() => {
+      if (!jobSort.value) {
+        return jobs.value
+      }
+      const getter = jobSort.value === 'count'
+        ? (row) => Number(row.numJobs) || 0
+        : (row) => row.state || ''
+      return sortRows(jobs.value, getter, jobDir.value)
+    })
+    function sortJobs(field) {
+      const next = toggleSort(field, jobSort.value, jobDir.value)
+      jobSort.value = next.field
+      jobDir.value = next.dir
+    }
 
     const crawlers = computed(() => {
       const live = (props.report && props.report.crawlerStatus) || []
@@ -175,7 +197,10 @@ export default {
       return latest.files || []
     })
 
-    return { up, generated, daemons, stubs, jobs, crawlers, files }
+    return {
+      up, generated, daemons, stubs, jobs, sortedJobs, jobSort, jobDir, sortJobs,
+      crawlers, files
+    }
   }
 }
 </script>

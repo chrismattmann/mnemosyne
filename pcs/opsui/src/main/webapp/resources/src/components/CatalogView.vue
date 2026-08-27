@@ -23,13 +23,13 @@
     <table v-else>
       <thead>
         <tr>
-          <th>Type</th>
+          <SortHead field="name" :sort="sort" :dir="dir" @sort="onSort">Type</SortHead>
           <th>Description</th>
-          <th>Products</th>
+          <SortHead field="numProducts" :sort="sort" :dir="dir" @sort="onSort">Products</SortHead>
         </tr>
       </thead>
       <tbody>
-        <tr v-for="type in types" :key="type.id || type.name">
+        <tr v-for="type in rows" :key="type.id || type.name">
           <td>
             <a href="#" @click.prevent="$emit('open', type.name)">{{ type.name }}</a>
           </td>
@@ -42,13 +42,37 @@
 </template>
 
 <script>
+import { computed, ref } from 'vue'
+import SortHead from './SortHead.vue'
+import { sortRows, toggleSort } from '../sort.js'
+
 export default {
   name: 'CatalogView',
+  components: { SortHead },
   props: {
     types: { type: Array, default: () => [] },
     loading: { type: Boolean, default: false }
   },
-  emits: ['open']
+  emits: ['open'],
+  setup(props) {
+    const sort = ref('')
+    const dir = ref('asc')
+    const rows = computed(() => {
+      if (!sort.value) {
+        return props.types
+      }
+      const getter = sort.value === 'numProducts'
+        ? (row) => Number(row.numProducts) || 0
+        : (row) => row.name || ''
+      return sortRows(props.types, getter, dir.value)
+    })
+    function onSort(field) {
+      const next = toggleSort(field, sort.value, dir.value)
+      sort.value = next.field
+      dir.value = next.dir
+    }
+    return { sort, dir, rows, onSort }
+  }
 }
 </script>
 
