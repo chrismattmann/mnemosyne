@@ -48,10 +48,15 @@ public class NullInputStreamTest extends TestCase {
                         in.read();
                         fail("Should not be able to read a closed stream");
                 } catch (IOException ignore) {}
+                // Closeable specifies that closing an already closed stream has
+                // no effect. This used to assert the opposite, which is why the
+                // implementation kept throwing.
                 try {
                         in.close();
-                        fail("Should not be able to close a closed stream");
-                } catch (IOException ignore) {}
+                } catch (IOException ex) {
+                        fail("Closing an already closed stream must have no effect: "
+                                + ex.getMessage());
+                }
         }
 
         public void testReading() {

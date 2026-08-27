@@ -75,7 +75,12 @@ public class FixedBufferOutputStream extends OutputStream {
 			System.arraycopy(a, off + insertionLength, buffer, 0, remaining);
 			start = remaining;
 		} else if (capacity == 0) {
-		  start = insertionIndex + insertionLength;
+		  // A bulk write that exactly filled the buffer left this equal to
+		  // length, and the next single-byte write indexed buffer[start], one
+		  // past the end. Bulk-only and single-byte-only paths each stayed in
+		  // bounds; only the mix went out. Guarded for the zero-length buffer,
+		  // which testZeroSizeStream covers.
+		  start = length == 0 ? 0 : (insertionIndex + insertionLength) % length;
 		}
 		size = Math.min(length, size + len);
 	}
