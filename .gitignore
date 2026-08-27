@@ -125,8 +125,10 @@ local.properties
 # node_modules
 /react-components/oodt_fm_plugin/node_modules
 /react-components/oodt_opsui_sample_app/node_modules
+pcs/opsui/src/main/webapp/resources/node_modules
 
 # npm build/Tarball ignores
 /react-components/oodt_fm_plugin/dist
+pcs/opsui/src/main/webapp/resources/dist
 
 

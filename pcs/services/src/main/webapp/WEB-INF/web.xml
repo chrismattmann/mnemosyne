@@ -29,6 +29,8 @@ the License.
 	  <param-value>
 	    org.apache.oodt.pcs.services.HealthResource
 	    org.apache.oodt.pcs.services.PedigreeResource
+	    org.apache.oodt.pcs.services.CatalogResource
+	    org.apache.oodt.pcs.services.WorkflowResource
 	  </param-value>
 	 </init-param>
 	<load-on-startup>1</load-on-startup>

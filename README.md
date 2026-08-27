@@ -205,6 +205,8 @@ and the console appenders write to standard error rather than standard output.
 | **Resource Manager** | Dispatches jobs across compute nodes |
 | **Crawler** | Ingests products and triggers post-ingest workflows |
 | **PGE** | Wraps arbitrary executables as pipeline stages |
+| **OPSUI** | Vue 3 monitoring UI at `/opsui/` — catalog, lineage, workflow instances |
+| **pcs-services** | JSON health, catalog, workflow, and pedigree APIs at `/pcs/services/` |
 | **CAS Metadata / CLI / Commons** | Shared metadata, command-line, and utility layers |
 
 Pipelines are described in structured XML rather than accreted shell glue, so

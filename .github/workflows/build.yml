@@ -25,6 +25,13 @@ jobs:
           java-version: '21'
           cache: maven
 
+      - name: Set up Node 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: npm
+          cache-dependency-path: pcs/opsui/src/main/webapp/resources/package-lock.json
+
       # java.ext.dirs and java.endorsed.dirs were removed in Java 9, and a JVM
       # given either one refuses to start. Every launcher script in the tree
       # passed one until #75. The file count is asserted first so that a scan
