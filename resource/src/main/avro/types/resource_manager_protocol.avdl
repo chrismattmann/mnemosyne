@@ -6,54 +6,75 @@ import schema "AvroNameValueJobInput.avsc";
 import schema "AvroJobInput.avsc";
 import schema "AvroResourceNode.avsc";
 
-    boolean isJobComplete(string jobId);
+    /**
+     * What kind of failure this was, so a caller can branch on it without
+     * reading the message. The vocabulary is defined once in
+     * org.apache.oodt.commons.rpc.FailureKinds; each protocol declares its own
+     * copy because a protocol's types live in its own namespace, and
+     * generating one shared class from several modules would put duplicate
+     * classes on the classpath. TestFailureKindVocabulary keeps them in step.
+     */
+    enum OodtFailureKind {
+        CATALOG,
+        INSTANCE_REPOSITORY,
+        INTERRUPTED,
+        IO,
+        JOB,
+        JOB_EXECUTION,
+        JOB_INPUT,
+        JOB_QUEUE,
+        JOB_REPOSITORY,
+        MONITOR,
+        NOT_FOUND,
+        QUERY,
+        QUEUE,
+        REPOSITORY,
+        SCHEDULER,
+        TRANSFER,
+        UNKNOWN,
+        VALIDATION,
+        VERSIONING,
+        WORKFLOW_REPOSITORY
+    }
 
-    AvroJob getJobInfo(string jobId);
+    /**
+     * A server-side failure, in a shape Avro can write.
+     *
+     * Without a declared error type the error schema is the implicit
+     * ["string"], which no exception matches, so Avro failed while reporting
+     * the failure. `type` carries the original exception's class name
+     * alongside the coarse `kind`, so nothing is lost when the kind lumps
+     * several exceptions together.
+     */
+    error OodtError {
+        OodtFailureKind kind;
+        string type;
+        union { null, string } detail;
+    }
 
-    boolean isAlive();
-
-    int getJobQueueSize();
-
-    int getJobQueueCapacity();
-
-    boolean killJob(string jobId);
-
-    string getExecutionNode(string jobId);
-
-    string getExecReport();
-
-    string getNodeReport();
-
-    array<AvroJob> getQueuedJobs();
-
-    string handleJob(AvroJob exec, AvroJobInput into);
-
-    boolean handleJobWithUrl(AvroJob exec, AvroJobInput in, string hostUrl);
-
-    array<AvroResourceNode> getNodes();
-
-    AvroResourceNode getNodeById(string nodeId);
-
-    boolean addQueue(string queueName);
-
-    boolean removeQueue(string queueName);
-
-    boolean addNode(AvroResourceNode node);
-
-    boolean removeNode(string nodeId);
-
-    boolean setNodeCapacity(string nodeId, int capacity);
-
-    boolean addNodeToQueue(string nodeId, string queueName);
-
-    boolean removeNodeFromQueue(string nodeId, string queueName);
-
-    array<string> getQueues();
-
-    array<string> getNodesInQueue(string queueName);
-
-    array<string> getQueuesWithNode(string nodeId);
-
-    string getNodeLoad(string nodeId);
-
+    boolean isJobComplete(string jobId) throws OodtError;
+    AvroJob getJobInfo(string jobId) throws OodtError;
+    boolean isAlive() throws OodtError;
+    int getJobQueueSize() throws OodtError;
+    int getJobQueueCapacity() throws OodtError;
+    boolean killJob(string jobId) throws OodtError;
+    string getExecutionNode(string jobId) throws OodtError;
+    string getExecReport() throws OodtError;
+    string getNodeReport() throws OodtError;
+    array<AvroJob> getQueuedJobs() throws OodtError;
+    string handleJob(AvroJob exec, AvroJobInput into) throws OodtError;
+    boolean handleJobWithUrl(AvroJob exec, AvroJobInput in, string hostUrl) throws OodtError;
+    array<AvroResourceNode> getNodes() throws OodtError;
+    AvroResourceNode getNodeById(string nodeId) throws OodtError;
+    boolean addQueue(string queueName) throws OodtError;
+    boolean removeQueue(string queueName) throws OodtError;
+    boolean addNode(AvroResourceNode node) throws OodtError;
+    boolean removeNode(string nodeId) throws OodtError;
+    boolean setNodeCapacity(string nodeId, int capacity) throws OodtError;
+    boolean addNodeToQueue(string nodeId, string queueName) throws OodtError;
+    boolean removeNodeFromQueue(string nodeId, string queueName) throws OodtError;
+    array<string> getQueues() throws OodtError;
+    array<string> getNodesInQueue(string queueName) throws OodtError;
+    array<string> getQueuesWithNode(string nodeId) throws OodtError;
+    string getNodeLoad(string nodeId) throws OodtError;
 }

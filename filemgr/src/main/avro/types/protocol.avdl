@@ -17,104 +17,100 @@ import schema "AvroFilterAlgor.avsc";
 import schema "AvroQueryFilter.avsc";
 import schema "AvroComplexQuery.avsc";
 
-    boolean isAlive();
+    /**
+     * What kind of failure this was, so a caller can branch on it without
+     * reading the message. The vocabulary is defined once in
+     * org.apache.oodt.commons.rpc.FailureKinds; each protocol declares its own
+     * copy because a protocol's types live in its own namespace, and
+     * generating one shared class from several modules would put duplicate
+     * classes on the classpath. TestFailureKindVocabulary keeps them in step.
+     */
+    enum OodtFailureKind {
+        CATALOG,
+        INSTANCE_REPOSITORY,
+        INTERRUPTED,
+        IO,
+        JOB,
+        JOB_EXECUTION,
+        JOB_INPUT,
+        JOB_QUEUE,
+        JOB_REPOSITORY,
+        MONITOR,
+        NOT_FOUND,
+        QUERY,
+        QUEUE,
+        REPOSITORY,
+        SCHEDULER,
+        TRANSFER,
+        UNKNOWN,
+        VALIDATION,
+        VERSIONING,
+        WORKFLOW_REPOSITORY
+    }
 
-    boolean refreshConfigAndPolicy();
+    /**
+     * A server-side failure, in a shape Avro can write.
+     *
+     * Without a declared error type the error schema is the implicit
+     * ["string"], which no exception matches, so Avro failed while reporting
+     * the failure. `type` carries the original exception's class name
+     * alongside the coarse `kind`, so nothing is lost when the kind lumps
+     * several exceptions together.
+     */
+    error OodtError {
+        OodtFailureKind kind;
+        string type;
+        union { null, string } detail;
+    }
 
-    boolean transferringProduct(AvroProduct p);
-
-    AvroFileTransferStatus getCurrentFileTransfer();
-
-    array<AvroFileTransferStatus> getCurrentFileTransfers();
-
-    double getProductPctTransferred(AvroProduct product);
-
-    double getRefPctTransferred(AvroReference reference);
-
-    boolean removeProductTransferStatus(AvroProduct product);
-
-    boolean isTransferComplete(AvroProduct product);
-
-    AvroProductPage pagedQuery(AvroQuery query, AvroProductType type, int pageNum);
-
-    AvroProductPage getFirstPage(AvroProductType type);
-
-    AvroProductPage getLastPage(AvroProductType type);
-
-    AvroProductPage getNextPage(AvroProductType type ,AvroProductPage currPage);
-
-    AvroProductPage getPrevPage(AvroProductType type,AvroProductPage currPage);
-
-    boolean setProductTransferStatus(AvroProduct product);
-
-    int getNumProducts(AvroProductType type);
-
-    array<AvroProduct> getTopNProductsByProductType(int n,AvroProductType type);
-
-    array<AvroProduct> getTopNProducts(int n);
-
-    boolean hasProduct(string productName);
-
-    AvroMetadata getMetadata(AvroProduct product);
-
-    AvroMetadata getReducedMetadata(AvroProduct product, array<string> elements);
-
-    array<AvroProductType>  getProductTypes();
-
-    array<AvroReference> getProductReferences(AvroProduct product);
-
-    AvroProduct getProductById(string productId);
-
-    AvroProduct getProductByName(string productName);
-
-    array<AvroProduct> getProductsByProductType(AvroProductType type);
-
-    array<AvroElement> getElementsByProductType(AvroProductType type);
-
-    AvroElement getElementById(string elementId);
-
-    AvroElement getElementByName(string elementName);
-
-    array<AvroQueryResult> complexQuery(AvroComplexQuery complexQuery);
-
-    array<AvroProduct> query(AvroQuery query,AvroProductType type);
-
-    AvroProductType getProductTypeByName(string productTypeName);
-
-    AvroProductType getProductTypeById(string productTypeId);
-
-    AvroProductType getProductTypeById(string productTypeId);
-
-    boolean updateMetadata(AvroProduct product,AvroMetadata met);
-
-    string addProductType(AvroProductType type);
-
-    string catalogProduct(AvroProduct product);
-
-    boolean addMetadata(AvroProduct product, AvroMetadata met);
-
-    boolean addProductReferences(AvroProduct product);
-
-    string ingestProduct(AvroProduct p,AvroMetadata m, boolean clientTransfer);
-
-    string ingestProduct(AvroProduct p,AvroMetadata m, boolean clientTransfer);
-
-    bytes retrieveFile(string filePath, int offset, int numBytes);
-
-    boolean transferFile(string filePath, bytes fileData, int offset,int numBytes);
-
-    boolean moveProduct(AvroProduct p, string newPath);
-
-    boolean removeFile(string filePath);
-
-    boolean modifyProduct(AvroProduct p);
-
-    boolean removeProduct(AvroProduct p);
-
-    AvroMetadata getCatalogValues(AvroMetadata m,AvroProductType productType);
-
-    AvroMetadata getOrigValues(AvroMetadata m,AvroProductType productType);
-
-    AvroQuery getCatalogQuery(AvroQuery query,AvroProductType productType);
-
+    boolean isAlive() throws OodtError;
+    boolean refreshConfigAndPolicy() throws OodtError;
+    boolean transferringProduct(AvroProduct p) throws OodtError;
+    AvroFileTransferStatus getCurrentFileTransfer() throws OodtError;
+    array<AvroFileTransferStatus> getCurrentFileTransfers() throws OodtError;
+    double getProductPctTransferred(AvroProduct product) throws OodtError;
+    double getRefPctTransferred(AvroReference reference) throws OodtError;
+    boolean removeProductTransferStatus(AvroProduct product) throws OodtError;
+    boolean isTransferComplete(AvroProduct product) throws OodtError;
+    AvroProductPage pagedQuery(AvroQuery query, AvroProductType type, int pageNum) throws OodtError;
+    AvroProductPage getFirstPage(AvroProductType type) throws OodtError;
+    AvroProductPage getLastPage(AvroProductType type) throws OodtError;
+    AvroProductPage getNextPage(AvroProductType type ,AvroProductPage currPage) throws OodtError;
+    AvroProductPage getPrevPage(AvroProductType type,AvroProductPage currPage) throws OodtError;
+    boolean setProductTransferStatus(AvroProduct product) throws OodtError;
+    int getNumProducts(AvroProductType type) throws OodtError;
+    array<AvroProduct> getTopNProductsByProductType(int n,AvroProductType type) throws OodtError;
+    array<AvroProduct> getTopNProducts(int n) throws OodtError;
+    boolean hasProduct(string productName) throws OodtError;
+    AvroMetadata getMetadata(AvroProduct product) throws OodtError;
+    AvroMetadata getReducedMetadata(AvroProduct product, array<string> elements) throws OodtError;
+    array<AvroProductType>  getProductTypes() throws OodtError;
+    array<AvroReference> getProductReferences(AvroProduct product) throws OodtError;
+    AvroProduct getProductById(string productId) throws OodtError;
+    AvroProduct getProductByName(string productName) throws OodtError;
+    array<AvroProduct> getProductsByProductType(AvroProductType type) throws OodtError;
+    array<AvroElement> getElementsByProductType(AvroProductType type) throws OodtError;
+    AvroElement getElementById(string elementId) throws OodtError;
+    AvroElement getElementByName(string elementName) throws OodtError;
+    array<AvroQueryResult> complexQuery(AvroComplexQuery complexQuery) throws OodtError;
+    array<AvroProduct> query(AvroQuery query,AvroProductType type) throws OodtError;
+    AvroProductType getProductTypeByName(string productTypeName) throws OodtError;
+    AvroProductType getProductTypeById(string productTypeId) throws OodtError;
+    AvroProductType getProductTypeById(string productTypeId) throws OodtError;
+    boolean updateMetadata(AvroProduct product,AvroMetadata met) throws OodtError;
+    string addProductType(AvroProductType type) throws OodtError;
+    string catalogProduct(AvroProduct product) throws OodtError;
+    boolean addMetadata(AvroProduct product, AvroMetadata met) throws OodtError;
+    boolean addProductReferences(AvroProduct product) throws OodtError;
+    string ingestProduct(AvroProduct p,AvroMetadata m, boolean clientTransfer) throws OodtError;
+    string ingestProduct(AvroProduct p,AvroMetadata m, boolean clientTransfer) throws OodtError;
+    bytes retrieveFile(string filePath, int offset, int numBytes) throws OodtError;
+    boolean transferFile(string filePath, bytes fileData, int offset,int numBytes) throws OodtError;
+    boolean moveProduct(AvroProduct p, string newPath) throws OodtError;
+    boolean removeFile(string filePath) throws OodtError;
+    boolean modifyProduct(AvroProduct p) throws OodtError;
+    boolean removeProduct(AvroProduct p) throws OodtError;
+    AvroMetadata getCatalogValues(AvroMetadata m,AvroProductType productType) throws OodtError;
+    AvroMetadata getOrigValues(AvroMetadata m,AvroProductType productType) throws OodtError;
+    AvroQuery getCatalogQuery(AvroQuery query,AvroProductType productType) throws OodtError;
 }

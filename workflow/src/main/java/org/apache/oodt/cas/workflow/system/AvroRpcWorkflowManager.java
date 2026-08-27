@@ -19,6 +19,9 @@ package org.apache.oodt.cas.workflow.system;
 
 import com.google.common.base.Preconditions;
 import org.apache.avro.AvroRemoteException;
+import org.apache.oodt.cas.workflow.struct.avrotypes.OodtError;
+import org.apache.oodt.cas.workflow.struct.avrotypes.OodtFailureKind;
+import org.apache.oodt.commons.rpc.FailureKinds;
 import org.apache.avro.ipc.HttpServer;
 import org.apache.avro.ipc.Server;
 import org.apache.oodt.commons.rpc.ErrorUnwrappingResponder;
@@ -177,7 +180,7 @@ public class AvroRpcWorkflowManager implements WorkflowManager,org.apache.oodt.c
             return inst.getId();
         }catch (RepositoryException | EngineException e){
             logger.error("Error occurred when creating dynamic workflow for taskIDs: {}", taskIds, e);
-            throw new AvroRemoteException(e);
+            throw oodtError(e);
         }
     }
 
@@ -189,8 +192,7 @@ public class AvroRpcWorkflowManager implements WorkflowManager,org.apache.oodt.c
             return events;
         } catch (RepositoryException e) {
             logger.error("Error occurred when registering events: {}", e.getMessage());
-            throw new AvroRemoteException(
-                    "Exception getting registered events from repository: Message: " + e.getMessage());
+            throw oodtError(e, "Exception getting registered events from repository: Message: " + e.getMessage());
         }
     }
 
@@ -259,7 +261,7 @@ public class AvroRpcWorkflowManager implements WorkflowManager,org.apache.oodt.c
             return AvroTypeFactory.getAvroWorkflowInstancePage(WorkflowInstancePage
                     .blankPage());
         } catch (InstanceRepositoryException e) {
-            throw new AvroRemoteException(e);
+            throw oodtError(e);
         }
     }
 
@@ -276,7 +278,7 @@ public class AvroRpcWorkflowManager implements WorkflowManager,org.apache.oodt.c
             return AvroTypeFactory.getAvroWorkflowInstancePage(WorkflowInstancePage
                     .blankPage());
         } catch (InstanceRepositoryException e) {
-            throw new AvroRemoteException(e);
+            throw oodtError(e);
         }
 
     }
@@ -292,8 +294,7 @@ public class AvroRpcWorkflowManager implements WorkflowManager,org.apache.oodt.c
                 return new ArrayList();
         } catch (Exception e) {
             e.printStackTrace();
-            throw new AvroRemoteException(
-                    "Exception getting workflows for event: " + eventName
+            throw oodtError(e, "Exception getting workflows for event: " + eventName
                             + " from repository: Message: " + e.getMessage());
         }
     }
@@ -316,8 +317,7 @@ public class AvroRpcWorkflowManager implements WorkflowManager,org.apache.oodt.c
             workflows = repo.getWorkflowsForEvent(eventName);
         } catch (Exception e) {
             logger.error("Couldn't get workflows for event: {}", eventName, e);
-            throw new AvroRemoteException(
-                    "Exception getting workflows associated with event: "
+            throw oodtError(e, "Exception getting workflows associated with event: "
                             + eventName + ": Message: " + e.getMessage());
         }
 
@@ -335,8 +335,7 @@ public class AvroRpcWorkflowManager implements WorkflowManager,org.apache.oodt.c
                     engine.startWorkflow(w, m);
                 } catch (Exception e) {
                     logger.error("Error when starting workflow: {} with metadata: {}", w.getName(), m.getAllKeys(), e);
-                    throw new AvroRemoteException(
-                            "Engine exception when starting workflow: " + w.getName() + ": Message: " + e.getMessage());
+                    throw oodtError(e, "Engine exception when starting workflow: " + w.getName() + ": Message: " + e.getMessage());
                 }
             }
 
@@ -397,7 +396,7 @@ public class AvroRpcWorkflowManager implements WorkflowManager,org.apache.oodt.c
             return engine.getInstanceRepository().getNumWorkflowInstancesByStatus(
                     status);
         } catch (InstanceRepositoryException e) {
-            throw new AvroRemoteException(e);
+            throw oodtError(e);
         }
     }
 
@@ -407,7 +406,7 @@ public class AvroRpcWorkflowManager implements WorkflowManager,org.apache.oodt.c
             return engine.getInstanceRepository().getNumWorkflowInstances();
         } catch (InstanceRepositoryException e) {
             e.printStackTrace();
-            throw new AvroRemoteException(e);
+            throw oodtError(e);
         }
     }
 
@@ -446,8 +445,7 @@ public class AvroRpcWorkflowManager implements WorkflowManager,org.apache.oodt.c
                 }
             } catch (Exception e) {
                 logger.error("Error when getting workflow instances by status: {}, error: {}", status, e.getMessage());
-                throw new AvroRemoteException(
-                        "Exception getting workflow instances by statusfrom workflow engine: Message: "
+                throw oodtError(e, "Exception getting workflow instances by statusfrom workflow engine: Message: "
                                 + e.getMessage());
             }
         }
@@ -493,8 +491,7 @@ public class AvroRpcWorkflowManager implements WorkflowManager,org.apache.oodt.c
                 return avroWorkflowInstances;
             } catch (Exception e) {
                 logger.error("Error getting workflow instances", e);
-                throw new AvroRemoteException(
-                        "Exception getting workflow instances from workflow engine: Message: "
+                throw oodtError(e, "Exception getting workflow instances from workflow engine: Message: "
                                 + e.getMessage());
             }
         } else
@@ -508,7 +505,7 @@ public class AvroRpcWorkflowManager implements WorkflowManager,org.apache.oodt.c
         try {
             workflowList = repo.getWorkflows();
         } catch (RepositoryException e) {
-            throw new AvroRemoteException(e);
+            throw oodtError(e);
         }
 
         if (workflowList != null) {
@@ -518,8 +515,7 @@ public class AvroRpcWorkflowManager implements WorkflowManager,org.apache.oodt.c
                 return AvroTypeFactory.getAvroWorkflows(workflowList);
             } catch (Exception e) {
                 logger.error("Unable to get workflows: {}", e.getMessage());
-                throw new AvroRemoteException(
-                        "Exception getting workflows from repository: Message: "
+                throw oodtError(e, "Exception getting workflows from repository: Message: "
                                 + e.getMessage());
             }
 
@@ -535,7 +531,7 @@ public class AvroRpcWorkflowManager implements WorkflowManager,org.apache.oodt.c
             return AvroTypeFactory.getAvroWorkflowTask(t);
         } catch (Exception e) {
             logger.error("Error when getting task by ID: {} - {}", taskId, e.getMessage());
-            throw new AvroRemoteException("Exception getting task by id: Message: " + e.getMessage());
+            throw oodtError(e, "Exception getting task by id: Message: " + e.getMessage());
         }
     }
 
@@ -546,7 +542,7 @@ public class AvroRpcWorkflowManager implements WorkflowManager,org.apache.oodt.c
             return AvroTypeFactory.getAvroWorkflowCondition(c);
         } catch (Exception e) {
             logger.error("Error when getting condition by ID: {} - {}", conditionId, e.getMessage());
-            throw new AvroRemoteException("Exception getting condition by id: Message: " + e.getMessage());
+            throw oodtError(e, "Exception getting condition by id: Message: " + e.getMessage());
         }
 
     }
@@ -558,8 +554,7 @@ public class AvroRpcWorkflowManager implements WorkflowManager,org.apache.oodt.c
             return AvroTypeFactory.getAvroWorkflow(workflow);
         } catch (Exception e) {
             logger.error("Error getting workflow by ID: {} - {}", workflowId, e.getMessage());
-            throw new AvroRemoteException(
-                    "Exception getting workflow by id from the repository: Message: "
+            throw oodtError(e, "Exception getting workflow by id from the repository: Message: "
                             + e.getMessage());
         }
 
@@ -627,7 +622,7 @@ public class AvroRpcWorkflowManager implements WorkflowManager,org.apache.oodt.c
         } catch (Exception e) {
             logger.error("Unable to updated workflow instance [{}] status to {} - {}",
                     workflowInstId, status, e.getMessage());
-            throw new AvroRemoteException(e);
+            throw oodtError(e);
         }
 
         wInst.setStatus(status);
@@ -719,4 +714,30 @@ public class AvroRpcWorkflowManager implements WorkflowManager,org.apache.oodt.c
         }
     }
 
+
+    /**
+     * Describe a server-side failure in the shape the protocol declares.
+     *
+     * The kind lets a caller branch without reading prose; the class name goes
+     * alongside it so the exact exception is still visible when the kind is
+     * coarse. FailureKinds owns the vocabulary, shared by every protocol.
+     */
+    private static OodtError oodtError(Throwable cause) {
+        OodtError error = new OodtError();
+        error.setKind(OodtFailureKind.valueOf(FailureKinds.classify(cause)));
+        error.setType(cause.getClass().getName());
+        error.setDetail(cause.getMessage());
+        return error;
+    }
+
+    /**
+     * As above, but keeping a message the caller composed. The kind and the
+     * class name still come from the cause, so context is added rather than
+     * traded for it.
+     */
+    private static OodtError oodtError(Throwable cause, String detail) {
+        OodtError error = oodtError(cause);
+        error.setDetail(detail);
+        return error;
+    }
 }

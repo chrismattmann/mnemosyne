@@ -19,6 +19,9 @@
 package org.apache.oodt.cas.filemgr.system;
 
 import org.apache.avro.AvroRemoteException;
+import org.apache.oodt.cas.filemgr.structs.avrotypes.OodtError;
+import org.apache.oodt.cas.filemgr.structs.avrotypes.OodtFailureKind;
+import org.apache.oodt.commons.rpc.FailureKinds;
 import org.apache.avro.ipc.NettyServer;
 import org.apache.avro.ipc.Server;
 import org.apache.oodt.commons.rpc.ErrorUnwrappingResponder;
@@ -197,7 +200,7 @@ public class AvroFileManagerServer implements AvroFileManager, FileManagerServer
                     pageNum
             ));
         } catch (CatalogException e) {
-            throw new AvroRemoteException(e.getMessage());
+            throw oodtError(e);
         }
     }
 
@@ -240,7 +243,7 @@ public class AvroFileManagerServer implements AvroFileManager, FileManagerServer
         try {
             return this.fileManager.setProductTransferStatus(AvroTypeFactory.getProduct(product));
         } catch (CatalogException e) {
-            throw new AvroRemoteException(e);
+            throw oodtError(e);
         }
     }
 
@@ -249,7 +252,7 @@ public class AvroFileManagerServer implements AvroFileManager, FileManagerServer
         try {
             return this.fileManager.getNumProducts(AvroTypeFactory.getProductType(type));
         } catch (CatalogException e) {
-            throw new AvroRemoteException(e);
+            throw oodtError(e);
         }
     }
 
@@ -261,7 +264,7 @@ public class AvroFileManagerServer implements AvroFileManager, FileManagerServer
                 avroProducts.add(AvroTypeFactory.getAvroProduct(p));
             }
         } catch (CatalogException e) {
-            throw new AvroRemoteException(e.getMessage());
+            throw oodtError(e);
         }
         return avroProducts;
     }
@@ -274,7 +277,7 @@ public class AvroFileManagerServer implements AvroFileManager, FileManagerServer
                 avroProducts.add(AvroTypeFactory.getAvroProduct(p));
             }
         } catch (CatalogException e) {
-            throw new AvroRemoteException(e.getMessage());
+            throw oodtError(e);
         }
         return avroProducts;
     }
@@ -284,7 +287,7 @@ public class AvroFileManagerServer implements AvroFileManager, FileManagerServer
         try {
             return this.fileManager.hasProduct(productName);
         } catch (CatalogException e) {
-            throw new AvroRemoteException(e.getMessage());
+            throw oodtError(e);
         }
     }
 
@@ -293,7 +296,7 @@ public class AvroFileManagerServer implements AvroFileManager, FileManagerServer
         try {
             return AvroTypeFactory.getAvroMetadata(this.fileManager.getMetadata(AvroTypeFactory.getProduct(product)));
         } catch (CatalogException e) {
-            throw new AvroRemoteException(e.getMessage());
+            throw oodtError(e);
         }
     }
 
@@ -302,7 +305,7 @@ public class AvroFileManagerServer implements AvroFileManager, FileManagerServer
         try {
             return AvroTypeFactory.getAvroMetadata(this.fileManager.getReducedMetadata(AvroTypeFactory.getProduct(product), elements));
         } catch (CatalogException e) {
-            throw new AvroRemoteException(e.getMessage());
+            throw oodtError(e);
         }
     }
 
@@ -314,7 +317,7 @@ public class AvroFileManagerServer implements AvroFileManager, FileManagerServer
                 avroProductTypes.add(AvroTypeFactory.getAvroProductType(pt));
             }
         } catch (RepositoryManagerException e) {
-            throw new AvroRemoteException(e.getMessage());
+            throw oodtError(e);
         }
         return avroProductTypes;
     }
@@ -327,7 +330,7 @@ public class AvroFileManagerServer implements AvroFileManager, FileManagerServer
                 avroProductTypes.add(AvroTypeFactory.getAvroReference(r));
             }
         } catch (CatalogException e) {
-            throw new AvroRemoteException(e.getMessage());
+            throw oodtError(e);
         }
         return avroProductTypes;
     }
@@ -337,7 +340,7 @@ public class AvroFileManagerServer implements AvroFileManager, FileManagerServer
         try {
             return AvroTypeFactory.getAvroProduct(this.fileManager.getProductById(productId));
         } catch (CatalogException e) {
-            throw new AvroRemoteException(e.getMessage());
+            throw oodtError(e);
         }
     }
 
@@ -346,7 +349,7 @@ public class AvroFileManagerServer implements AvroFileManager, FileManagerServer
         try {
             return AvroTypeFactory.getAvroProduct(this.fileManager.getProductByName(productName));
         } catch (CatalogException e) {
-            throw new AvroRemoteException(e.getMessage());
+            throw oodtError(e);
         }
     }
 
@@ -362,7 +365,7 @@ public class AvroFileManagerServer implements AvroFileManager, FileManagerServer
             }
             return avroProducts;
         } catch (CatalogException e) {
-            throw new AvroRemoteException(e.getMessage());
+            throw oodtError(e);
         }
     }
 
@@ -375,7 +378,7 @@ public class AvroFileManagerServer implements AvroFileManager, FileManagerServer
             }
             return avroElements;
         } catch (ValidationLayerException e) {
-            throw new AvroRemoteException(e.getMessage());
+            throw oodtError(e);
         }
     }
 
@@ -384,7 +387,7 @@ public class AvroFileManagerServer implements AvroFileManager, FileManagerServer
         try {
             return AvroTypeFactory.getAvroElement(this.fileManager.getElementById(elementId));
         } catch (ValidationLayerException e) {
-            throw new AvroRemoteException(e.getMessage());
+            throw oodtError(e);
         }
     }
 
@@ -393,7 +396,7 @@ public class AvroFileManagerServer implements AvroFileManager, FileManagerServer
         try {
             return AvroTypeFactory.getAvroElement(this.fileManager.getElementByName(elementName));
         } catch (ValidationLayerException e) {
-            throw new AvroRemoteException(e.getMessage());
+            throw oodtError(e);
         }
     }
 
@@ -406,7 +409,7 @@ public class AvroFileManagerServer implements AvroFileManager, FileManagerServer
             }
             return avroQueryResults;
         } catch (CatalogException e) {
-            throw new AvroRemoteException(e.getMessage());
+            throw oodtError(e);
         }
     }
 
@@ -419,7 +422,7 @@ public class AvroFileManagerServer implements AvroFileManager, FileManagerServer
             }
             return avroProducts;
         } catch (CatalogException e) {
-            throw new AvroRemoteException(e.getMessage());
+            throw oodtError(e);
         }
     }
 
@@ -428,7 +431,7 @@ public class AvroFileManagerServer implements AvroFileManager, FileManagerServer
         try {
             return AvroTypeFactory.getAvroProductType(this.fileManager.getProductTypeByName(productTypeName));
         } catch (RepositoryManagerException e) {
-            throw new AvroRemoteException(e.getMessage());
+            throw oodtError(e);
         }
     }
 
@@ -437,7 +440,7 @@ public class AvroFileManagerServer implements AvroFileManager, FileManagerServer
         try {
             return AvroTypeFactory.getAvroProductType(this.fileManager.getProductTypeById(productTypeId));
         } catch (RepositoryManagerException e) {
-            throw new AvroRemoteException(e.getMessage());
+            throw oodtError(e);
         }
     }
 
@@ -446,7 +449,7 @@ public class AvroFileManagerServer implements AvroFileManager, FileManagerServer
         try {
             return this.fileManager.updateMetadata(AvroTypeFactory.getProduct(product), AvroTypeFactory.getMetadata(met));
         } catch (CatalogException e) {
-            throw new AvroRemoteException(e.getMessage());
+            throw oodtError(e);
         }
     }
 
@@ -455,7 +458,7 @@ public class AvroFileManagerServer implements AvroFileManager, FileManagerServer
         try {
             return this.fileManager.addProductType(AvroTypeFactory.getProductType(type));
         } catch (RepositoryManagerException e) {
-            throw new AvroRemoteException(e.getMessage());
+            throw oodtError(e);
         }
     }
 
@@ -464,7 +467,7 @@ public class AvroFileManagerServer implements AvroFileManager, FileManagerServer
         try {
             return this.fileManager.catalogProduct(AvroTypeFactory.getProduct(product));
         } catch (CatalogException e) {
-            throw new AvroRemoteException(e.getMessage());
+            throw oodtError(e);
         }
     }
 
@@ -473,7 +476,7 @@ public class AvroFileManagerServer implements AvroFileManager, FileManagerServer
         try {
             return this.fileManager.addMetadata(AvroTypeFactory.getProduct(product), AvroTypeFactory.getMetadata(met)) != null;
         } catch (CatalogException e) {
-            throw new AvroRemoteException(e.getMessage());
+            throw oodtError(e);
         }
     }
 
@@ -482,7 +485,7 @@ public class AvroFileManagerServer implements AvroFileManager, FileManagerServer
         try {
             return this.fileManager.addProductReferences(AvroTypeFactory.getProduct(product));
         } catch (CatalogException e) {
-            throw new AvroRemoteException(e.getMessage());
+            throw oodtError(e);
         }
     }
 
@@ -491,13 +494,13 @@ public class AvroFileManagerServer implements AvroFileManager, FileManagerServer
         try {
             return this.fileManager.ingestProduct(AvroTypeFactory.getProduct(p), AvroTypeFactory.getMetadata(m), clientTransfer);
         } catch (VersioningException e) {
-            throw new AvroRemoteException(e.getMessage());
+            throw oodtError(e);
         } catch (RepositoryManagerException e) {
-            throw new AvroRemoteException(e.getMessage());
+            throw oodtError(e);
         } catch (DataTransferException e) {
-            throw new AvroRemoteException(e.getMessage());
+            throw oodtError(e);
         } catch (CatalogException e) {
-            throw new AvroRemoteException(e.getMessage());
+            throw oodtError(e);
         }
     }
 
@@ -506,7 +509,7 @@ public class AvroFileManagerServer implements AvroFileManager, FileManagerServer
         try {
             return ByteBuffer.wrap(this.fileManager.retrieveFile(filePath, offset, numBytes));
         } catch (DataTransferException e) {
-            throw new AvroRemoteException(e.getMessage());
+            throw oodtError(e);
         }
     }
 
@@ -520,7 +523,7 @@ public class AvroFileManagerServer implements AvroFileManager, FileManagerServer
         try {
             return this.fileManager.moveProduct(AvroTypeFactory.getProduct(p), newPath);
         } catch (DataTransferException e) {
-            throw new AvroRemoteException(e.getMessage());
+            throw oodtError(e);
         }
     }
 
@@ -529,9 +532,9 @@ public class AvroFileManagerServer implements AvroFileManager, FileManagerServer
         try {
             return this.fileManager.removeFile(filePath);
         } catch (DataTransferException e) {
-            throw new AvroRemoteException(e.getMessage());
+            throw oodtError(e);
         } catch (IOException e) {
-            throw new AvroRemoteException(e.getMessage());
+            throw oodtError(e);
         }
     }
 
@@ -540,7 +543,7 @@ public class AvroFileManagerServer implements AvroFileManager, FileManagerServer
         try {
             return this.fileManager.modifyProduct(AvroTypeFactory.getProduct(p));
         } catch (CatalogException e) {
-            throw new AvroRemoteException(e.getMessage());
+            throw oodtError(e);
         }
     }
 
@@ -549,7 +552,7 @@ public class AvroFileManagerServer implements AvroFileManager, FileManagerServer
         try {
             return this.fileManager.removeProduct(AvroTypeFactory.getProduct(p));
         } catch (CatalogException e) {
-            throw new AvroRemoteException(e.getMessage());
+            throw oodtError(e);
         }
     }
 
@@ -560,7 +563,7 @@ public class AvroFileManagerServer implements AvroFileManager, FileManagerServer
                     AvroTypeFactory.getMetadata(m), AvroTypeFactory.getProductType(productType)
             ));
         } catch (RepositoryManagerException e) {
-            throw new AvroRemoteException(e.getMessage());
+            throw oodtError(e);
         }
     }
 
@@ -572,7 +575,7 @@ public class AvroFileManagerServer implements AvroFileManager, FileManagerServer
                     AvroTypeFactory.getProductType(productType)
             ));
         } catch (RepositoryManagerException e) {
-            throw new AvroRemoteException(e.getMessage());
+            throw oodtError(e);
         }
     }
 
@@ -584,10 +587,25 @@ public class AvroFileManagerServer implements AvroFileManager, FileManagerServer
                     AvroTypeFactory.getProductType(productType)
             ));
         } catch (RepositoryManagerException e) {
-            throw new AvroRemoteException(e.getMessage());
+            throw oodtError(e);
         } catch (QueryFormulationException e) {
-            throw new AvroRemoteException(e.getMessage());
+            throw oodtError(e);
         }
     }
 
+
+    /**
+     * Describe a server-side failure in the shape the protocol declares.
+     *
+     * The kind lets a caller branch without reading prose; the class name goes
+     * alongside it so the exact exception is still visible when the kind is
+     * coarse. FailureKinds owns the vocabulary, shared by every protocol.
+     */
+    private static OodtError oodtError(Throwable cause) {
+        OodtError error = new OodtError();
+        error.setKind(OodtFailureKind.valueOf(FailureKinds.classify(cause)));
+        error.setType(cause.getClass().getName());
+        error.setDetail(cause.getMessage());
+        return error;
+    }
 }

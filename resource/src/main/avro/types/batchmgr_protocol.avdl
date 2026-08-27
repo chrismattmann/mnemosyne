@@ -6,10 +6,54 @@ import schema "AvroNameValueJobInput.avsc";
 import schema "AvroJobInput.avsc";
 import schema "AvroResourceNode.avsc";
 
-    boolean isAlive();
+    /**
+     * What kind of failure this was, so a caller can branch on it without
+     * reading the message. The vocabulary is defined once in
+     * org.apache.oodt.commons.rpc.FailureKinds; each protocol declares its own
+     * copy because a protocol's types live in its own namespace, and
+     * generating one shared class from several modules would put duplicate
+     * classes on the classpath. TestFailureKindVocabulary keeps them in step.
+     */
+    enum OodtFailureKind {
+        CATALOG,
+        INSTANCE_REPOSITORY,
+        INTERRUPTED,
+        IO,
+        JOB,
+        JOB_EXECUTION,
+        JOB_INPUT,
+        JOB_QUEUE,
+        JOB_REPOSITORY,
+        MONITOR,
+        NOT_FOUND,
+        QUERY,
+        QUEUE,
+        REPOSITORY,
+        SCHEDULER,
+        TRANSFER,
+        UNKNOWN,
+        VALIDATION,
+        VERSIONING,
+        WORKFLOW_REPOSITORY
+    }
 
-    boolean executeJob(AvroJob avroJob, AvroJobInput jobInput);
+    /**
+     * A server-side failure, in a shape Avro can write.
+     *
+     * Without a declared error type the error schema is the implicit
+     * ["string"], which no exception matches, so Avro failed while reporting
+     * the failure. `type` carries the original exception's class name
+     * alongside the coarse `kind`, so nothing is lost when the kind lumps
+     * several exceptions together.
+     */
+    error OodtError {
+        OodtFailureKind kind;
+        string type;
+        union { null, string } detail;
+    }
 
+    boolean isAlive() throws OodtError;
+    boolean executeJob(AvroJob avroJob, AvroJobInput jobInput) throws OodtError;
 //    public boolean executeJob(Hashtable jobHash, Date jobInput);
 //
 //    public boolean executeJob(Hashtable jobHash, double jobInput);
@@ -22,8 +66,6 @@ import schema "AvroResourceNode.avsc";
 //
 //    public boolean executeJob(Hashtable jobHash, byte[] jobInput);
 
-    boolean killJob(AvroJob jobHash);
-    
-    array<string> getJobsOnNode(string nodeId);
-
+    boolean killJob(AvroJob jobHash) throws OodtError;
+    array<string> getJobsOnNode(string nodeId) throws OodtError;
 }

@@ -21,6 +21,8 @@ import java.io.FileInputStream;
 import java.net.URL;
 import java.util.Properties;
 
+import org.apache.oodt.cas.filemgr.structs.avrotypes.OodtError;
+import org.apache.oodt.cas.filemgr.structs.avrotypes.OodtFailureKind;
 import org.apache.oodt.cas.filemgr.util.RpcCommunicationFactory;
 
 import junit.framework.TestCase;
@@ -103,6 +105,39 @@ public class TestAvroErrorMarshalling extends TestCase {
 
             assertTrue("the server's message did not survive: " + rendered,
                     rendered.contains("/definitely/not/a/real/path/nope.bin"));
+        } finally {
+            fmc.close();
+        }
+    }
+
+    /**
+     * The failure now arrives as the declared error, so a caller can branch on
+     * the kind instead of reading the message, and still see the exact class.
+     */
+    public void testFailureArrivesTypedAndClassified() throws Exception {
+        FileManagerClient fmc =
+                RpcCommunicationFactory.createClient(new URL("http://localhost:" + FM_PORT));
+        try {
+            fmc.retrieveFile("/definitely/not/a/real/path/nope.bin", 0, 16);
+            fail("expected the server to fail reading a path that does not exist");
+        } catch (Exception e) {
+            OodtError error = null;
+            for (Throwable t = e; t != null; t = t.getCause()) {
+                if (t instanceof OodtError) {
+                    error = (OodtError) t;
+                    break;
+                }
+            }
+            assertNotNull("the failure did not arrive as the declared error: " + e, error);
+
+            assertEquals("a failed read is a transfer failure",
+                    OodtFailureKind.TRANSFER, error.getKind());
+            assertEquals("the exact exception class should still be visible",
+                    "org.apache.oodt.cas.filemgr.structs.exceptions.DataTransferException",
+                    error.getType());
+            assertTrue("the server's message did not survive: " + error.getDetail(),
+                    String.valueOf(error.getDetail())
+                            .contains("/definitely/not/a/real/path/nope.bin"));
         } finally {
             fmc.close();
         }
