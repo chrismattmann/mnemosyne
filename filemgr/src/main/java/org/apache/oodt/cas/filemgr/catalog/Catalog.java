@@ -152,9 +152,12 @@ public interface Catalog extends Pagination {
      * 
      * @param productId
      *            The unique ID of the Product to retrieve.
-     * @return A {@link Product}, with the given ID. The implementer of this
-     *         method should ensure that the product {@link Reference}s are
-     *         populated as well.
+     * @return A {@link Product} with the given ID, or <code>null</code> if no
+     *         product with that ID is catalogued. A missing product is not an
+     *         error condition and does not raise {@link CatalogException}, so
+     *         callers must check the result before using it. The implementer
+     *         of this method should ensure that the product
+     *         {@link Reference}s are populated as well.
      * @throws CatalogException
      *             If any error occurs.
      */
@@ -167,10 +170,14 @@ public interface Catalog extends Pagination {
      * 
      * @param productName
      *            The name of the Product to retrieve.
-     * @return A {@link Product} with the given name. The implementer of this
-     *         method should ensure that the product {@link Reference}s are
-     *         populated as well.
+     * @return A {@link Product} with the given name, or <code>null</code> if
+     *         no product with that name is catalogued. A missing product is
+     *         not an error condition and does not raise
+     *         {@link CatalogException}, so callers must check the result
+     *         before using it. The implementer of this method should ensure
+     *         that the product {@link Reference}s are populated as well.
      * @throws CatalogException
+     *             if the catalog cannot be read at all.
      */
     Product getProductByName(String productName) throws CatalogException;
 

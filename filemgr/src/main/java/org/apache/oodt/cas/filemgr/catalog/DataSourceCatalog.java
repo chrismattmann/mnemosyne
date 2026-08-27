@@ -139,6 +139,7 @@ public class DataSourceCatalog implements Catalog {
      * @see org.apache.oodt.cas.filemgr.catalog.Catalog#addMetadata(org.apache.oodt.cas.metadata.Metadata,
      *      org.apache.oodt.cas.filemgr.structs.Product)
      */
+    @Override
     public synchronized void addMetadata(Metadata m, Product product)
             throws CatalogException {
         List<Element> metadataTypes;
@@ -194,6 +195,7 @@ public class DataSourceCatalog implements Catalog {
      * @see org.apache.oodt.cas.filemgr.catalog.Catalog#addMetadata(org.apache.oodt.cas.metadata.Metadata,
      *      org.apache.oodt.cas.filemgr.structs.Product)
      */
+    @Override
     public synchronized void removeMetadata(Metadata m, Product product)
             throws CatalogException {
         List<Element> metadataTypes;
@@ -241,6 +243,7 @@ public class DataSourceCatalog implements Catalog {
      * 
      * @see org.apache.oodt.cas.filemgr.catalog.Catalog#addProduct(org.apache.oodt.cas.filemgr.structs.Product)
      */
+    @Override
     public synchronized void addProduct(Product product)
             throws CatalogException {
         Connection conn = null;
@@ -369,6 +372,7 @@ public class DataSourceCatalog implements Catalog {
      * 
      * @see org.apache.oodt.cas.filemgr.catalog.Catalog#modifyProduct(org.apache.oodt.cas.filemgr.structs.Product)
      */
+    @Override
     public synchronized void modifyProduct(Product product)
             throws CatalogException {
         Connection conn = null;
@@ -433,6 +437,7 @@ public class DataSourceCatalog implements Catalog {
      * 
      * @see org.apache.oodt.cas.filemgr.catalog.Catalog#removeProduct(org.apache.oodt.cas.filemgr.structs.Product)
      */
+    @Override
     public synchronized void removeProduct(Product product)
             throws CatalogException {
         Connection conn = null;
@@ -506,6 +511,7 @@ public class DataSourceCatalog implements Catalog {
      * 
      * @see org.apache.oodt.cas.filemgr.catalog.Catalog#setProductTransferStatus(org.apache.oodt.cas.filemgr.structs.Product)
      */
+    @Override
     public synchronized void setProductTransferStatus(Product product)
             throws CatalogException {
         Connection conn = null;
@@ -567,6 +573,7 @@ public class DataSourceCatalog implements Catalog {
      * 
      * @see org.apache.oodt.cas.filemgr.catalog.Catalog#addProductReferences(org.apache.oodt.cas.filemgr.structs.Product)
      */
+    @Override
     public synchronized void addProductReferences(Product product)
             throws CatalogException {
         Connection conn = null;
@@ -646,6 +653,7 @@ public class DataSourceCatalog implements Catalog {
      * 
      * @see org.apache.oodt.cas.filemgr.catalog.Catalog#getProductById(java.lang.String)
      */
+    @Override
     public Product getProductById(String productId) throws CatalogException {
         Connection conn = null;
         Statement statement = null;
@@ -717,6 +725,7 @@ public class DataSourceCatalog implements Catalog {
      * 
      * @see org.apache.oodt.cas.filemgr.catalog.Catalog#getProductByName(java.lang.String)
      */
+    @Override
     public Product getProductByName(String productName) throws CatalogException {
         Connection conn = null;
         Statement statement = null;
@@ -790,6 +799,7 @@ public class DataSourceCatalog implements Catalog {
      * 
      * @see org.apache.oodt.cas.filemgr.catalog.Catalog#getProductReferences(org.apache.oodt.cas.filemgr.structs.Product)
      */
+    @Override
     public List<Reference> getProductReferences(Product product) throws CatalogException {
         Connection conn = null;
         Statement statement = null;
@@ -869,6 +879,7 @@ public class DataSourceCatalog implements Catalog {
      * 
      * @see org.apache.oodt.cas.filemgr.catalog.Catalog#getProducts()
      */
+    @Override
     public List<Product> getProducts() throws CatalogException {
         Connection conn = null;
         Statement statement = null;
@@ -946,6 +957,7 @@ public class DataSourceCatalog implements Catalog {
      * 
      * @see org.apache.oodt.cas.filemgr.catalog.Catalog#getProductsByProductType(org.apache.oodt.cas.filemgr.structs.ProductType)
      */
+    @Override
     public List<Product> getProductsByProductType(ProductType type)
             throws CatalogException {
         Connection conn = null;
@@ -1025,6 +1037,7 @@ public class DataSourceCatalog implements Catalog {
         return products;
     }
 
+    @Override
     public Metadata getMetadata(Product product) throws CatalogException {
         Connection conn = null;
         Statement statement = null;
@@ -1108,6 +1121,7 @@ public class DataSourceCatalog implements Catalog {
         return m;
     }
     
+    @Override
     public Metadata getReducedMetadata(Product product, List<String> elems) throws CatalogException {
         Connection conn = null;
         Statement statement = null;
@@ -1207,6 +1221,7 @@ public class DataSourceCatalog implements Catalog {
      * @see org.apache.oodt.cas.filemgr.catalog.Catalog#query(org.apache.oodt.cas.filemgr.structs.Query
      *      org.apache.oodt.cas.filemgr.structs.ProductType)
      */
+    @Override
     public List<String> query(Query query, ProductType type) throws CatalogException {
         return paginateQuery(query, type, -1);
     }
@@ -1216,6 +1231,7 @@ public class DataSourceCatalog implements Catalog {
      * 
      * @see org.apache.oodt.cas.filemgr.catalog.Catalog#getTopNProducts(int)
      */
+    @Override
     public List<Product> getTopNProducts(int n) throws CatalogException {
         return getTopNProducts(n, null);
     }
@@ -1226,6 +1242,7 @@ public class DataSourceCatalog implements Catalog {
      * @see org.apache.oodt.cas.filemgr.catalog.Catalog#getTopNProducts(int,
      *      org.apache.oodt.cas.filemgr.structs.ProductType)
      */
+    @Override
     public List<Product> getTopNProducts(int n, ProductType type)
             throws CatalogException {
         List<Product> products = null;
@@ -1320,6 +1337,7 @@ public class DataSourceCatalog implements Catalog {
      * 
      * @see org.apache.oodt.cas.filemgr.catalog.Catalog#getValidationLayer()
      */
+    @Override
     public ValidationLayer getValidationLayer() {
     	// note that validationLayer may be null to allow for leniency in subclasses
     	return validationLayer;
@@ -1463,6 +1481,7 @@ public class DataSourceCatalog implements Catalog {
      * 
      * @see org.apache.oodt.cas.filemgr.catalog.Catalog#getNumProducts(org.apache.oodt.cas.filemgr.structs.ProductType)
      */
+    @Override
     public int getNumProducts(ProductType type) throws CatalogException {
         Connection conn = null;
         Statement statement = null;
@@ -1542,6 +1561,7 @@ public class DataSourceCatalog implements Catalog {
      * 
      * @see org.apache.oodt.cas.filemgr.util.Pagination#getFirstPage(org.apache.oodt.cas.filemgr.structs.ProductType)
      */
+    @Override
     public ProductPage getFirstPage(ProductType type) {
         Query query = new Query();
         ProductPage firstPage = null;
@@ -1560,6 +1580,7 @@ public class DataSourceCatalog implements Catalog {
      * 
      * @see org.apache.oodt.cas.filemgr.util.Pagination#getLastProductPage(org.apache.oodt.cas.filemgr.structs.ProductType)
      */
+    @Override
     public ProductPage getLastProductPage(ProductType type) {
         ProductPage lastPage = null;
         ProductPage firstPage = getFirstPage(type);
@@ -1580,6 +1601,7 @@ public class DataSourceCatalog implements Catalog {
      * @see org.apache.oodt.cas.filemgr.util.Pagination#getNextPage(org.apache.oodt.cas.filemgr.structs.ProductType,
      *      org.apache.oodt.cas.filemgr.structs.ProductPage)
      */
+    @Override
     public ProductPage getNextPage(ProductType type, ProductPage currentPage) {
         if (currentPage == null) {
             return getFirstPage(type);
@@ -1608,6 +1630,7 @@ public class DataSourceCatalog implements Catalog {
      * @see org.apache.oodt.cas.filemgr.util.Pagination#getPrevPage(org.apache.oodt.cas.filemgr.structs.ProductType,
      *      org.apache.oodt.cas.filemgr.structs.ProductPage)
      */
+    @Override
     public ProductPage getPrevPage(ProductType type, ProductPage currentPage) {
         if (currentPage == null) {
             return getFirstPage(type);
@@ -1635,6 +1658,7 @@ public class DataSourceCatalog implements Catalog {
      * @see org.apache.oodt.cas.filemgr.catalog.Catalog#pagedQuery(org.apache.oodt.cas.filemgr.structs.Query,
      *      org.apache.oodt.cas.filemgr.structs.ProductType, int)
      */
+    @Override
     public ProductPage pagedQuery(Query query, ProductType type, int pageNum)
             throws CatalogException {
         int totalPages = PaginationUtils.getTotalPage(getResultListSize(query,
