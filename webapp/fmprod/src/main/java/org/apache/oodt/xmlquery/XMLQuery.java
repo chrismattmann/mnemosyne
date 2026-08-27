@@ -417,7 +417,8 @@ public class XMLQuery implements java.io.Serializable, Cloneable {
 	    lpart = "";
 	    rpart = "";
 
-            tokens = new java.io.StreamTokenizer(new StringReader(kwdQueryString));
+            tokens = new java.io.StreamTokenizer(
+                    new StringReader(protectQuotedBackslashes(kwdQueryString)));
             tokens.resetSyntax();
             tokens.ordinaryChar('/');
             tokens.wordChars('#', '#');
@@ -480,7 +481,7 @@ public class XMLQuery implements java.io.Serializable, Cloneable {
 
 	    if (isTokenEqual("NOT") | isTokenEqual("not") | isTokenEqual("!")) {
             lflag = kqFactorParse();
-            appendLogOperator("LOGOP", "NOT");
+            appendLogOperator("LOGOP", "NOT", 1);
         } else {
             lflag = kqFactorParse ();
         }
@@ -533,10 +534,24 @@ public class XMLQuery implements java.io.Serializable, Cloneable {
      */
     private boolean appendLogOperator (String tt, String ts)
 	{
-	    if (lit == 1 & qfsc > 1) {
+	    return appendLogOperator(tt, ts, 2);
+	}
+
+    /**
+     * Record a logical operator once its operands have been seen.
+     *
+     * The guard used to be a fixed "more than one operand", which is right for
+     * AND and OR and wrong for NOT: NOT is unary and goes through here too, so
+     * a clause holding a single comparison dropped the negation and the query
+     * came to mean the opposite of what was written. The arity is now the
+     * caller's to state.
+     */
+    private boolean appendLogOperator (String tt, String ts, int operands)
+	{
+	    if (lit == 1 & qfsc >= operands) {
 		    fromElementSet.add(new QueryElement(tt, ts));
 
-    	} else if (lit == 2 & qwsc > 1) {
+    	} else if (lit == 2 & qwsc >= operands) {
 		whereElementSet.add(new QueryElement(tt, ts));
     	}
 	    return true;
@@ -978,4 +993,53 @@ public class XMLQuery implements java.io.Serializable, Cloneable {
 
 	/** Serial version unique ID. */
 	static final long serialVersionUID = -7638068782048963710L;
+
+    /**
+     * Double the backslashes inside quoted literals, so that
+     * {@link java.io.StreamTokenizer}'s C-style unescaping gives back the text
+     * that was actually typed.
+     *
+     * <p>
+     * {@code quoteChar} always applies escape processing and offers no way to
+     * turn it off, so a quoted literal came back altered: {@code 'C:\temp'}
+     * arrived with a tab in it, {@code 'a\a'} with a BEL. Quoting is the only
+     * way this language has to protect a literal, and it was corrupting
+     * exactly the values it exists for, silently.
+     *
+     * <p>
+     * A backslash that precedes the closing quote or another backslash is left
+     * alone: those are deliberate escapes and still mean what they did.
+     */
+    static String protectQuotedBackslashes(String query) {
+        if (query == null || query.indexOf('\\') < 0) {
+            return query;
+        }
+        StringBuilder out = new StringBuilder(query.length() + 8);
+        char quote = 0;
+        for (int i = 0; i < query.length(); i++) {
+            char c = query.charAt(i);
+            if (quote == 0) {
+                if (c == '\'' || c == '"') {
+                    quote = c;
+                }
+                out.append(c);
+                continue;
+            }
+            if (c == '\\' && i + 1 < query.length()) {
+                char next = query.charAt(i + 1);
+                if (next == quote || next == '\\') {
+                    out.append(c).append(next);   // a deliberate escape
+                    i++;
+                    continue;
+                }
+                out.append('\\').append('\\'); // protect it from the tokenizer
+                continue;
+            }
+            if (c == quote) {
+                quote = 0;
+            }
+            out.append(c);
+        }
+        return out.toString();
+    }
 }
