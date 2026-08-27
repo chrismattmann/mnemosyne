@@ -105,4 +105,47 @@ the License.
       </plugin>
     </plugins>
   </build>
+  <profiles>
+    <!--
+      This module pins maven-surefire-plugin 2.4, which predates the JUnit
+      Platform and therefore runs none of the property tests in
+      src/test/pbt/java — silently, reporting success. The parent's `hegel`
+      profile supplies those tests; this raises surefire for the same JDK
+      range so they are actually executed. forkMode was removed in surefire 3,
+      so `pertest` becomes forkCount=1 with reuseForks=false.
+    -->
+    <profile>
+      <id>hegel</id>
+      <activation>
+        <jdk>[22,)</jdk>
+      </activation>
+      <build>
+        <plugins>
+          <plugin>
+            <artifactId>maven-surefire-plugin</artifactId>
+            <version>3.5.3</version>
+            <configuration>
+              <forkMode combine.self="remove"/>
+              <forkCount>1</forkCount>
+              <reuseForks>false</reuseForks>
+              <argLine>${coverageArgLine} --enable-native-access=ALL-UNNAMED</argLine>
+              <!--
+                junit 3.8.2 is declared directly in this module, and the vintage
+                engine refuses to start below 4.12. Its three legacy tests live
+                under src/test/org/... rather than src/test/java, so they are
+                outside testSourceDirectory and have never been compiled — no
+                existing test is lost by dropping the engine here.
+              -->
+              <classpathDependencyExcludes>
+                <classpathDependencyExclude>org.junit.vintage:junit-vintage-engine</classpathDependencyExclude>
+              </classpathDependencyExcludes>
+              <includes>
+                <include>**/*Test*.java</include>
+              </includes>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 </project>

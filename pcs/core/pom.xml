@@ -128,4 +128,31 @@ the License.
       </plugin>
     </plugins>
   </build>
+  <profiles>
+    <!--
+      This module declares junit 3.8.2 directly. The vintage engine the parent's
+      `hegel` profile adds refuses to start against anything below 4.12 —
+      "Unsupported version of junit:junit: 3.8.2" — and fails the whole run, so
+      the module executed zero tests rather than some. It is dropped from the
+      test classpath here: this module has no src/test/java, so no JUnit 3 or 4 test is lost.
+    -->
+    <profile>
+      <id>hegel</id>
+      <activation>
+        <jdk>[22,)</jdk>
+      </activation>
+      <build>
+        <plugins>
+          <plugin>
+            <artifactId>maven-surefire-plugin</artifactId>
+            <configuration>
+              <classpathDependencyExcludes>
+                <classpathDependencyExclude>org.junit.vintage:junit-vintage-engine</classpathDependencyExclude>
+              </classpathDependencyExcludes>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 </project>

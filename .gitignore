@@ -130,3 +130,8 @@ local.properties
 /react-components/oodt_fm_plugin/dist
 
 
+
+# Hegel property-based testing: local database of failing examples, written
+# per module so a failure found on one run is replayed first on the next.
+# Machine-local by nature, like a test cache.
+.hegel/
