@@ -24,7 +24,7 @@ import org.jboss.netty.handler.execution.ExecutionHandler;
 import org.jboss.netty.handler.execution.OrderedMemoryAwareThreadPoolExecutor;
 import org.apache.avro.ipc.NettyServer;
 import org.apache.avro.ipc.Server;
-import org.apache.avro.ipc.specific.SpecificResponder;
+import org.apache.oodt.commons.rpc.ErrorUnwrappingResponder;
 
 //OODT imports
 import org.apache.oodt.cas.crawl.ProductCrawler;
@@ -86,7 +86,7 @@ public class AvroRpcCrawlDaemon implements AvroCrawlDaemon {
         // An ExecutionHandler gives handlers their own pool, which is what
         // XML-RPC's WebServer did and why this was not visible before.
         this.server = new NettyServer(
-            new SpecificResponder(AvroCrawlDaemon.class, this),
+            new ErrorUnwrappingResponder(AvroCrawlDaemon.class, this),
             new InetSocketAddress(this.daemonPort),
                 new NioServerSocketChannelFactory(Executors.newCachedThreadPool(),
                         Executors.newCachedThreadPool()),

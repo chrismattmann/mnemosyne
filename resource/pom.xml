@@ -222,5 +222,9 @@
       <artifactId>hamcrest-all</artifactId>
       <scope>test</scope>
     </dependency>
-  </dependencies>
+      <dependency>
+      <groupId>ai.mattmann.mnemosyne</groupId>
+      <artifactId>oodt-commons</artifactId>
+    </dependency>
+</dependencies>
 </project>

@@ -24,7 +24,7 @@ import org.jboss.netty.handler.execution.ExecutionHandler;
 import org.jboss.netty.handler.execution.OrderedMemoryAwareThreadPoolExecutor;
 import org.apache.avro.ipc.NettyServer;
 import org.apache.avro.ipc.Server;
-import org.apache.avro.ipc.specific.SpecificResponder;
+import org.apache.oodt.commons.rpc.ErrorUnwrappingResponder;
 import org.apache.oodt.cas.resource.structs.AvroTypeFactory;
 import org.apache.oodt.cas.resource.structs.Job;
 import org.apache.oodt.cas.resource.structs.JobInput;
@@ -78,7 +78,7 @@ public class AvroRpcBatchStub implements AvroIntrBatchmgr {
         // An ExecutionHandler gives handlers their own pool, which is what
         // XML-RPC's WebServer did and why this was not visible before.
         server = new NettyServer(
-                new SpecificResponder(AvroIntrBatchmgr.class, this),
+                new ErrorUnwrappingResponder(AvroIntrBatchmgr.class, this),
                 new InetSocketAddress(this.port),
                 new NioServerSocketChannelFactory(Executors.newCachedThreadPool(),
                         Executors.newCachedThreadPool()),

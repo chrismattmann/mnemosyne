@@ -21,7 +21,7 @@ import com.google.common.base.Preconditions;
 import org.apache.avro.AvroRemoteException;
 import org.apache.avro.ipc.HttpServer;
 import org.apache.avro.ipc.Server;
-import org.apache.avro.ipc.specific.SpecificResponder;
+import org.apache.oodt.commons.rpc.ErrorUnwrappingResponder;
 import org.apache.oodt.cas.metadata.Metadata;
 import org.apache.oodt.cas.workflow.engine.ThreadPoolWorkflowEngineFactory;
 import org.apache.oodt.cas.workflow.engine.WorkflowEngine;
@@ -108,7 +108,7 @@ public class AvroRpcWorkflowManager implements WorkflowManager,org.apache.oodt.c
         logger.debug("Starting Http Server...");
         // start up the server
         try {
-            server = new HttpServer(new SpecificResponder(
+            server = new HttpServer(new ErrorUnwrappingResponder(
                     org.apache.oodt.cas.workflow.struct.avrotypes.WorkflowManager.class,this), port);
         } catch (IOException e) {
             logger.error("Unable to create http server on port: {}", e);

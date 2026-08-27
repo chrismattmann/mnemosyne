@@ -21,7 +21,7 @@ package org.apache.oodt.cas.filemgr.system;
 import org.apache.avro.AvroRemoteException;
 import org.apache.avro.ipc.NettyServer;
 import org.apache.avro.ipc.Server;
-import org.apache.avro.ipc.specific.SpecificResponder;
+import org.apache.oodt.commons.rpc.ErrorUnwrappingResponder;
 import org.apache.oodt.cas.filemgr.catalog.Catalog;
 import org.apache.oodt.cas.filemgr.datatransfer.DataTransfer;
 import org.apache.oodt.cas.filemgr.structs.Element;
@@ -91,7 +91,7 @@ public class AvroFileManagerServer implements AvroFileManager, FileManagerServer
         // the I/O threads free to service the nested call. XML-RPC's WebServer
         // dispatched to a worker pool for the same reason.
         server = new NettyServer(
-                new SpecificResponder(AvroFileManager.class, this),
+                new ErrorUnwrappingResponder(AvroFileManager.class, this),
                 new InetSocketAddress(this.port),
                 new NioServerSocketChannelFactory(Executors.newCachedThreadPool(),
                         Executors.newCachedThreadPool()),
