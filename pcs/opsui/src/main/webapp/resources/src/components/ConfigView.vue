@@ -22,16 +22,33 @@
     <p v-if="loading && !config.id" class="empty">Loading configuration…</p>
     <article v-else class="card">
       <h3>Properties</h3>
-      <p v-if="!rows.length" class="empty">No properties in this file.</p>
+      <p v-if="!blocks.length" class="empty">No properties in this file.</p>
       <table v-else>
         <thead>
           <tr><th>Property</th><th>Value</th></tr>
         </thead>
         <tbody>
-          <tr v-for="row in rows" :key="row.key">
-            <td class="mono">{{ row.key }}</td>
-            <td class="break">{{ row.value }}</td>
-          </tr>
+          <template v-for="block in blocks" :key="block.id">
+            <tr v-if="block.type === 'row'">
+              <td class="mono">{{ block.row.key }}</td>
+              <td class="break" :class="{ pre: multiline(block.row.value) }">{{ displayValue(block.row.value) }}</td>
+            </tr>
+            <tr v-else class="group-row">
+              <td class="mono">
+                <button type="button" class="toggle" @click="toggle(block.id)">
+                  <span class="plus">{{ open[block.id] ? '−' : '+' }}</span>
+                  {{ block.label }}
+                </button>
+              </td>
+              <td>
+                <span v-if="!open[block.id]" class="ellipsis">{…}</span>
+              </td>
+            </tr>
+            <tr v-for="row in open[block.id] ? block.rows : []" :key="row.key" class="nested">
+              <td class="mono">{{ row.key }}</td>
+              <td class="break">{{ row.value }}</td>
+            </tr>
+          </template>
         </tbody>
       </table>
     </article>
@@ -39,7 +56,8 @@
 </template>
 
 <script>
-import { computed } from 'vue'
+import { computed, reactive } from 'vue'
+import { displayValue, groupConfigRows } from '../configGroups.js'
 
 export default {
   name: 'ConfigView',
@@ -50,9 +68,18 @@ export default {
   emits: ['back'],
   setup(props) {
     const config = computed(() => (props.payload && props.payload.config) || {})
+    const open = reactive({})
     return {
       config,
-      rows: computed(() => config.value.properties || [])
+      open,
+      displayValue,
+      blocks: computed(() => groupConfigRows(config.value.properties || [])),
+      toggle(id) {
+        open[id] = !open[id]
+      },
+      multiline(value) {
+        return String(displayValue(value) || '').indexOf('\n') >= 0
+      }
     }
   }
 }
@@ -80,7 +107,50 @@ h3 {
   word-break: break-all;
 }
 
+.pre {
+  white-space: pre-wrap;
+}
+
 th {
   width: 40%;
+}
+
+button.toggle {
+  background: transparent;
+  color: inherit;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  font-weight: 600;
+  font-size: inherit;
+  font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+button.toggle:hover {
+  color: var(--copper);
+  background: transparent;
+}
+
+.plus {
+  display: inline-block;
+  width: 0.9rem;
+  color: var(--copper);
+  font-weight: 700;
+}
+
+.group-row td {
+  color: var(--muted);
+}
+
+.nested td:first-child {
+  padding-left: 1.85rem;
+}
+
+.ellipsis {
+  letter-spacing: 0.12em;
+  color: var(--muted);
 }
 </style>

@@ -54,4 +54,48 @@ public class TestConfigResource extends TestCase {
     assertTrue(ConfigResource.isSecret("db.password"));
     assertFalse(ConfigResource.isSecret("filemgr.catalog.factory"));
   }
+
+  public void testReadPropertiesJoinsBackslashContinuations() throws Exception {
+    File file = File.createTempFile("filemgr", ".properties");
+    file.deleteOnExit();
+    OutputStreamWriter writer = new OutputStreamWriter(new FileOutputStream(file),
+        Charset.forName("ISO-8859-1"));
+    try {
+      writer.write("filemgr.catalog.factory=org.apache.oodt.cas.filemgr.catalog.LuceneCatalogFactory\n");
+      writer.write("org.apache.oodt.cas.filemgr.repositorymgr.dirs=file:///tmp/policy/core,\\\n");
+      writer.write("file:///tmp/policy/geo,\\\n");
+      writer.write("  file:///tmp/policy/trace,\\\n");
+      writer.write("file:///tmp/policy/bigtranslate\n");
+      writer.write("org.apache.oodt.cas.filemgr.validation.dirs=file:///tmp/policy/core,\\\n");
+      writer.write("file:///tmp/policy/geo\n");
+      writer.write("literal.backslash=keep\\\\\n");
+      writer.write("next.property=ok\n");
+    } finally {
+      writer.close();
+    }
+    List<Map<String, String>> rows = ConfigResource.readProperties(file);
+    assertEquals(5, rows.size());
+    assertEquals("filemgr.catalog.factory", rows.get(0).get("key"));
+    assertEquals("org.apache.oodt.cas.filemgr.repositorymgr.dirs", rows.get(1).get("key"));
+    assertEquals(
+        "file:///tmp/policy/core,file:///tmp/policy/geo,file:///tmp/policy/trace,file:///tmp/policy/bigtranslate",
+        rows.get(1).get("value"));
+    assertEquals("org.apache.oodt.cas.filemgr.validation.dirs", rows.get(2).get("key"));
+    assertEquals("file:///tmp/policy/core,file:///tmp/policy/geo", rows.get(2).get("value"));
+    assertEquals("literal.backslash", rows.get(3).get("key"));
+    assertEquals("keep\\\\", rows.get(3).get("value"));
+    assertEquals("next.property", rows.get(4).get("key"));
+    for (int i = 0; i < rows.size(); i++) {
+      String key = rows.get(i).get("key");
+      assertFalse("continuation leaked as a key: " + key,
+          "file".equals(key) || key.startsWith("file:"));
+    }
+  }
+
+  public void testEndsWithContinuation() {
+    assertTrue(ConfigResource.endsWithContinuation("foo,\\"));
+    assertFalse(ConfigResource.endsWithContinuation("foo\\\\"));
+    assertTrue(ConfigResource.endsWithContinuation("foo\\\\\\"));
+    assertFalse(ConfigResource.endsWithContinuation("foo"));
+  }
 }
