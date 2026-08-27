@@ -144,13 +144,13 @@ public class PolicyResource extends CurationService {
     for (Product product : page.getPageProducts()) {
       html.append(" <li class=\"file\">");
       html.append("<a href=\"#\" rel=\"/");
-      html.append(policy);
+      html.append(escapeHtml(policy));
       html.append("/");
-      html.append(productTypeName);
+      html.append(escapeHtml(productTypeName));
       html.append("/");
-      html.append(product.getProductId());
+      html.append(escapeHtml(product.getProductId()));
       html.append("\">");
-      html.append(product.getProductName());
+      html.append(escapeHtml(product.getProductName()));
       html.append("</a>");
       html.append("</li>\r\n");
     }
