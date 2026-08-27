@@ -1050,19 +1050,36 @@ public class CmdLineUtils {
     */
    public static String getFormattedString(String string, int startIndex,
          int endIndex) {
+      // The first word of each line used to be appended with no width check
+      // and no hard break, so a word longer than the column overran it.
+      // StdCmdLinePrinter formats requirement rules into a 50-column box and a
+      // default Object.toString() runs to about 65 characters, which broke the
+      // two-column help layout.
+      int width = endIndex - startIndex;
+      if (width <= 0) {
+         return string;
+      }
+      String indent = StringUtils.repeat(" ", startIndex);
       StringBuilder outputString = new StringBuilder("");
-      String[] splitStrings = StringUtils.split(string, " ");
-      StringBuffer curLine;
-      for (int i = 0; i < splitStrings.length; i++) {
-         curLine = new StringBuffer("");
-         curLine.append(splitStrings[i]).append(" ");
-
-         for (; i + 1 < splitStrings.length
-               && curLine.length() + splitStrings[i + 1].length() <= (endIndex - startIndex); i++) {
-            curLine.append(splitStrings[i + 1]).append(" ");
+      StringBuilder curLine = new StringBuilder("");
+      for (String word : StringUtils.split(string, " ")) {
+         // a word that cannot fit on a line of its own has to be broken
+         while (word.length() > width) {
+            if (curLine.length() > 0) {
+               outputString.append(indent).append(curLine.toString().trim()).append("\n");
+               curLine.setLength(0);
+            }
+            outputString.append(indent).append(word, 0, width).append("\n");
+            word = word.substring(width);
          }
-
-         outputString.append(StringUtils.repeat(" ", startIndex)).append(curLine.toString()).append("\n");
+         if (curLine.length() + word.length() > width) {
+            outputString.append(indent).append(curLine.toString().trim()).append("\n");
+            curLine.setLength(0);
+         }
+         curLine.append(word).append(" ");
+      }
+      if (curLine.length() > 0) {
+         outputString.append(indent).append(curLine.toString().trim()).append("\n");
       }
       return outputString.toString();
    }
@@ -1117,11 +1134,10 @@ public class CmdLineUtils {
          }
          return doubles;
       } else if (type.equals(String.class)) {
-         StringBuilder combinedString = new StringBuilder("");
-         for (String value : values) {
-            combinedString.append(value).append(" ");
-         }
-         return Lists.newArrayList(combinedString.toString().trim());
+         // This appended a separator per value and then trimmed the buffer,
+         // which also removed whitespace the user had quoted: --name " Bob "
+         // arrived as "Bob". Joining does the same thing without the trim.
+         return Lists.newArrayList(StringUtils.join(values, " "));
       } else {
          List<Object> objects = new LinkedList<Object>();
          for (String value : values) {
