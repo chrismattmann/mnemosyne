@@ -113,6 +113,14 @@ public class PCSServiceConfig implements PCSServiceConfMetKeys {
     return PathUtils.replaceEnvVariables(this.parameters.get(PCS_TRACE_PTYPE_EXCLUDE_LIST));
   }
 
+  public String resolvePath(String key, String defaultValue) {
+    String raw = this.parameters.get(key);
+    if (raw == null || raw.trim().length() == 0) {
+      raw = defaultValue;
+    }
+    return PathUtils.replaceEnvVariables(raw);
+  }
+
   @SuppressWarnings("unchecked")
   private void readContextParams(ServletConfig config) {
     for (Enumeration<String> paramNames = config.getServletContext()

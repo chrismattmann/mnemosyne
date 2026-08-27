@@ -33,6 +33,12 @@ public interface PCSServiceConfMetKeys {
 
   String RM_URL = "org.apache.oodt.cas.rm.url";
 
+  String FM_PROPERTIES_PATH = "org.apache.oodt.cas.fm.properties";
+
+  String WM_PROPERTIES_PATH = "org.apache.oodt.cas.wm.properties";
+
+  String RM_PROPERTIES_PATH = "org.apache.oodt.cas.rm.properties";
+
   String PCS_LL_CONF_FILE_PATH = "org.apache.oodt.pcs.ll.conf.filePath";
 
   String PCS_HEALTH_CRAWLER_CONF_PATH = "org.apache.oodt.pcs.health.crawler.conf.filePath";
