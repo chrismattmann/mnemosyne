@@ -480,11 +480,17 @@ the License.
         <artifactId>pcs-opsui</artifactId>
         <version>${project.parent.version}</version>
       </dependency>
-      <dependency>
-        <groupId>org.apache.poi</groupId>
-        <artifactId>poi</artifactId>
-        <version>3.2-FINAL</version>
-      </dependency>
+      <!--
+        poi is deliberately not managed here. Nothing in this project imports
+        it: it arrives through tika-parsers, which declares poi, poi-ooxml and
+        poi-scratchpad together at one version and expects them to stay that
+        way. Managing poi alone pinned it to 3.2-FINAL from 2008 while the
+        other two resolved to 3.15-beta1, and POI's modules compile against
+        each other, so the mismatch was a NoSuchMethodError waiting on
+        whichever Office format first crossed the gap. The pin arrived in
+        OODT-839 recording what happened to resolve in 2015, not a requirement
+        for that version.
+      -->
       <!--
         solr-core is gone. It is the search server, and nothing here ever ran
         one: every Solr class this repository touches comes from solrj, the
