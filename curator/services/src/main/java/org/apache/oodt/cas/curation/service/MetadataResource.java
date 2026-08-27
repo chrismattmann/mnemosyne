@@ -159,9 +159,9 @@ public class MetadataResource extends CurationService {
         html.append("selected ");
       }
       html.append("value=\"");
-      html.append(configId);
+      html.append(escapeHtml(configId));
       html.append("\">");
-      html.append(configId);
+      html.append(escapeHtml(configId));
       html.append("</option>\r\n");
     }
     return html.toString();
@@ -390,16 +390,14 @@ public class MetadataResource extends CurationService {
     html.append("<table>\r\n");
     for (String key : (Set<String>) metadata.getMap().keySet()) {
       html.append(" <tr>\r\n");
-      html.append("  <th>").append(key).append("</th>\r\n");
-      html.append("  <td class=\"").append(key).append("\">");
+      html.append("  <th>").append(escapeHtml(key)).append("</th>\r\n");
+      html.append("  <td class=\"").append(escapeHtml(key)).append("\">");
       List<String> values = metadata.getAllMetadata(key);
       for (Iterator<String> i = values.iterator(); i.hasNext();) {
-        html.append("<span>").append(i.next()).append("</span>");
+        html.append("<span>").append(escapeHtml(i.next())).append("</span>");
         if (i.hasNext()) {
           html.append(", ");
         }
-      }
-      for (String value : (List<String>) metadata.getAllMetadata(key)) {
       }
       html.append("</td>\r\n");
       html.append(" </tr>\r\n");
@@ -955,4 +953,5 @@ public class MetadataResource extends CurationService {
 		}
 		return vLayer;
 	}
+
 }

@@ -223,33 +223,33 @@ public class IngestionResource extends CurationService {
     for (IngestionTask task : taskList) {
       out.append("<tr>");
       out.append("<td>");
-      out.append(task.getId());
+      out.append(escapeHtml(task.getId()));
       out.append("</td><td>");
-      out.append(DateUtils.getDateAsISO8601String(task.getCreateDate()));
+      out.append(escapeHtml(DateUtils.getDateAsISO8601String(task.getCreateDate())));
       out.append("</td><td>");
       out.append(task.getFileList().size());
       out.append("</td><td>");
-      out.append(task.getPolicy());
+      out.append(escapeHtml(task.getPolicy()));
       out.append("</td><td>");
-      out.append(task.getProductType());
+      out.append(escapeHtml(task.getProductType()));
       out.append("</td><td>");
-      out.append(task.getExtConf().getIdentifier());
+      out.append(escapeHtml(task.getExtConf().getIdentifier()));
       out.append("</td><td>");
       out.append(task.getExtConf().getConfigFiles().size());
       out.append("</td><td id='");
-      out.append(task.getId());
+      out.append(escapeHtml(task.getId()));
       out.append("_Status'>");
-      out.append(task.getStatus());
+      out.append(escapeHtml(task.getStatus()));
       out.append("</td>");
       if (!task.getStatus().equals(IngestionTask.FINISHED)) {
         out.append(
             "<td><input type=\"button\" rel=\"_taskid_\" value=\"Start\" onclick=\"startIngestionTask('");
-        out.append(task.getId());
+        out.append(escapeHtml(task.getId()));
         out.append("')\"/></td>");
       } else {
         out.append(
             "<td><input type=\"button\" rel=\"_taskid_\" value=\"Remove\" onclick=\"removeIngestionTask('");
-        out.append(task.getId());
+        out.append(escapeHtml(task.getId()));
         out.append("')\"></td>");
       }
 

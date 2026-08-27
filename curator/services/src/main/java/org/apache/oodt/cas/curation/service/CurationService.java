@@ -148,4 +148,37 @@ public class CurationService extends HttpServlet implements CuratorConfMetKeys {
 
   }
 
+
+  /**
+   * Render a value as text rather than as markup.
+   *
+   * These pages carry product metadata, which is extracted from ingested
+   * files, so a data producer decides the content and a curator is the person
+   * who opens the page to look at it. Unescaped, a key containing a quote
+   * closed the class attribute and everything after it was parsed as markup:
+   * stored cross-site scripting with the archive as the storage medium.
+   *
+   * The five characters are escaped and everything else is passed through
+   * unchanged, which keeps text outside ASCII intact, surrogate pairs
+   * included. The apostrophe is escaped as well so this is safe in a
+   * single-quoted attribute too, and harmless in element content.
+   */
+  static String escapeHtml(String value) {
+    if (value == null) {
+      return "";
+    }
+    StringBuilder out = new StringBuilder(value.length() + 16);
+    for (int i = 0; i < value.length(); i++) {
+      char c = value.charAt(i);
+      switch (c) {
+        case '&':  out.append("&amp;");  break;
+        case '<':  out.append("&lt;");   break;
+        case '>':  out.append("&gt;");   break;
+        case '"':  out.append("&quot;"); break;
+        case '\'': out.append("&#39;");  break;
+        default:   out.append(c);
+      }
+    }
+    return out.toString();
+  }
 }
