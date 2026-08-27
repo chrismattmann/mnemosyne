@@ -56,20 +56,50 @@
   </build>
 
   <dependencies>
-    <dependency>
+          <!--
+        provided, so it does not travel. Every component depends on this module
+        to get the extension jar itself onto its classpath, and a compile-scope
+        dependency here rode along with it: pcs-core alone brought cas-crawler,
+        cas-filemgr, cas-metadata, cas-resource and cas-workflow, so a filemgr
+        deployment carried the workflow and resource managers it never calls.
+        Each component already declares the OODT library it actually uses, and
+        provided scope still compiles extension code against these APIs.
+      -->
+<dependency>
       <groupId>ai.mattmann.mnemosyne</groupId>
       <artifactId>cas-metadata</artifactId>
       <version>${oodt.version}</version>
+      <scope>provided</scope>
     </dependency>
-    <dependency>
+          <!--
+        provided, so it does not travel. Every component depends on this module
+        to get the extension jar itself onto its classpath, and a compile-scope
+        dependency here rode along with it: pcs-core alone brought cas-crawler,
+        cas-filemgr, cas-metadata, cas-resource and cas-workflow, so a filemgr
+        deployment carried the workflow and resource managers it never calls.
+        Each component already declares the OODT library it actually uses, and
+        provided scope still compiles extension code against these APIs.
+      -->
+<dependency>
       <groupId>ai.mattmann.mnemosyne</groupId>
       <artifactId>cas-filemgr</artifactId>
       <version>${oodt.version}</version>
+      <scope>provided</scope>
     </dependency>
-    <dependency>
+          <!--
+        provided, so it does not travel. Every component depends on this module
+        to get the extension jar itself onto its classpath, and a compile-scope
+        dependency here rode along with it: pcs-core alone brought cas-crawler,
+        cas-filemgr, cas-metadata, cas-resource and cas-workflow, so a filemgr
+        deployment carried the workflow and resource managers it never calls.
+        Each component already declares the OODT library it actually uses, and
+        provided scope still compiles extension code against these APIs.
+      -->
+<dependency>
       <groupId>ai.mattmann.mnemosyne</groupId>
       <artifactId>pcs-core</artifactId>
       <version>${oodt.version}</version>
+      <scope>provided</scope>
     </dependency>
     <dependency>
       <groupId>junit</groupId>

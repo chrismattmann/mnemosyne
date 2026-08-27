@@ -61,12 +61,6 @@
       <version>${project.parent.version}</version>
       <type>jar</type>
       <scope>runtime</scope>
-      <exclusions>
-        <exclusion>
-          <groupId>ai.mattmann.mnemosyne</groupId>
-          <artifactId>cas-filemgr</artifactId>
-        </exclusion>
-      </exclusions>
     </dependency>
     <dependency>
       <groupId>ai.mattmann.mnemosyne</groupId>
