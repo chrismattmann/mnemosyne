@@ -66,13 +66,11 @@ the License.
     <dependency>
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>
-      <version>3.8.2</version>
       <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>ai.mattmann.mnemosyne</groupId>
       <artifactId>oodt-commons</artifactId>
-      <version>${project.parent.version}</version>
     </dependency>
   </dependencies>
   <build>
