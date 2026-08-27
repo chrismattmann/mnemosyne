@@ -154,6 +154,25 @@ public class AvroTypeFactory {
         return avroResourceNodes;
     }
 
+    /**
+     * Convert a list of jobs off the wire.
+     *
+     * getQueuedJobs on the client returned the proxy's list unconverted, so a
+     * List<AvroJob> travelled under a List<Job> declaration. Erasure hides
+     * that until an element is read, which is why resmgr-client
+     * --getQueuedJobs threw ClassCastException only when the queue was not
+     * empty.
+     */
+    public static List<Job> getListJob(List<AvroJob> avroJobs) {
+        List<Job> jobs = new Vector<Job>();
+        if (avroJobs != null) {
+            for (AvroJob avroJob : avroJobs) {
+                jobs.add(getJob(avroJob));
+            }
+        }
+        return jobs;
+    }
+
     public static List<ResourceNode> getListResourceNode(List<AvroResourceNode> avroResourceNodes){
         List<ResourceNode> resourceNodes = new ArrayList<ResourceNode>();
 

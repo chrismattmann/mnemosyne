@@ -364,7 +364,7 @@ public class AvroRpcResourceManagerClient implements ResourceManagerClient {
     @Override
     public List getQueuedJobs() throws JobQueueException {
         try {
-            return proxy.getQueuedJobs();
+            return AvroTypeFactory.getListJob(proxy.getQueuedJobs());
         } catch (AvroRemoteException e) {
             throw new JobQueueException(e);
         }
