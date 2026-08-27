@@ -41,6 +41,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Vector;
 
 import javax.sql.DataSource;
 
@@ -480,5 +481,66 @@ public class TestWorkflowDataSourceRepository {
   }
 
     
+
+  private static Workflow workflowNamed(String id, String name) {
+    Workflow w = new Workflow();
+    w.setId(id);
+    w.setName(name);
+    WorkflowTask task = new WorkflowTask();
+    task.setTaskId("1");
+    task.setTaskName("Test Task");
+    List<WorkflowTask> tasks = new Vector<WorkflowTask>();
+    tasks.add(task);
+    w.setTasks(tasks);
+    return w;
+  }
+
+  /**
+   * Every statement in these classes is built by string concatenation, so a
+   * value carrying an apostrophe closes the literal it sits in. An apostrophe
+   * in English text is not an edge case, and the failure is an opaque SQL
+   * error rather than anything a caller can act on.
+   */
+  @Test
+  public void testWorkflowNameWithAnApostropheCanBeDefined() throws Exception {
+    DataSourceWorkflowRepository repo = new DataSourceWorkflowRepository(ds);
+
+    String id = repo.addWorkflow(workflowNamed("101", "Tom's pipeline"));
+    assertNotNull("the workflow was not stored", id);
+
+    Workflow stored = repo.getWorkflowById(id);
+    assertNotNull(stored);
+    assertEquals("Tom's pipeline", stored.getName());
+  }
+
+  /**
+   * A workflow name comes from a policy file, so a value reaching this can
+   * carry SQL of its own. Parameters make the value a value; this asserts it
+   * is stored as text rather than executed.
+   */
+  @Test
+  public void testWorkflowNameCarryingSqlIsStoredAsText() throws Exception {
+    DataSourceWorkflowRepository repo = new DataSourceWorkflowRepository(ds);
+    String hostile = "x'); DROP TABLE workflows; --";
+
+    String id = repo.addWorkflow(workflowNamed("102", hostile));
+    assertNotNull(id);
+
+    Workflow stored = repo.getWorkflowById(id);
+    assertNotNull("the workflows table did not survive", stored);
+    assertEquals(hostile, stored.getName());
+
+    // and the table is still there to be read from
+    assertNotNull(repo.getWorkflowById("1"));
+  }
+
+  /** Ordinary names must keep working. */
+  @Test
+  public void testOrdinaryWorkflowNameIsUnaffected() throws Exception {
+    DataSourceWorkflowRepository repo = new DataSourceWorkflowRepository(ds);
+
+    String id = repo.addWorkflow(workflowNamed("103", "Plain Pipeline"));
+    assertEquals("Plain Pipeline", repo.getWorkflowById(id).getName());
+  }
 }
 

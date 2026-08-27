@@ -29,6 +29,7 @@ import java.net.URLEncoder;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.PreparedStatement;
 import java.sql.Statement;
 import java.util.List;
 import java.util.Vector;
@@ -77,6 +78,7 @@ public class DataSourceWorkflowInstanceRepository extends
             throws InstanceRepositoryException {
         Connection conn = null;
         Statement statement = null;
+        PreparedStatement insert = null;
         ResultSet rs = null;
 
         try {
@@ -88,30 +90,31 @@ public class DataSourceWorkflowInstanceRepository extends
             String taskIdField;
             String workflowIdField;
 
-            if (quoteFields) {
-                taskIdField = "'"
-                        + wInst.getWorkflow().getTasks().get(0)
-                                .getTaskId() + "'";
-                workflowIdField = "'" + wInst.getWorkflow().getId() + "'";
-            } else {
-                taskIdField = wInst.getWorkflow().getTasks()
-                        .get(0).getTaskId();
-                workflowIdField = wInst.getWorkflow().getId();
-            }
+            // quoteFields decided whether to wrap these in quotes for the SQL
+            // literal. They are bound parameters now, so the driver decides
+            // how to render them and adding quotes here would store them.
+            taskIdField = wInst.getWorkflow().getTasks().get(0).getTaskId();
+            workflowIdField = wInst.getWorkflow().getId();
 
             startWorkflowSql = "INSERT INTO workflow_instances "
                     + "(workflow_instance_status, workflow_id, current_task_id,"
                     + "start_date_time, end_date_time, current_task_start_date_time,"
-                    + "current_task_end_date_time, priority, times_blocked) " + "VALUES ('"
-                    + wInst.getStatus() + "', " + workflowIdField + ","
-                    + taskIdField + ", '" + wInst.getStartDateTimeIsoStr()
-                    + "','" + wInst.getEndDateTimeIsoStr() + "','"
-                    + wInst.getCurrentTaskStartDateTimeIsoStr() + "','"
-                    + wInst.getCurrentTaskEndDateTimeIsoStr() + "', "+wInst.getPriority().getValue()+", "
-                    + wInst.getTimesBlocked() + ")";
+                    + "current_task_end_date_time, priority, times_blocked) " + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
+            // Bound, not concatenated: an apostrophe in any of these closed
+            // the literal it sat in and took the statement with it.
             LOG.log(Level.FINE, "sql: Executing: " + startWorkflowSql);
-            statement.execute(startWorkflowSql);
+            insert = conn.prepareStatement(startWorkflowSql);
+            insert.setString(1, wInst.getStatus());
+            insert.setString(2, workflowIdField);
+            insert.setString(3, taskIdField);
+            insert.setString(4, wInst.getStartDateTimeIsoStr());
+            insert.setString(5, wInst.getEndDateTimeIsoStr());
+            insert.setString(6, wInst.getCurrentTaskStartDateTimeIsoStr());
+            insert.setString(7, wInst.getCurrentTaskEndDateTimeIsoStr());
+            insert.setDouble(8, wInst.getPriority().getValue());
+            insert.setInt(9, wInst.getTimesBlocked());
+            insert.execute();
 
             String workflowInstId = "";
 
@@ -153,6 +156,13 @@ public class DataSourceWorkflowInstanceRepository extends
                 } catch (SQLException ignore) {
                 }
 
+            }
+
+            if (insert != null) {
+                try {
+                    insert.close();
+                } catch (SQLException ignore) {
+                }
             }
 
             if (statement != null) {
@@ -238,6 +248,7 @@ public class DataSourceWorkflowInstanceRepository extends
             throws InstanceRepositoryException {
         Connection conn = null;
         Statement statement = null;
+        PreparedStatement update = null;
         String taskIdField, workflowIdField;
 
         try {
@@ -245,33 +256,32 @@ public class DataSourceWorkflowInstanceRepository extends
             conn.setAutoCommit(false);
             statement = conn.createStatement();
 
-            if (quoteFields) {
-                taskIdField = "'" + wInst.getCurrentTaskId() + "'";
-                workflowIdField = "'" + wInst.getWorkflow().getId() + "'";
-            } else {
-                taskIdField = wInst.getCurrentTaskId();
-                workflowIdField = wInst.getWorkflow().getId();
-            }
+            // Bound parameters, so quoteFields no longer applies: adding
+            // quotes here would store them.
+            taskIdField = wInst.getCurrentTaskId();
+            workflowIdField = wInst.getWorkflow().getId();
 
             String updateStatusSql = "UPDATE workflow_instances SET "
-                    + "workflow_instance_status='" + wInst.getStatus()
-                    + "', current_task_id=" + taskIdField + ", workflow_id = "
-                    + workflowIdField + ",start_date_time='"
-                    + wInst.getStartDateTimeIsoStr() + "'," + "end_date_time='"
-                    + wInst.getEndDateTimeIsoStr()
-                    + "',current_task_start_date_time='"
-                    + wInst.getCurrentTaskStartDateTimeIsoStr()
-                    + "',current_task_end_date_time='"
-                    + wInst.getCurrentTaskEndDateTimeIsoStr()
-                    + "',priority="
-                    + wInst.getPriority().getValue()
-                    + ",times_blocked="
-                    + wInst.getTimesBlocked()
-                    +" WHERE workflow_instance_id = " + wInst.getId();
+                    + "workflow_instance_status=?, current_task_id=?, "
+                    + "workflow_id=?, start_date_time=?, end_date_time=?, "
+                    + "current_task_start_date_time=?, "
+                    + "current_task_end_date_time=?, priority=?, "
+                    + "times_blocked=? WHERE workflow_instance_id = ?";
 
             LOG.log(Level.FINE, "updateStatusSql: Executing: "
                     + updateStatusSql);
-            statement.execute(updateStatusSql);
+            update = conn.prepareStatement(updateStatusSql);
+            update.setString(1, wInst.getStatus());
+            update.setString(2, taskIdField);
+            update.setString(3, workflowIdField);
+            update.setString(4, wInst.getStartDateTimeIsoStr());
+            update.setString(5, wInst.getEndDateTimeIsoStr());
+            update.setString(6, wInst.getCurrentTaskStartDateTimeIsoStr());
+            update.setString(7, wInst.getCurrentTaskEndDateTimeIsoStr());
+            update.setDouble(8, wInst.getPriority().getValue());
+            update.setInt(9, wInst.getTimesBlocked());
+            update.setString(10, wInst.getId());
+            update.execute();
             conn.commit();
 
             // now update its metadata
@@ -294,6 +304,13 @@ public class DataSourceWorkflowInstanceRepository extends
             }
             throw new InstanceRepositoryException(e.getMessage());
         } finally {
+            if (update != null) {
+                try {
+                    update.close();
+                } catch (SQLException ignore) {
+                }
+            }
+
             if (statement != null) {
                 try {
                     statement.close();
@@ -541,6 +558,7 @@ public class DataSourceWorkflowInstanceRepository extends
             throws InstanceRepositoryException {
         Connection conn = null;
         Statement statement = null;
+        PreparedStatement select = null;
         ResultSet rs = null;
 
         List workflowInsts = null;
@@ -550,12 +568,14 @@ public class DataSourceWorkflowInstanceRepository extends
             statement = conn.createStatement();
 
             String getWorkflowSql = "SELECT * from workflow_instances "
-                    + "WHERE workflow_instance_status = '" + status
-                    + "' ORDER BY workflow_instance_id DESC";
+                    + "WHERE workflow_instance_status = ? "
+                    + "ORDER BY workflow_instance_id DESC";
 
             LOG.log(Level.FINE, "getWorkflowInstancesByStatus: Executing: "
                     + getWorkflowSql);
-            rs = statement.executeQuery(getWorkflowSql);
+            select = conn.prepareStatement(getWorkflowSql);
+            select.setString(1, status);
+            rs = select.executeQuery();
 
             workflowInsts = new Vector();
             while (rs.next()) {
@@ -591,6 +611,13 @@ public class DataSourceWorkflowInstanceRepository extends
                 } catch (SQLException ignore) {
                 }
 
+            }
+
+            if (select != null) {
+                try {
+                    select.close();
+                } catch (SQLException ignore) {
+                }
             }
 
             if (statement != null) {
@@ -694,6 +721,9 @@ public class DataSourceWorkflowInstanceRepository extends
             throws InstanceRepositoryException {
         Connection conn = null;
         Statement statement = null;
+        PreparedStatement metInsert = null;
+        PreparedStatement pagedSelect = null;
+        PreparedStatement select = null;
         ResultSet rs = null;
         int numInsts = -1;
 
@@ -702,11 +732,13 @@ public class DataSourceWorkflowInstanceRepository extends
             statement = conn.createStatement();
 
             String getWorkflowSql = "SELECT COUNT(workflow_instance_id) AS num_insts from workflow_instances "
-                    + "WHERE workflow_instance_status = '" + status + "'";
+                    + "WHERE workflow_instance_status = ?";
 
             LOG.log(Level.FINE, "getNumWorkflowInstancesByStatus: Executing: "
                     + getWorkflowSql);
-            rs = statement.executeQuery(getWorkflowSql);
+            select = conn.prepareStatement(getWorkflowSql);
+            select.setString(1, status);
+            rs = select.executeQuery();
 
             while (rs.next()) {
                 numInsts = rs.getInt("num_insts");
@@ -737,6 +769,27 @@ public class DataSourceWorkflowInstanceRepository extends
 
             }
 
+            if (select != null) {
+                try {
+                    select.close();
+                } catch (SQLException ignore) {
+                }
+            }
+
+            if (pagedSelect != null) {
+                try {
+                    pagedSelect.close();
+                } catch (SQLException ignore) {
+                }
+            }
+
+            if (metInsert != null) {
+                try {
+                    metInsert.close();
+                } catch (SQLException ignore) {
+                }
+            }
+
             if (statement != null) {
                 try {
                     statement.close();
@@ -762,6 +815,7 @@ public class DataSourceWorkflowInstanceRepository extends
             throws InstanceRepositoryException {
         Connection conn = null;
         Statement statement = null;
+        PreparedStatement pagedSelect = null;
         ResultSet rs = null;
 
         List wInstIds = null;
@@ -779,10 +833,9 @@ public class DataSourceWorkflowInstanceRepository extends
                     ResultSet.CONCUR_READ_ONLY);
 
             String getWorkflowSql = "SELECT workflow_instance_id FROM workflow_instances ";
-            if (status != null && !status.equals("")) {
-                getWorkflowSql += "WHERE workflow_instance_status = '" + status
-                        + "'";
-
+            boolean filterByStatus = status != null && !status.equals("");
+            if (filterByStatus) {
+                getWorkflowSql += "WHERE workflow_instance_status = ? ";
             }
 
             getWorkflowSql += "ORDER BY workflow_instance_id DESC ";
@@ -790,7 +843,12 @@ public class DataSourceWorkflowInstanceRepository extends
             LOG.log(Level.FINE, "workflow instance paged query: executing: "
                     + getWorkflowSql);
 
-            rs = statement.executeQuery(getWorkflowSql);
+            pagedSelect = conn.prepareStatement(getWorkflowSql,
+                    ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_READ_ONLY);
+            if (filterByStatus) {
+                pagedSelect.setString(1, status);
+            }
+            rs = pagedSelect.executeQuery();
             wInstIds = new Vector();
 
             int startNum = (pageNum - 1) * pageSize;
@@ -850,6 +908,13 @@ public class DataSourceWorkflowInstanceRepository extends
                 } catch (SQLException ignore) {
                 }
 
+            }
+
+            if (pagedSelect != null) {
+                try {
+                    pagedSelect.close();
+                } catch (SQLException ignore) {
+                }
             }
 
             if (statement != null) {
@@ -967,17 +1032,26 @@ public class DataSourceWorkflowInstanceRepository extends
             String val) throws InstanceRepositoryException {
         Connection conn = null;
         Statement statement = null;
+        PreparedStatement metInsert = null;
 
         try {
             conn = dataSource.getConnection();
             conn.setAutoCommit(false);
             statement = conn.createStatement();
             String addMetSql = "INSERT INTO workflow_instance_metadata"
-                    + " (workflow_instance_id,workflow_met_key,workflow_met_val) VALUES ("
-                    + wInstId + ",'" + key + "','" + URLEncoder.encode(val, "UTF-8") + "')";
+                    + " (workflow_instance_id,workflow_met_key,workflow_met_val)"
+                    + " VALUES (?, ?, ?)";
 
+            // The value was URL-encoded and the key beside it was not, which
+            // is how a shared-context key carrying an apostrophe broke the
+            // statement. Both are bound now. The encoding stays because the
+            // read path decodes, so dropping it would misread stored rows.
             LOG.log(Level.FINE, "sql: Executing: " + addMetSql);
-            statement.execute(addMetSql);
+            metInsert = conn.prepareStatement(addMetSql);
+            metInsert.setString(1, wInstId);
+            metInsert.setString(2, key);
+            metInsert.setString(3, URLEncoder.encode(val, "UTF-8"));
+            metInsert.execute();
 
             conn.commit();
         } catch (Exception e) {
@@ -996,6 +1070,13 @@ public class DataSourceWorkflowInstanceRepository extends
             }
             throw new InstanceRepositoryException(e.getMessage());
         } finally {
+
+            if (metInsert != null) {
+                try {
+                    metInsert.close();
+                } catch (SQLException ignore) {
+                }
+            }
 
             if (statement != null) {
                 try {
