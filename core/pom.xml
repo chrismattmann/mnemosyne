@@ -54,6 +54,9 @@ the License.
       rebuilding the catalog. See the README.
     -->
     <lucene.version>10.5.1</lucene.version>
+    <slf4j.version>2.0.17</slf4j.version>
+    <log4j2.version>2.24.3</log4j2.version>
+    <reload4j.version>1.2.25</reload4j.version>
     <!-- Docker -->
     <docker.build.disabled>true</docker.build.disabled>
     <docker.image.name/>
@@ -235,9 +238,9 @@ the License.
         <version>4.12</version>
       </dependency>
       <dependency>
-        <groupId>log4j</groupId>
-        <artifactId>log4j</artifactId>
-        <version>1.2.14</version>
+        <groupId>ch.qos.reload4j</groupId>
+        <artifactId>reload4j</artifactId>
+        <version>${reload4j.version}</version>
       </dependency>
       <dependency>
         <groupId>mysql</groupId>
@@ -611,23 +614,23 @@ the License.
       <dependency>
         <groupId>org.slf4j</groupId>
         <artifactId>slf4j-api</artifactId>
-        <version>1.7.12</version>
+        <version>${slf4j.version}</version>
       </dependency>
       <!-- Temporary fix to send java.util.Logger logs to SLF4J -->
       <dependency>
         <groupId>org.slf4j</groupId>
         <artifactId>jul-to-slf4j</artifactId>
-        <version>1.7.12</version>
+        <version>${slf4j.version}</version>
       </dependency>
       <dependency>
         <groupId>org.slf4j</groupId>
-        <artifactId>slf4j-log4j12</artifactId>
-        <version>1.7.12</version>
+        <artifactId>slf4j-reload4j</artifactId>
+        <version>${slf4j.version}</version>
       </dependency>
       <dependency>
         <groupId>org.apache.logging.log4j</groupId>
-        <artifactId>log4j-slf4j-impl</artifactId>
-        <version>2.24.3</version>
+        <artifactId>log4j-slf4j2-impl</artifactId>
+        <version>${log4j2.version}</version>
       </dependency>
       <dependency>
         <groupId>org.springframework</groupId>
@@ -664,7 +667,52 @@ the License.
         <artifactId>xmlunit</artifactId>
         <version>1.4</version>
       </dependency>
-    </dependencies>
+    
+      <!-- Versions that used to live only in the module that needed them.
+           jaxb-api in particular was pinned separately in webapp/fmprod and
+           webapp/wmservices, which is exactly the drift this block exists to
+           prevent. -->
+      <dependency>
+        <groupId>javax.activation</groupId>
+        <artifactId>activation</artifactId>
+        <version>1.1.1</version>
+      </dependency>
+      <dependency>
+        <groupId>com.sun.activation</groupId>
+        <artifactId>javax.activation</artifactId>
+        <version>1.2.0</version>
+      </dependency>
+      <dependency>
+        <groupId>javax.xml.bind</groupId>
+        <artifactId>jaxb-api</artifactId>
+        <version>2.3.1</version>
+      </dependency>
+      <dependency>
+        <groupId>org.glassfish.jaxb</groupId>
+        <artifactId>jaxb-runtime</artifactId>
+        <version>2.3.3</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.ant</groupId>
+        <artifactId>ant</artifactId>
+        <version>1.7.0</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.maven</groupId>
+        <artifactId>maven-plugin-api</artifactId>
+        <version>2.0</version>
+      </dependency>
+      <dependency>
+        <groupId>org.objenesis</groupId>
+        <artifactId>objenesis</artifactId>
+        <version>3.3</version>
+      </dependency>
+      <dependency>
+        <groupId>servletapi</groupId>
+        <artifactId>servletapi</artifactId>
+        <version>2.4</version>
+      </dependency>
+</dependencies>
   </dependencyManagement>
 
   <build>
