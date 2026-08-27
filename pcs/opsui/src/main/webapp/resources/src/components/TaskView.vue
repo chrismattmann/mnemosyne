@@ -28,6 +28,49 @@
         </tbody>
       </table>
     </article>
+
+    <article class="card">
+      <h3>Configuration</h3>
+      <p v-if="!propKeys.length" class="empty">No static properties on this task.</p>
+      <table v-else>
+        <thead>
+          <tr><th>Property</th><th>Value</th></tr>
+        </thead>
+        <tbody>
+          <tr v-for="key in propKeys" :key="key">
+            <td class="mono">{{ key }}</td>
+            <td class="break">{{ properties[key] }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </article>
+
+    <article v-if="required.length" class="card">
+      <h3>Required metadata</h3>
+      <ul>
+        <li v-for="field in required" :key="field" class="mono">{{ field }}</li>
+      </ul>
+    </article>
+
+    <article class="card">
+      <h3>Conditions</h3>
+      <p v-if="!conditions.length" class="empty">No pre- or post-conditions.</p>
+      <table v-else>
+        <thead>
+          <tr><th>When</th><th>Name</th><th>Class</th></tr>
+        </thead>
+        <tbody>
+          <tr v-for="cond in conditions" :key="cond.phase + (cond.id || cond.name)">
+            <td>{{ cond.phase }}</td>
+            <td>
+              <a v-if="cond.id" href="#" @click.prevent="$emit('open-condition', cond.id)">{{ cond.name || cond.id }}</a>
+              <span v-else>{{ cond.name }}</span>
+            </td>
+            <td class="mono">{{ cond.className }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </article>
   </section>
 </template>
 
@@ -40,11 +83,18 @@ export default {
     payload: { type: Object, default: null },
     loading: { type: Boolean, default: false }
   },
-  emits: ['back'],
+  emits: ['back', 'open-condition'],
   setup(props) {
-    return {
-      task: computed(() => (props.payload && props.payload.task) || {})
-    }
+    const task = computed(() => (props.payload && props.payload.task) || {})
+    const properties = computed(() => task.value.properties || {})
+    const propKeys = computed(() => Object.keys(properties.value))
+    const required = computed(() => task.value.requiredMetFields || [])
+    const conditions = computed(() => {
+      const pre = (task.value.preConditions || []).map((c) => Object.assign({ phase: 'Pre' }, c))
+      const post = (task.value.postConditions || []).map((c) => Object.assign({ phase: 'Post' }, c))
+      return pre.concat(post)
+    })
+    return { task, properties, propKeys, required, conditions }
   }
 }
 </script>
@@ -54,12 +104,29 @@ h2 {
   margin: 0.4rem 0 0.8rem;
 }
 
+h3 {
+  margin: 0 0 0.6rem;
+}
+
+.card {
+  margin-bottom: 0.8rem;
+}
+
 .mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.85rem;
 }
 
+.break {
+  word-break: break-all;
+}
+
 th {
-  width: 8rem;
+  width: 10rem;
+}
+
+ul {
+  margin: 0;
+  padding-left: 1.2rem;
 }
 </style>

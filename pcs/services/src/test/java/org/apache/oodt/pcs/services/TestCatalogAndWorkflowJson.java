@@ -27,8 +27,10 @@ import org.apache.oodt.cas.filemgr.structs.ProductType;
 import org.apache.oodt.cas.filemgr.structs.Reference;
 import org.apache.oodt.cas.metadata.Metadata;
 import org.apache.oodt.cas.workflow.structs.Workflow;
+import org.apache.oodt.cas.workflow.structs.WorkflowCondition;
 import org.apache.oodt.cas.workflow.structs.WorkflowInstance;
 import org.apache.oodt.cas.workflow.structs.WorkflowTask;
+import org.apache.oodt.cas.workflow.structs.WorkflowTaskConfiguration;
 
 public class TestCatalogAndWorkflowJson extends TestCase {
 
@@ -112,5 +114,28 @@ public class TestCatalogAndWorkflowJson extends TestCase {
     Map<String, Object> full = WorkflowResource.encodeWorkflow(workflow, true);
     assertTrue(full.get("tasks") instanceof List);
     assertEquals(1, ((List<?>) full.get("tasks")).size());
+  }
+
+  public void testEncodeTaskIncludesConfiguration() {
+    WorkflowTaskConfiguration config = new WorkflowTaskConfiguration();
+    config.addConfigProperty("PGETask_Name", "BigTranslate_Task");
+    config.addConfigProperty("TranslateBatchSize", "32");
+    WorkflowCondition cond = new WorkflowCondition();
+    cond.setConditionId("urn:bt:Ready");
+    cond.setConditionName("Ready");
+    cond.setConditionInstanceClassName("org.example.Ready");
+    WorkflowTask task = new WorkflowTask();
+    task.setTaskId("urn:bt:Translate");
+    task.setTaskName("Translate");
+    task.setTaskInstanceClassName("org.apache.oodt.cas.pge.StdPGETaskInstance");
+    task.setTaskConfig(config);
+    task.setRequiredMetFields(Arrays.asList("Filename"));
+    task.setPreConditions(Arrays.asList(cond));
+    Map<String, Object> row = WorkflowResource.encodeTask(task);
+    assertEquals("org.apache.oodt.cas.pge.StdPGETaskInstance", row.get("className"));
+    Map<?, ?> props = (Map<?, ?>) row.get("properties");
+    assertEquals("32", props.get("TranslateBatchSize"));
+    assertEquals("Filename", ((List<?>) row.get("requiredMetFields")).get(0));
+    assertEquals("urn:bt:Ready", ((Map<?, ?>) ((List<?>) row.get("preConditions")).get(0)).get("id"));
   }
 }

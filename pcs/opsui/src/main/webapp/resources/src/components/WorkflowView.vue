@@ -21,6 +21,11 @@
     <p class="muted mono">{{ workflow.id }}</p>
     <p v-if="loading && !workflow.id" class="empty">Loading workflow…</p>
     <article class="card">
+      <h3>Description</h3>
+      <WorkflowGraph :tasks="tasks" :name="workflow.name" @open-task="$emit('open-task', $event)"/>
+      <p v-if="!tasks.length" class="empty">No tasks on this workflow.</p>
+    </article>
+    <article class="card">
       <h3>Tasks</h3>
       <p v-if="!tasks.length" class="empty">No tasks on this workflow.</p>
       <table v-else>
@@ -50,9 +55,11 @@
 
 <script>
 import { computed } from 'vue'
+import WorkflowGraph from './WorkflowGraph.vue'
 
 export default {
   name: 'WorkflowView',
+  components: { WorkflowGraph },
   props: {
     payload: { type: Object, default: null },
     loading: { type: Boolean, default: false }
