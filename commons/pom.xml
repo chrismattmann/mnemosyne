@@ -186,49 +186,5 @@
         </plugins>
       </build>
     </profile>
-
-    <!--
-      This module pins maven-surefire-plugin 2.4, which predates the JUnit
-      Platform and cannot run the property tests in src/test/pbt/java. The
-      parent's `hegel` profile supplies those tests; this profile raises
-      surefire for the same JDK range so they can actually be executed.
-
-      The 2.4 configuration is carried over rather than dropped: forkMode was
-      removed in surefire 3, so `pertest` becomes forkCount=1 with
-      reuseForks=false, which is the documented equivalent. The rest of the
-      module's suites keep the isolation and logging setup they had.
-    -->
-    <profile>
-      <id>hegel</id>
-      <activation>
-        <jdk>[22,)</jdk>
-      </activation>
-      <build>
-        <plugins>
-          <plugin>
-            <artifactId>maven-surefire-plugin</artifactId>
-            <version>3.5.3</version>
-            <configuration>
-              <forkMode combine.self="remove"/>
-              <forkCount>1</forkCount>
-              <reuseForks>false</reuseForks>
-              <useSystemClassLoader>false</useSystemClassLoader>
-              <argLine>${coverageArgLine} --enable-native-access=ALL-UNNAMED</argLine>
-              <systemProperties>
-                <property>
-                  <name>java.util.logging.config.file</name>
-                  <value>${basedir}/src/test/resources/test.logging.properties</value>
-                </property>
-              </systemProperties>
-              <forkedProcessTimeoutInSeconds>0</forkedProcessTimeoutInSeconds>
-              <redirectTestOutputToFile>true</redirectTestOutputToFile>
-              <includes>
-                <include>**/*Test*.java</include>
-              </includes>
-            </configuration>
-          </plugin>
-        </plugins>
-      </build>
-    </profile>
   </profiles>
 </project>
