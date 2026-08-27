@@ -71,6 +71,15 @@ the License.
       <groupId>org.apache.cxf</groupId>
       <artifactId>cxf-rt-frontend-jaxrs</artifactId>
     </dependency>
+    <!-- JAXB left the JDK in Java 11; CXFServlet needs it at runtime on 21. -->
+    <dependency>
+      <groupId>javax.xml.bind</groupId>
+      <artifactId>jaxb-api</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.glassfish.jaxb</groupId>
+      <artifactId>jaxb-runtime</artifactId>
+    </dependency>
     <dependency>
       <groupId>ai.mattmann.mnemosyne</groupId>
       <artifactId>pcs-core</artifactId>
