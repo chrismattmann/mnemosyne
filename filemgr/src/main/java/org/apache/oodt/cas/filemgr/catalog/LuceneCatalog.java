@@ -1127,16 +1127,16 @@ public class LuceneCatalog implements Catalog {
         lmp.setMergeFactor(mergeFactor);
         config.setMergePolicy(lmp);
 
-        try {
-            writer = new IndexWriter(indexDir, config);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
+        // Opening the writer used to print the stack trace of any IOException
+        // and carry on with writer still null, so a directory that could not
+        // be opened -- no permission, a lock held by another process, a full
+        // disk -- was reported to the caller as a NullPointerException on the
+        // next line, with the real cause on stdout. The failure to open is
+        // the failure to index.
         Document doc = toDoc(cp.getProduct(), cp.getMetadata());
         try {
+            writer = new IndexWriter(indexDir, config);
             writer.addDocument(doc);
-            writer.close();
             // TODO: determine a better way to optimize the index
         } catch (Exception e) {
             LOG.log(Level.WARNING, "Unable to index product: ["
@@ -1146,12 +1146,17 @@ public class LuceneCatalog implements Catalog {
                     + cp.getProduct().getProductName() + "]: Message: "
                     + e.getMessage(), e);
         } finally {
+            // Closed once, here. It was closed inside the try as well, so the
+            // ordinary path closed twice and the second close ran against an
+            // already-closed writer.
             try {
                 if (writer != null) {
                     writer.close();
                 }
             } catch (Exception e) {
-                System.out.println("failed" + e.getLocalizedMessage());
+                LOG.log(Level.WARNING, "Unable to close the index writer for "
+                        + "product: [" + cp.getProduct().getProductName()
+                        + "]: Message: " + e.getMessage(), e);
             }
         }
 

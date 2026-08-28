@@ -21,6 +21,7 @@ package org.apache.oodt.cas.filemgr.metadata.extractors.examples;
 import org.apache.oodt.cas.filemgr.metadata.extractors.AbstractFilemgrMetExtractor;
 import org.apache.oodt.cas.filemgr.structs.Product;
 import org.apache.oodt.cas.filemgr.structs.Reference;
+import org.apache.tika.mime.MimeType;
 import org.apache.oodt.cas.metadata.Metadata;
 import org.apache.oodt.cas.metadata.exceptions.MetExtractionException;
 
@@ -59,15 +60,24 @@ public class MimeTypeExtractor extends AbstractFilemgrMetExtractor {
         Metadata extractMet = new Metadata();
         merge(met, extractMet);
 
-        if (product.getProductStructure().equals(Product.STRUCTURE_FLAT)) {
+        if (Product.STRUCTURE_FLAT.equals(product.getProductStructure())
+                && product.getProductReferences() != null
+                && !product.getProductReferences().isEmpty()) {
             Reference prodRef = (Reference) product.getProductReferences().get(
                     0);
 
-            extractMet.addMetadata(MIME_TYPE, prodRef.getMimeType().getName());
-            extractMet.addMetadata(MIME_TYPE, prodRef.getMimeType()
-                    .getType().getType());
-            extractMet.addMetadata(MIME_TYPE, prodRef.getMimeType()
-                    .getType().getSubtype());
+            // The four-argument Reference constructor explicitly permits a
+            // null mime type, and this dereferenced it three times, so a
+            // caller following #145's advice -- avoid the three-argument
+            // constructor, which spawns a subprocess per reference -- took
+            // the File Manager down on addMetadata. A product with no mime
+            // type has no mime type metadata; that is not a failure.
+            MimeType mimeType = prodRef.getMimeType();
+            if (mimeType != null) {
+                extractMet.addMetadata(MIME_TYPE, mimeType.getName());
+                extractMet.addMetadata(MIME_TYPE, mimeType.getType().getType());
+                extractMet.addMetadata(MIME_TYPE, mimeType.getType().getSubtype());
+            }
         }
 
         return extractMet;

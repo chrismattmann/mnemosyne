@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -17,66 +17,78 @@
 
 package org.apache.oodt.cas.filemgr.metadata.extractors.examples;
 
-//Junit imports
-import java.io.File;
-import java.net.URL;
-import java.util.Properties;
-//OODT imports
-import org.apache.oodt.cas.filemgr.metadata.CoreMetKeys;
 import org.apache.oodt.cas.filemgr.structs.Product;
 import org.apache.oodt.cas.filemgr.structs.Reference;
 import org.apache.oodt.cas.metadata.Metadata;
-import org.apache.oodt.cas.metadata.exceptions.MetExtractionException;
 
-//Junit imports
-import junit.framework.TestCase;
+import org.junit.Test;
+
+import java.util.Vector;
+
+import static org.junit.Assert.*;
 
 /**
- * 
- * Test harness for the {@link MimeTypeExtractor}.
- * 
- * @since OODT-58
- * 
+ * The four-argument {@link Reference} constructor explicitly permits a null
+ * mime type, and this extractor dereferenced it three times. #145 advises
+ * avoiding the three-argument constructor because it builds a Tika config and
+ * spawns a subprocess per reference -- so a caller taking that advice hands
+ * this a reference with no mime type and takes the File Manager down on
+ * addMetadata.
  */
-public class TestMimeTypeExtractor extends TestCase implements CoreMetKeys {
+public class TestMimeTypeExtractor {
 
-  private Properties initialProperties = new Properties(System.getProperties());
-
-  public void setUp() throws Exception {
-    Properties properties = new Properties(System.getProperties());
-    URL url = this.getClass().getResource("/mime-types.xml");
-    properties.setProperty("org.apache.oodt.cas.filemgr.mime.type.repository",
-        new File(url.getFile()).getAbsolutePath());
-    System.setProperties(properties);
-  }
-
-  public void tearDown() throws Exception {
-    System.setProperties(initialProperties);
-  }
-
-  /**
-   * @since OODT-58
-   */
-  public void testExtract() {
-    MimeTypeExtractor extractor = new MimeTypeExtractor();
-    Product p = Product.getDefaultFlatProduct("test", "urn:oodt:GenericFile");
-    Reference r = new Reference("file:///tmp/test.he5",
-        "file:///archive/test.he5/test.he5", 0L);
-    p.getProductReferences().add(r);
-    Metadata met = new Metadata();
-    try {
-      met = extractor.doExtract(p, met);
-    } catch (MetExtractionException e) {
-      fail(e.getMessage());
+    private static Product flatProductWith(Reference ref) {
+        Product p = Product.getDefaultFlatProduct("test", "urn:oodt:GenericFile");
+        Vector<Reference> refs = new Vector<Reference>();
+        if (ref != null) {
+            refs.add(ref);
+        }
+        p.setProductReferences(refs);
+        return p;
     }
 
-    assertNotNull(met);
-    assertNotNull(met.getAllMetadata(MIME_TYPE));
-    assertEquals(3, met.getAllMetadata(MIME_TYPE).size());
-    System.out.println(met.getAllMetadata(MIME_TYPE));
-    assertEquals("application/x-hdf", met.getAllMetadata(MIME_TYPE).get(0));
-    assertEquals("application", met.getAllMetadata(MIME_TYPE).get(1));
-    assertEquals("x-hdf", met.getAllMetadata(MIME_TYPE).get(2));
-  }
+    @Test
+    public void testAReferenceWithNoMimeTypeIsNotAFailure() throws Exception {
+        Product product = flatProductWith(
+                new Reference("file:/tmp/a.dat", "file:/archive/a.dat", 10L, null));
 
+        Metadata met = new MimeTypeExtractor().doExtract(product, new Metadata());
+
+        assertNotNull(met);
+        assertNull("a mime type was invented for a reference that has none",
+                met.getMetadata("MimeType"));
+    }
+
+    /** a product carrying no references at all is the same story. */
+    @Test
+    public void testAProductWithNoReferencesIsNotAFailure() throws Exception {
+        Metadata met = new MimeTypeExtractor()
+                .doExtract(flatProductWith(null), new Metadata());
+
+        assertNotNull(met);
+    }
+
+    /** and a product with no structure set does not decide it is flat. */
+    @Test
+    public void testAProductWithNoStructureIsNotAFailure() throws Exception {
+        Product product = flatProductWith(
+                new Reference("file:/tmp/a.dat", "file:/archive/a.dat", 10L, null));
+        product.setProductStructure(null);
+
+        assertNotNull(new MimeTypeExtractor().doExtract(product, new Metadata()));
+    }
+
+    /** a reference that does carry a mime type still reports it. */
+    @Test
+    public void testAReferenceWithAMimeTypeStillReportsIt() throws Exception {
+        Reference ref = new Reference("file:/tmp/a.txt", "file:/archive/a.txt", 10L);
+        Product product = flatProductWith(ref);
+
+        Metadata met = new MimeTypeExtractor().doExtract(product, new Metadata());
+
+        assertNotNull(met);
+        if (ref.getMimeType() != null) {
+            assertNotNull("the mime type was dropped", met.getMetadata("MimeType"));
+        }
+    }
 }
