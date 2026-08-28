@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mergeTypeCatalog } from './catalogPages.js'
+import { loadTypePages, mergeTypeCatalog, typeHasMore } from './catalogPages.js'
 
 test('page 1 replaces, later pages append without dupes', () => {
   const first = mergeTypeCatalog(null, {
@@ -31,4 +31,78 @@ test('a different type starts a new list', () => {
     catalog: { type: { name: 'TsvSplit' }, page: 1, products: [{ id: 'y' }] }
   })
   assert.deepEqual(next.catalog.products.map((p) => p.id), ['y'])
+})
+
+test('typeHasMore is true when another page exists or the count is short', () => {
+  assert.equal(typeHasMore({ page: 1, totalPages: 3, numProducts: 46 }, 20), true)
+  assert.equal(typeHasMore({ page: 3, totalPages: 3, numProducts: 46 }, 45), true)
+  assert.equal(typeHasMore({ page: 3, totalPages: 3, numProducts: 46 }, 46), false)
+})
+
+test('a refresh rebuilds from page 1 so newly ingested products appear', async () => {
+  const pages = {
+    1: {
+      catalog: {
+        type: { name: 'TsvSplit' },
+        page: 1,
+        totalPages: 2,
+        numProducts: 3,
+        products: [{ id: 'a' }, { id: 'b' }]
+      }
+    },
+    2: {
+      catalog: {
+        type: { name: 'TsvSplit' },
+        page: 2,
+        totalPages: 2,
+        numProducts: 3,
+        products: [{ id: 'c' }]
+      }
+    }
+  }
+  const fetched = []
+  const previous = mergeTypeCatalog(null, pages[1])
+  const next = await loadTypePages({
+    name: 'TsvSplit',
+    previous,
+    through: 1,
+    refresh: true,
+    getPage: async (name, page) => {
+      fetched.push([name, page])
+      return pages[page]
+    }
+  })
+  assert.deepEqual(fetched, [['TsvSplit', 1], ['TsvSplit', 2]])
+  assert.deepEqual(next.catalog.products.map((p) => p.id), ['a', 'b', 'c'])
+  assert.equal(next.catalog.numProducts, 3)
+})
+
+test('without refresh, later pages append onto what is already shown', async () => {
+  const fetched = []
+  const previous = mergeTypeCatalog(null, {
+    catalog: {
+      type: { name: 'TsvSplit' },
+      page: 1,
+      totalPages: 2,
+      products: [{ id: 'a' }]
+    }
+  })
+  const next = await loadTypePages({
+    name: 'TsvSplit',
+    previous,
+    through: 2,
+    getPage: async (name, page) => {
+      fetched.push(page)
+      return {
+        catalog: {
+          type: { name: 'TsvSplit' },
+          page,
+          totalPages: 2,
+          products: [{ id: 'b' }]
+        }
+      }
+    }
+  })
+  assert.deepEqual(fetched, [2])
+  assert.deepEqual(next.catalog.products.map((p) => p.id), ['a', 'b'])
 })

@@ -51,3 +51,42 @@ export function mergeTypeCatalog(previous, incoming) {
     catalog: Object.assign({}, catalog, { products: products })
   }
 }
+
+export function typeHasMore(catalog, loadedCount) {
+  const page = Number(catalog && catalog.page) || 0
+  const totalPages = Number(catalog && catalog.totalPages) || 0
+  const numProducts = Number(catalog && catalog.numProducts) || 0
+  if (totalPages > 0 && page < totalPages) {
+    return true
+  }
+  return loadedCount < numProducts
+}
+
+/**
+ * Fill type-product pages. A refresh rebuilds from page 1 through the
+ * current total so a live ingest shows up without leaving the page.
+ */
+export async function loadTypePages(options) {
+  const name = options.name
+  const getPage = options.getPage
+  const refresh = Boolean(options.refresh)
+  const through = Number(options.through) || 1
+  let merged = refresh ? null : options.previous
+  if (typeName(merged) !== name) {
+    merged = null
+  }
+  let havePage = 0
+  if (merged && merged.catalog) {
+    havePage = Number(merged.catalog.page) || 0
+  }
+  const cap = refresh ? Number.POSITIVE_INFINITY : through
+  for (let p = havePage + 1; p <= cap; p++) {
+    const body = await getPage(name, p)
+    merged = mergeTypeCatalog(merged, body)
+    const total = Number(body && body.catalog && body.catalog.totalPages) || 1
+    if (p >= total) {
+      break
+    }
+  }
+  return merged
+}

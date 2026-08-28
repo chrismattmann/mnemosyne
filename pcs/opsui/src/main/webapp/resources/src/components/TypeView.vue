@@ -19,6 +19,7 @@
     <p><a href="#" @click.prevent="$emit('back')">← Catalog</a></p>
     <h2>{{ name }}</h2>
     <p class="muted">{{ description }} · {{ numProducts }} products</p>
+    <RefreshNote :refreshed-at="refreshedAt" :stale="stale"/>
     <p v-if="loading && !products.length" class="empty">Loading products…</p>
     <p v-else-if="!products.length" class="empty">No products of this type.</p>
     <table v-else>
@@ -54,27 +55,31 @@
 
 <script>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import RefreshNote from './RefreshNote.vue'
 import SortHead from './SortHead.vue'
+import { typeHasMore } from '../catalogPages.js'
 import { parseStamp, sortRows, toggleSort } from '../sort.js'
 
 export default {
   name: 'TypeView',
-  components: { SortHead },
+  components: { RefreshNote, SortHead },
   props: {
     payload: { type: Object, default: null },
-    loading: { type: Boolean, default: false }
+    loading: { type: Boolean, default: false },
+    refreshedAt: { type: Number, default: 0 },
+    stale: { type: Boolean, default: false }
   },
-  emits: ['more', 'open', 'back'],
+  emits: ['more', 'refresh', 'open', 'back'],
   setup(props, { emit }) {
     const catalog = computed(() => (props.payload && props.payload.catalog) || {})
     const type = computed(() => catalog.value.type || {})
     const page = computed(() => catalog.value.page || 1)
     const totalPages = computed(() => catalog.value.totalPages || 1)
-    const hasMore = computed(() => page.value < totalPages.value)
+    const products = computed(() => catalog.value.products || [])
+    const hasMore = computed(() => typeHasMore(catalog.value, products.value.length))
     const moreEl = ref(null)
     const sort = ref('')
     const dir = ref('asc')
-    const products = computed(() => catalog.value.products || [])
     const rows = computed(() => {
       if (!sort.value) {
         return products.value
@@ -96,7 +101,11 @@ export default {
       if (props.loading || !hasMore.value) {
         return
       }
-      emit('more', page.value + 1)
+      if (page.value < totalPages.value) {
+        emit('more', page.value + 1)
+        return
+      }
+      emit('refresh')
     }
 
     function attach() {
@@ -116,7 +125,7 @@ export default {
     }
 
     onMounted(attach)
-    watch([hasMore, moreEl], attach)
+    watch([hasMore, moreEl], attach, { flush: 'post' })
     onUnmounted(() => {
       if (observer) {
         observer.disconnect()

@@ -18,6 +18,7 @@
   <section>
     <h2>File catalog</h2>
     <p class="muted">Product types in File Manager.</p>
+    <RefreshNote :refreshed-at="refreshedAt" :stale="stale"/>
     <form class="query" @submit.prevent="submit">
       <input v-model="sql" type="text" spellcheck="false"
         :placeholder="exampleSql"/>
@@ -68,6 +69,7 @@
 
 <script>
 import { computed, ref } from 'vue'
+import RefreshNote from './RefreshNote.vue'
 import SortHead from './SortHead.vue'
 import { sortRows, toggleSort } from '../sort.js'
 import { EXAMPLE_CATALOG_SQL, QUERY_RESULT_CAP, catalogSqlError } from '../sqlQuery.js'
@@ -75,10 +77,12 @@ import { partitionTypes } from '../catalogGroups.js'
 
 export default {
   name: 'CatalogView',
-  components: { SortHead },
+  components: { RefreshNote, SortHead },
   props: {
     types: { type: Array, default: () => [] },
-    loading: { type: Boolean, default: false }
+    loading: { type: Boolean, default: false },
+    refreshedAt: { type: Number, default: 0 },
+    stale: { type: Boolean, default: false }
   },
   emits: ['open', 'query', 'find'],
   setup(props, { emit }) {
