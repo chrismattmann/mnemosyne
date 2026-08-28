@@ -20,7 +20,6 @@ package org.apache.oodt.cas.filemgr.structs;
 //OODT imports
 
 import org.apache.oodt.cas.metadata.util.PathUtils;
-import org.apache.tika.Tika;
 import org.apache.tika.config.TikaConfig;
 import org.apache.tika.mime.MimeType;
 import org.apache.tika.mime.MimeTypeException;
@@ -114,13 +113,34 @@ public class Reference implements Serializable {
         origReference = origRef;
         dataStoreReference = dataRef;
         fileSize = size;
-        // TODO: since no mimetype was specified, do the dirty work
-        // ourselves to determine the which MimeType class to associate
-        // with this reference.
+        // Resolved from the shared repository above, by name.
+        //
+        // This used to be mimeTypeRepository.forName(new Tika().detect(...)),
+        // constructing a Tika per reference. new Tika() builds the default
+        // configuration, which loads the whole parser set, and every
+        // ExternalParser in it checks whether its tool exists by running it.
+        // One property run logged 4,105 "ffmpeg -version" spawns and spent
+        // about seven minutes on them -- from a three-field value object
+        // whose signature promises no I/O at all. A hierarchical product with
+        // a thousand files paid that a thousand times on ingest, and in an
+        // environment where subprocess execution is restricted, constructing
+        // a value object stalled or threw.
+        //
+        // None of it bought anything: Tika.detect(String) is name-based
+        // detection, so the parser set was loaded and probed as a side effect
+        // of construction and never consulted. MimeTypes resolves a name
+        // without any of it.
+        //
+        // It also uses the configured repository now. Detection went through
+        // Tika's default configuration while the lookup went through
+        // mimeTypeRepository, so a custom mime-types.xml named by
+        // org.apache.oodt.cas.filemgr.mime.type.repository was bypassed for
+        // the detection half.
         try {
-            this.mimeType = mimeTypeRepository.forName(new Tika().detect(origRef));
-        } catch (MimeTypeException e) {
-            LOG.log(Level.SEVERE, e.getMessage());
+            this.mimeType = mimeTypeRepository.getMimeType(origRef);
+        } catch (Exception e) {
+            LOG.log(Level.WARNING, "Unable to determine a mime type for ["
+                    + origRef + "]: " + e.getMessage());
         }
 
     }

@@ -42,6 +42,9 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.List;
 import java.util.Vector;
 import java.util.concurrent.ConcurrentHashMap;
@@ -70,6 +73,21 @@ import java.util.logging.Logger;
  * README.
  */
 public class LuceneCatalog implements Catalog {
+
+    /**
+     * The field names this catalog writes for its own bookkeeping.
+     *
+     * They are storage detail rather than product metadata, so they are kept
+     * out of the Metadata handed back to callers; see toCompleteProduct.
+     */
+    private static final Set<String> RESERVED_FIELD_NAMES =
+        Collections.unmodifiableSet(new HashSet<String>(Arrays.asList(
+            "product_id", "product_name", "product_structure",
+            "product_transfer_status", "product_type_desc", "product_type_id",
+            "product_type_name", "product_type_repoPath",
+            "product_type_versioner", "reference_orig",
+            "reference_data_store", "reference_fileSize",
+            "reference_mimeType", "myfield")));
 
     /* our log stream */
     @Deprecated
@@ -1240,10 +1258,27 @@ public class LuceneCatalog implements Catalog {
 	                                + e.getMessage());
 	            }
             } else {
-            	// add all metadata elements found in document
+            	// add all metadata elements found in document, except the
+            	// catalog's own. Those are storage detail rather than product
+            	// metadata, and copying them out here was what made a lenient
+            	// catalog unmodifiable: modifyProduct hands this Metadata
+            	// straight back to toDoc, which writes a SortedDocValuesField
+            	// for every key it is given, while the documents already in
+            	// the index carry those same names without doc values. Lucene
+            	// rejects the inconsistency -- "cannot change field
+            	// reference_data_store from doc values type=NONE to
+            	// inconsistent doc values type=SORTED" -- so the second
+            	// product ingested failed and every one after it.
+            	//
+            	// setProductTransferStatus calls modifyProduct on every
+            	// server-side ingest, so a deployment with
+            	// lucene.lenientFields=true ingested exactly one product and
+            	// then failed on all the rest, with an error naming a Lucene
+            	// internal and nothing about the configuration behind it.
             	List<IndexableField> fields = doc.getFields();
                 for(IndexableField field: fields){
-                    if (!names.contains(field.name())) {
+                    if (!RESERVED_FIELD_NAMES.contains(field.name())
+                            && !names.contains(field.name())) {
                         names.add(field.name());
                     }
                 }
