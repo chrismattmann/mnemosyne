@@ -176,13 +176,25 @@ public class AvroRpcBatchMgrProxy extends Thread implements Runnable {
      * #192, three times over in one class. They are closed in a finally now.
      */
     private void connect() throws IOException {
-        this.client = new NettyTransceiver(
+        Transceiver opened = new NettyTransceiver(
                 new InetSocketAddress(remoteHost.getIpAddr().getHost(), remoteHost.getIpAddr().getPort()),
                 CHANNEL_FACTORY);
-        // Bounded, because a batch stub that stops responding mid-job used
-        // to hold this thread for the life of the process.
-        this.proxy = RequestTimeout.bound(AvroIntrBatchmgr.class,
-                SpecificRequestor.getClient(AvroIntrBatchmgr.class, client));
+        try {
+            // Bounded, because a batch stub that stops responding mid-job
+            // used to hold this thread for the life of the process.
+            this.proxy = RequestTimeout.bound(AvroIntrBatchmgr.class,
+                    SpecificRequestor.getClient(AvroIntrBatchmgr.class, opened));
+            this.client = opened;
+        } catch (RuntimeException e) {
+            // The socket is open by now; the callers' finally only runs once
+            // connect has returned, so it would be orphaned otherwise.
+            try {
+                AvroTransceivers.closeSharing(opened);
+            } catch (IOException ignore) {
+                // already failing
+            }
+            throw e;
+        }
     }
 
     /** Releases the transport, leaving the shared Netty threads running. */

@@ -801,8 +801,16 @@ public class AvroFileManagerClient implements FileManagerClient {
     private static SharedConnection newConnection(URL url) throws IOException {
         InetSocketAddress inetSocketAddress = new InetSocketAddress(url.getHost(), url.getPort());
         Transceiver transceiver = new NettyTransceiver(inetSocketAddress, CHANNEL_FACTORY, 40000L);
-        AvroFileManager clientProxy = (AvroFileManager) SpecificRequestor.getClient(
-            AvroFileManager.class, transceiver);
+        AvroFileManager clientProxy;
+        try {
+            clientProxy = (AvroFileManager) SpecificRequestor.getClient(
+                AvroFileManager.class, transceiver);
+        } catch (RuntimeException e) {
+            // The transceiver is connected by the time getClient runs, so
+            // letting this out would orphan a socket per failure.
+            AvroTransceivers.closeSharing(transceiver);
+            throw e;
+        }
         // 40000L above is the *connect* timeout and the only bound Avro
         // offers. Past the handshake a request that never gets a response
         // parked the caller in CallFuture.get() with no deadline and no
