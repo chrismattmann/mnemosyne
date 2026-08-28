@@ -16,7 +16,7 @@
 -->
 <template>
   <section>
-    <p><a href="#" @click.prevent="$emit('back')">← Workflows</a></p>
+    <p><a href="#" @click.prevent="$emit('back')">← {{ backLabel }}</a></p>
     <h2>{{ task.name || 'Task' }}</h2>
     <p v-if="loading && !task.id" class="empty">Loading task…</p>
     <article v-else class="card">
@@ -81,6 +81,7 @@ export default {
   name: 'TaskView',
   props: {
     payload: { type: Object, default: null },
+    backLabel: { type: String, default: 'Workflows' },
     loading: { type: Boolean, default: false }
   },
   emits: ['back', 'open-condition'],

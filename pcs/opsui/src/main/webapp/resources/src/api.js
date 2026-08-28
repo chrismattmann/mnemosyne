@@ -63,10 +63,13 @@ export function getPedigree(filename) {
   return fetch(`${services()}/pedigree/report/${encodeURIComponent(filename)}`).then(readJson)
 }
 
-export function getInstances(status, page) {
+export function getInstances(status, page, workflow) {
   const params = new URLSearchParams()
   params.set('status', status || 'ALL')
   params.set('page', String(page || 1))
+  if (workflow) {
+    params.set('workflow', workflow)
+  }
   return fetch(`${services()}/workflow/instances?${params}`).then(readJson)
 }
 

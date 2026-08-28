@@ -16,7 +16,7 @@
 -->
 <template>
   <section>
-    <p><a href="#" @click.prevent="$emit('back')">← Workflows</a></p>
+    <p><a href="#" @click.prevent="$emit('back')">← {{ backLabel }}</a></p>
     <h2>{{ condition.name || 'Condition' }}</h2>
     <p v-if="loading && !condition.name" class="empty">Loading condition…</p>
     <article v-else class="card">
@@ -37,6 +37,7 @@ export default {
   name: 'ConditionView',
   props: {
     payload: { type: Object, default: null },
+    backLabel: { type: String, default: 'Workflows' },
     loading: { type: Boolean, default: false }
   },
   emits: ['back'],

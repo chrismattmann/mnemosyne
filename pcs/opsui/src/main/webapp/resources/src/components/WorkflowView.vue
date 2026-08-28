@@ -50,6 +50,50 @@
         </tbody>
       </table>
     </article>
+
+    <article class="card">
+      <h3>Recent instances</h3>
+      <p v-if="loading && !instances.length" class="empty">Loading instances…</p>
+      <p v-else-if="!instances.length" class="empty">No runs of this workflow yet.</p>
+      <table v-else>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Status</th>
+            <th>Product</th>
+            <th>Task</th>
+            <th>Started</th>
+            <th>Ended</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="inst in instances" :key="inst.id">
+            <td class="mono">
+              <a v-if="inst.id" href="#" @click.prevent="$emit('open-instance', inst.id)">{{ inst.id }}</a>
+              <span v-else>—</span>
+            </td>
+            <td>
+              <span class="pill" :class="pillClass(inst.status)">{{ inst.status || '—' }}</span>
+            </td>
+            <td>
+              <a v-if="inst.productName" href="#" @click.prevent="$emit('open-product', inst.productName)">
+                {{ inst.productName }}
+              </a>
+              <span v-else>—</span>
+            </td>
+            <td>
+              <a v-if="inst.currentTaskId" href="#" @click.prevent="$emit('open-task', inst.currentTaskId)">
+                {{ inst.currentTaskName || inst.currentTaskId }}
+              </a>
+              <span v-else>—</span>
+            </td>
+            <td>{{ inst.startDateTime || '—' }}</td>
+            <td>{{ inst.endDateTime || '—' }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <p v-if="truncated" class="muted shown">Showing the {{ instances.length }} most recent runs.</p>
+    </article>
   </section>
 </template>
 
@@ -64,12 +108,28 @@ export default {
     payload: { type: Object, default: null },
     loading: { type: Boolean, default: false }
   },
-  emits: ['open-task', 'back'],
+  emits: ['open-task', 'open-instance', 'open-product', 'back'],
   setup(props) {
     const workflow = computed(() => (props.payload && props.payload.workflow) || {})
+    const page = computed(() => (props.payload && props.payload.page) || {})
     return {
       workflow,
-      tasks: computed(() => workflow.value.tasks || [])
+      tasks: computed(() => workflow.value.tasks || []),
+      instances: computed(() => page.value.instances || []),
+      truncated: computed(() => Boolean(page.value.truncated)),
+      pillClass(status) {
+        const value = String(status || '').toUpperCase()
+        if (value === 'FINISHED' || value === 'SUCCESS' || value === 'EXECUTIONCOMPLETE') {
+          return 'up'
+        }
+        if (value === 'FAILURE' || value === 'RESULTSFAILURE' || value === 'STOPPED') {
+          return 'down'
+        }
+        if (value === 'PGE EXEC' || value === 'EXECUTING' || value === 'CRAWLING') {
+          return 'warn'
+        }
+        return 'neutral'
+      }
     }
   }
 }
@@ -87,5 +147,10 @@ h2 {
 .mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.8rem;
+}
+
+.shown {
+  margin-top: 0.6rem;
+  font-size: 0.85rem;
 }
 </style>
