@@ -59,8 +59,20 @@ public class FILOPrioritySorter implements PrioritySorter {
        */
       @Override
       public int compare(WorkflowProcessor o1, WorkflowProcessor o2) {
-        return o1.getWorkflowInstance().getStartDate()
-            .compareTo(o2.getWorkflowInstance().getStartDate());
+        // o2 before o1: descending by start date, so the most recently
+        // created instance is scheduled first. This compared ascending --
+        // oldest first, which is a FIFO ordering -- so the class named for
+        // first-in-last-out, and documented as "the first ones to get
+        // processed are the most recently created instances", did the exact
+        // opposite of both. A PrioritySorter is a deployment's scheduling
+        // policy, chosen deliberately in configuration; someone selecting
+        // this one wants recent work not to starve behind a backlog, and got
+        // the reverse with no symptom beyond the scheduler feeling wrong.
+        //
+        // The sibling sorters behave as documented, so this was a lone slip
+        // rather than a shared convention.
+        return o2.getWorkflowInstance().getStartDate()
+            .compareTo(o1.getWorkflowInstance().getStartDate());
       }
 
     });

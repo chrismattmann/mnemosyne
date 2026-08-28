@@ -68,7 +68,15 @@ final class ChunkedProductInputStream extends InputStream {
 		if (eof) {
 		  return -1;                               // No more blocks?  Signal EOF.
 		}
-		return block[blockIndex++];					       // Yield next byte (promoted) from block.
+		// Masked to 0..255. InputStream.read() is specified to return a value
+		// in that range and to reserve -1 for end of stream; a byte[] element
+		// sign-extends when widened, so a stored 0xFF came back as -1 and the
+		// canonical read loop -- while ((b = in.read()) != -1) -- stopped
+		// there and reported success. Every binary product was silently
+		// truncated at its first 0xFF, which for most formats is within the
+		// first few dozen bytes, with no error anywhere. The comment said
+		// "(promoted)", so widening was known about; sign extension was not.
+		return block[blockIndex++] & 0xFF;			       // Yield next byte from block.
 	}
 
 	/**
@@ -113,14 +121,28 @@ final class ChunkedProductInputStream extends InputStream {
 	private void fetchBlock() throws IOException {
 		if (block == null || blockIndex == block.length) {
 		  try {               // No block, or current block exhausted?
-			if (productIndex == size) {                       // No more blocks left to get?
+			// >=, not ==. A retriever returning a chunk longer than asked
+			// for, or a declared size smaller than the data, steps
+			// productIndex past size, and an exact test is then never true
+			// again: the stream calls retrieveChunk forever, allocating a
+			// fresh byte[] each time round.
+			if (productIndex >= size) {                       // No more blocks left to get?
 			  block = null;                           // Drop current block
 			  eof = true;                           // Signal EOF
 			} else {                               // Otherwise there are more blocks
 			  int x = (int) Math.min(BLOCK_SIZE, size - productIndex);  // Can only fetch so much
 			  block = retriever.retrieveChunk(id, productIndex, x);  // Get x's worth of data
-			  blockIndex = 0;                           // Start at block's beginning
-			  productIndex += block.length;                   // Advance product index by block size
+			  // A retriever answering with nothing used to leave an empty
+			  // block in place for read() to index into, giving
+			  // ArrayIndexOutOfBoundsException; and since productIndex would
+			  // not advance, the loop above could not make progress either.
+			  if (block == null || block.length == 0) {
+				block = null;
+				eof = true;
+			  } else {
+				blockIndex = 0;                           // Start at block's beginning
+				productIndex += block.length;                   // Advance product index by block size
+			  }
 			}
 		  } catch (ProductException ex) {
 			throw new IOException(ex.getMessage());
