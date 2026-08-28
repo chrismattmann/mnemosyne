@@ -86,6 +86,22 @@ public class FileManagerUtils implements PCSConfigMetadata, Serializable, AutoCl
     this.fmgrClient = client;
   }
 
+  /**
+   * Wraps a client that was built elsewhere, keeping the URL it was built
+   * for.
+   *
+   * The single-argument form above leaves fmUrl null, so anything that later
+   * asks getFmUrl() -- reconnecting, for one -- gets nothing back. Use this
+   * when the caller has a client and knows where it points.
+   *
+   * @param fileMgrUrl where the client is connected
+   * @param client     the client to wrap
+   */
+  public FileManagerUtils(URL fileMgrUrl, FileManagerClient client) {
+    this.fmgrClient = client;
+    this.fmUrl = fileMgrUrl;
+  }
+
   public List safeGetTopNProducts(int n) {
     if (!isConnected())
       return Collections.EMPTY_LIST;

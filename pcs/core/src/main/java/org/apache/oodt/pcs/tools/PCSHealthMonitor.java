@@ -27,6 +27,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.Iterator;
+import java.net.URL;
 import java.util.List;
 import java.util.Vector;
 import java.util.concurrent.ExecutorService;
@@ -59,6 +60,7 @@ import org.apache.oodt.pcs.health.PCSDaemonStatus;
 import org.apache.oodt.pcs.health.PCSHealthMonitorMetKeys;
 import org.apache.oodt.pcs.health.PCSHealthMonitorReport;
 import org.apache.oodt.pcs.health.WorkflowStatesFile;
+import org.apache.oodt.cas.filemgr.util.RpcCommunicationFactory;
 import org.apache.oodt.pcs.util.FileManagerUtils;
 import org.apache.oodt.pcs.util.ResourceManagerUtils;
 import org.apache.oodt.pcs.util.WorkflowManagerUtils;
@@ -754,8 +756,20 @@ public final class PCSHealthMonitor implements CoreMetKeys,
     // Manager was down at first check, or an Avro call left that socket
     // wedged, isAlive stays false even after the daemon is back. Try a
     // fresh client before declaring it down.
+    //
+    // Dedicated, not the ordinary client. RpcCommunicationFactory.createClient
+    // leaves shareConnection at the factory default of true, so it hands back
+    // the cached per-URL transceiver -- the very socket that is wedged. A
+    // retry built that way is the same connection under a new object, and
+    // fixes only the other case, where the first check happened while File
+    // Manager was down and left fmgrClient null for good.
     try {
-      FileManagerUtils retry = new FileManagerUtils(fm.getFmUrl());
+      URL fmUrl = fm.getFmUrl();
+      if (fmUrl == null) {
+        return false;
+      }
+      FileManagerUtils retry = new FileManagerUtils(fmUrl,
+          RpcCommunicationFactory.createDedicatedClient(fmUrl));
       boolean up = retry.getFmgrClient() != null && retry.getFmgrClient().isAlive();
       if (up) {
         try {
