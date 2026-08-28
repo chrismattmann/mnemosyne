@@ -18,13 +18,10 @@ package org.apache.oodt.pcs.services;
 
 import java.io.IOException;
 import java.net.MalformedURLException;
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
-import java.util.function.Supplier;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
@@ -38,7 +35,6 @@ import javax.ws.rs.QueryParam;
 
 import net.sf.json.JSONObject;
 
-import org.apache.oodt.cas.filemgr.structs.Element;
 import org.apache.oodt.cas.filemgr.structs.Product;
 import org.apache.oodt.cas.filemgr.structs.ProductPage;
 import org.apache.oodt.cas.filemgr.structs.ProductType;
@@ -46,6 +42,7 @@ import org.apache.oodt.cas.filemgr.structs.Reference;
 import org.apache.oodt.cas.filemgr.structs.exceptions.QueryFormulationException;
 import org.apache.oodt.cas.filemgr.structs.query.ComplexQuery;
 import org.apache.oodt.cas.filemgr.structs.query.QueryResult;
+import org.apache.oodt.cas.filemgr.util.CatalogNames;
 import org.apache.oodt.cas.filemgr.util.SqlParser;
 import org.apache.oodt.cas.metadata.Metadata;
 import org.apache.oodt.pcs.util.FileManagerUtils;
@@ -187,20 +184,10 @@ public class CatalogResource extends PCSService {
         return queryJson(body);
       }
       ComplexQuery cq = SqlParser.parseSqlQuery(trimmed);
-      // The product types are fetched once and shared: catalogTypeNames needs
-      // them, and so does the element lookup, which used to ask for them a
-      // second time. The elements themselves cost a call per product type, so
-      // they sit behind a supplier and are fetched only for a field name that
-      // does not resolve against the core keys below -- which, for a query
-      // spelled the way the catalog spells it, is never.
-      final List productTypes = fm.safeGetProductTypes();
-      SqlParser.resolveIdentifiers(cq, catalogTypeNames(productTypes),
-          CORE_ELEMENT_NAMES, new Supplier<Collection<String>>() {
-            @Override
-            public Collection<String> get() {
-              return catalogElementNames(fm, productTypes);
-            }
-          });
+      // Shared with the CLI and QueryTool, which parse the same SQL and need
+      // the same mapping; CatalogNames is the one place that knows how a
+      // catalog spells its own names.
+      CatalogNames.resolve(cq, fm.getFmgrClient());
       List<QueryResult> found = fm.getFmgrClient().complexQuery(cq);
       List<Map<String, Object>> results = new ArrayList<Map<String, Object>>();
       int limit = found == null ? 0 : Math.min(found.size(), MAX_QUERY_RESULTS);
@@ -230,64 +217,6 @@ public class CatalogResource extends PCSService {
     } finally {
       fm.close();
     }
-  }
-
-  private static List<String> catalogTypeNames(List types) {
-    List<String> names = new ArrayList<String>();
-    if (types == null) {
-      return names;
-    }
-    for (Object item : types) {
-      if (item instanceof ProductType && ((ProductType) item).getName() != null) {
-        names.add(((ProductType) item).getName());
-      }
-    }
-    return names;
-  }
-
-  /**
-   * The field names every catalog has, available without a round trip.
-   *
-   * A query naming one of these -- in any casing -- is resolved without
-   * asking the File Manager for anything.
-   */
-  private static final List<String> CORE_ELEMENT_NAMES =
-      Collections.unmodifiableList(Arrays.asList(
-          "Filename", "FileLocation", "FileSize", "ProductType", "ProductName",
-          "InputFiles", "MimeType", "CAS.ProductName", "CAS.ProductId",
-          "CAS.ProductReceivedTime"));
-
-  /**
-   * Every element name the catalog declares, at one call per product type.
-   *
-   * Reached only through the supplier in query(), for a field name that did
-   * not resolve against CORE_ELEMENT_NAMES.
-   */
-  private static List<String> catalogElementNames(FileManagerUtils fm, List types) {
-    List<String> names = new ArrayList<String>(CORE_ELEMENT_NAMES);
-    if (types == null || fm.getFmgrClient() == null) {
-      return names;
-    }
-    for (Object item : types) {
-      if (!(item instanceof ProductType)) {
-        continue;
-      }
-      try {
-        List elements = fm.getFmgrClient().getElementsByProductType((ProductType) item);
-        if (elements == null) {
-          continue;
-        }
-        for (Object element : elements) {
-          if (element instanceof Element && ((Element) element).getElementName() != null
-              && !names.contains(((Element) element).getElementName())) {
-            names.add(((Element) element).getElementName());
-          }
-        }
-      } catch (Exception ignored) {
-        // keep the core keys; a missing validation layer should not fail the query
-      }
-    }
-    return names;
   }
 
   private static String queryJson(Map<String, Object> body) {
