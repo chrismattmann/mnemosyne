@@ -58,7 +58,11 @@ public class ZNodePaths {
      * @param componentName Name of the OODT component
      */
     public ZNodePaths(String project, String componentName) {
-        if (project == null) {
+        // Blank as well as null. An empty name builds /projects//components/x,
+        // which Zookeeper rejects far from here with "empty node name
+        // specified @10"; ConfigUtils.getOODTProjectName guards its own
+        // lookup, but this constructor is public and takes the name directly.
+        if (project == null || project.trim().isEmpty()) {
             project = DEFAULT_PROJECT;
         }
 

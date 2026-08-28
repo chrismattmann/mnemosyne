@@ -101,7 +101,10 @@ public class DateUtils {
     public static int getLeapSecsForDate(Calendar utcCal) throws CommonsException {
         long timeInMillis = utcCal.getTimeInMillis();
         for (int i = dateAndLeapSecs.length - 1; i >= 0; i--) {
-            if (dateAndLeapSecs[i][IndexType.DATE.index] < timeInMillis) {
+            // The first row is keyed at exactly 0, the Unix epoch, so a
+            // strict comparison matched no row for millis == 0 and the scan
+            // fell through to the throw below.
+            if (dateAndLeapSecs[i][IndexType.DATE.index] <= timeInMillis) {
                 return (int) dateAndLeapSecs[i][IndexType.LEAP_SECS.index];
             }
         }
