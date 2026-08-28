@@ -19,6 +19,7 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.TimeZone;
+import java.util.Locale;
 
 /**
 	The <code>DateConvert</code> class is intended to provide date/time
@@ -49,6 +50,16 @@ public class DateConvert {
 		The format string representing the ISO 8601 format. The format
 		is close to CCSDS ASCII Time Code A. 
 	*/
+	// Every formatter below is built with Locale.ROOT. They were built with
+	// none, so each depended on whichever locale the JVM started in -- and two
+	// of them broke across hosts. "yyyy-MM-dd" looks locale-proof because it
+	// is all digits, but yyyy is a year in whatever calendar the locale
+	// nominates: written under en-US and read under th-TH, the same string is
+	// an instant 543 years away, with no exception thrown. "dd-MMM-yyyy" is
+	// louder -- it writes the month abbreviation in the writer's language, so
+	// a value written on an English host cannot be parsed on a German one at
+	// all, and that one is a database column format, where the two ends are
+	// routinely different processes.
 	private final static String ISO_FORMAT = "yyyy-MM-dd'T'HH:mm:ss.SSS";
 
 	/**
@@ -97,53 +108,56 @@ public class DateConvert {
 		@param inputDate The date to be converted into string format.
 		@return The formatted date/time string.
 	*/
+	/** Zero-padded to the two digits an ISO 8601 offset field carries. */
+	private static String twoDigits(long value) {
+		return value < 10 ? "0" + value : String.valueOf(value);
+	}
+
 	public static String isoFormat(Date inputDate) {
 
 		// Setup the date format and convert the given date.
-		SimpleDateFormat dateFormat = new SimpleDateFormat(ISO_FORMAT);
+		SimpleDateFormat dateFormat = new SimpleDateFormat(ISO_FORMAT, Locale.ROOT);
 		String dateString = dateFormat.format(inputDate);
 
 		// Determine the time zone and concatenate the time zone designator
 		// onto the formatted date/time string.
+		// The offset is asked for rather than reconstructed. What was here
+		// before got three things wrong at once, all of them following from
+		// building the designator by hand out of getRawOffset():
+		//
+		//   - getRawOffset() is the zone's standard offset *today*, not the
+		//     offset in effect at the instant being formatted, so every
+		//     historical timestamp was labelled with a modern offset. At
+		//     millis 0 in Europe/London -- on British Standard Time, UTC+1
+		//     year round from 1968 to 1971 -- the local time was rendered
+		//     correctly as 01:00 and then labelled Z, so reading it back
+		//     gave an instant an hour later than the one written;
+		//   - the daylight correction added a whole hour, which is wrong for
+		//     Australia/Lord_Howe's thirty-minute DST;
+		//   - the minute field kept the sign of a negative offset and was
+		//     never zero-padded, so America/St_Johns formatted as
+		//     "-02:-30" -- a string isoParse itself rejects.
+		//
+		// getOffset(long) answers all three: it is the offset at that
+		// instant, DST included, at whatever granularity the zone uses.
+		//
+		// The Z branch used to test tz.getDisplayName().equals("Greenwich
+		// Mean Time"), a localised display string that never matched under a
+		// non-English default locale. Zero is zero in every language.
 		TimeZone tz = dateFormat.getTimeZone();
-		String tzName = tz.getDisplayName();
-		if (tzName.equals("Greenwich Mean Time") && !TimeZone.getDefault().inDaylightTime( inputDate )) {
-			dateString = dateString.concat("Z");
-		}
-		else {
-			// Determine the hour offset. Add an hour if daylight savings
-			// is in effect.
-			long tzOffsetMS = tz.getRawOffset();
-			long tzOffsetHH = tzOffsetMS / MS_IN_HOUR;
-			if (tz.inDaylightTime(inputDate)) {
-				tzOffsetHH = tzOffsetHH + 1;
-			}
-			String hourString = String.valueOf(Math.abs(tzOffsetHH));
-			if (hourString.length() == 1) {
-				hourString = "0" + hourString;
-			}
+		int tzOffsetMS = tz.getOffset(inputDate.getTime());
 
-			// Determine the minute offset.
-			long tzOffsetMMMS = tzOffsetMS % MS_IN_HOUR;
-			long tzOffsetMM = 0;
-			if (tzOffsetMMMS != 0) {
-				tzOffsetMM = tzOffsetMMMS / MS_IN_MINUTE;
-			}
-			String minuteString = String.valueOf(tzOffsetMM);
-			if (minuteString.length() == 1) {
-				minuteString = "0" + minuteString;
-			}
-
-			// Determine the sign of the offset.
-			String sign = "+";
-			if (String.valueOf(tzOffsetMS).contains("-")) {
-				sign = "-";
-			}
-
-			dateString = dateString.concat(sign + hourString + ":" + minuteString);
+		if (tzOffsetMS == 0) {
+			return dateString.concat("Z");
 		}
 
-		return(dateString);
+		String sign = tzOffsetMS < 0 ? "-" : "+";
+		int absOffsetMS = Math.abs(tzOffsetMS);
+		long tzOffsetHH = absOffsetMS / MS_IN_HOUR;
+		long tzOffsetMM = (absOffsetMS % MS_IN_HOUR) / MS_IN_MINUTE;
+
+		return dateString.concat(sign + twoDigits(tzOffsetHH) + ":"
+				+ twoDigits(tzOffsetMM));
 	}
 
 
@@ -161,7 +175,7 @@ public class DateConvert {
 	public static Date isoParse(String inputString) throws ParseException {
 
 		// Setup the date format.
-		SimpleDateFormat dateFormat = new SimpleDateFormat(ISO_FORMAT);
+		SimpleDateFormat dateFormat = new SimpleDateFormat(ISO_FORMAT, Locale.ROOT);
 		dateFormat.setLenient(false);
 
 		// The length of the input string should be at least 24 characters.
@@ -180,7 +194,7 @@ public class DateConvert {
 			dateFormat.setTimeZone(TimeZone.getTimeZone("Greenwich Mean Time"));
 		}
 		else if (offsetString.startsWith("-") || offsetString.startsWith("+")) {
-			SimpleDateFormat offsetFormat = new SimpleDateFormat();
+			SimpleDateFormat offsetFormat = new SimpleDateFormat("", Locale.ROOT);
 			if (offsetString.length() == 3) {
 				offsetFormat.applyPattern("HH");
 			}
@@ -221,7 +235,7 @@ public class DateConvert {
 	public static String doyFormat(Date inputDate) {
 
 		// Setup the date format and convert the given date.
-		SimpleDateFormat dateFormat = new SimpleDateFormat(DOY_FORMAT);
+		SimpleDateFormat dateFormat = new SimpleDateFormat(DOY_FORMAT, Locale.ROOT);
 
 	  return(dateFormat.format(inputDate));
 	}
@@ -241,7 +255,7 @@ public class DateConvert {
 	public static Date doyParse(String inputString) throws ParseException {
 
 		// Setup the date format and parse the given string.
-		SimpleDateFormat dateFormat = new SimpleDateFormat(DOY_FORMAT);
+		SimpleDateFormat dateFormat = new SimpleDateFormat(DOY_FORMAT, Locale.ROOT);
 		dateFormat.setLenient(false);
 
 	  return(dateFormat.parse(inputString));
@@ -260,7 +274,7 @@ public class DateConvert {
 	public static String tsFormat(Date inputDate) {
 
 		// Setup the date format and convert the given date.
-		SimpleDateFormat dateFormat = new SimpleDateFormat(TS_FORMAT);
+		SimpleDateFormat dateFormat = new SimpleDateFormat(TS_FORMAT, Locale.ROOT);
 
 	  return(dateFormat.format(inputDate));
 	}
@@ -280,7 +294,7 @@ public class DateConvert {
 	public static Date tsParse(String inputString) throws ParseException {
 
 		// Setup the date format and parse the given string.
-		SimpleDateFormat dateFormat = new SimpleDateFormat(TS_FORMAT);
+		SimpleDateFormat dateFormat = new SimpleDateFormat(TS_FORMAT, Locale.ROOT);
 		dateFormat.setLenient(false);
 
 	  return(dateFormat.parse(inputString));
@@ -299,7 +313,7 @@ public class DateConvert {
 	public static String dbmsFormat(Date inputDate) {
 
 		// Setup the date format and convert the given date.
-		SimpleDateFormat dateFormat = new SimpleDateFormat(DBMS_FORMAT);
+		SimpleDateFormat dateFormat = new SimpleDateFormat(DBMS_FORMAT, Locale.ROOT);
 
 	  return(dateFormat.format(inputDate));
 	}
@@ -319,7 +333,7 @@ public class DateConvert {
 	public static Date dbmsParse(String inputString) throws ParseException {
 
 		// Setup the date format and parse the given string.
-		SimpleDateFormat dateFormat = new SimpleDateFormat(DBMS_FORMAT);
+		SimpleDateFormat dateFormat = new SimpleDateFormat(DBMS_FORMAT, Locale.ROOT);
 		dateFormat.setLenient(false);
 
 	  return(dateFormat.parse(inputString));
@@ -338,7 +352,7 @@ public class DateConvert {
 	public static String ymdFormat(Date inputDate) {
 
 		// Setup the date format and convert the given date.
-		SimpleDateFormat dateFormat = new SimpleDateFormat(YMD_FORMAT);
+		SimpleDateFormat dateFormat = new SimpleDateFormat(YMD_FORMAT, Locale.ROOT);
 
 	  return(dateFormat.format(inputDate));
 	}
@@ -358,7 +372,7 @@ public class DateConvert {
 	public static Date ymdParse(String inputString) throws ParseException {
 
 		// Setup the date format and parse the given string.
-		SimpleDateFormat dateFormat = new SimpleDateFormat(YMD_FORMAT);
+		SimpleDateFormat dateFormat = new SimpleDateFormat(YMD_FORMAT, Locale.ROOT);
 		dateFormat.setLenient(false);
 
 	  return(dateFormat.parse(inputString));
