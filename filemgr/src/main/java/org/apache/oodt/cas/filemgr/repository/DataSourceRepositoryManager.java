@@ -24,6 +24,7 @@ import org.apache.oodt.cas.filemgr.util.DbStructFactory;
 
 //JDK imports
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -76,6 +77,7 @@ public class DataSourceRepositoryManager implements RepositoryManager {
             throws RepositoryManagerException {
         Connection conn = null;
         Statement statement = null;
+        PreparedStatement insert = null;
         ResultSet rs = null;
 
         try {
@@ -150,6 +152,14 @@ public class DataSourceRepositoryManager implements RepositoryManager {
             if (statement != null) {
                 try {
                     statement.close();
+                } catch (SQLException ignore) {
+                }
+
+            }
+
+            if (insert != null) {
+                try {
+                    insert.close();
                 } catch (SQLException ignore) {
                 }
 

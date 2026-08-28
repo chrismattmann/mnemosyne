@@ -42,6 +42,7 @@ import org.springframework.util.StringUtils;
 
 //JDK imports
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -167,22 +168,28 @@ public class DataSourceCatalog implements Catalog {
         }
 
         for (String value : values) {
+          // Was caught, logged at WARNING and skipped, so a value that could
+          // not be stored left addProduct and addMetadata returning normally
+          // and the field missing from the archive record. For a system whose
+          // stated purpose is an unbroken provenance record, a write path
+          // that drops fields and reports success is the failure mode least
+          // likely to be noticed and most likely to be trusted. A value that
+          // cannot be stored fails the ingest.
           try {
             addMetadataValue(element, product, value);
           } catch (Exception e) {
-            LOG.log(Level.SEVERE, e.getMessage());
-            LOG
-                .log(
-                    Level.WARNING,
-                    "Exception ingesting metadata. Error inserting field: ["
-                    + element.getElementId()
-                    + "=>"
-                    + value
-                    + "]: for product: ["
-                    + product.getProductName()
-                    + "]: Message: "
-                    + e.getMessage()
-                    + ": Attempting to continue processing metadata");
+            LOG.log(Level.SEVERE,
+                "Exception ingesting metadata. Error inserting field: ["
+                + element.getElementId()
+                + "=>"
+                + value
+                + "]: for product: ["
+                + product.getProductName()
+                + "]: Message: "
+                + e.getMessage(), e);
+            throw new CatalogException("Unable to store metadata field: ["
+                + element.getElementId() + "] for product: ["
+                + product.getProductName() + "]: Message: " + e.getMessage(), e);
           }
         }
       }
@@ -248,6 +255,7 @@ public class DataSourceCatalog implements Catalog {
             throws CatalogException {
         Connection conn = null;
         Statement statement = null;
+        PreparedStatement insert = null;
         ResultSet rs = null;
 
         try {
@@ -264,10 +272,12 @@ public class DataSourceCatalog implements Catalog {
 
 						if (!productIdString) {
 							
+	            // The product name is bound. It was concatenated in, so a
+	            // filename carrying an apostrophe -- O'Brien.txt is a legal
+	            // filename, and the caller has no escaping hook -- closed the
+	            // literal and the ingest failed outright.
 	            addProductSql = "INSERT INTO products (product_name, product_structure, product_transfer_status, product_type_id) "
-	                + "VALUES ('"
-	                + product.getProductName()
-	                + "', '"
+	                + "VALUES (?, '"
 	                + product.getProductStructure()
 	                + "', '"
 	                + product.getTransferStatus()
@@ -276,7 +286,9 @@ public class DataSourceCatalog implements Catalog {
 	                + ")";
 
 				        LOG.log(Level.FINE, "addProduct: Executing: " + addProductSql);
-				        statement.execute(addProductSql);
+				        insert = conn.prepareStatement(addProductSql);
+				        insert.setString(1, product.getProductName());
+				        insert.execute();
 				
 				        // read "product_id" value that was automatically assigned by the database
 				        String productId = "";
@@ -300,12 +312,11 @@ public class DataSourceCatalog implements Catalog {
                   productId = UUID.randomUUID().toString();
                 }
             	// insert product in database
+            	// Bound for the same reason as the branch above.
             	addProductSql = "INSERT INTO products (product_id, product_name, product_structure, product_transfer_status, product_type_id, product_datetime) "
                     + "VALUES ('"
                     + productId
-                    + "', '"
-                    + product.getProductName()
-                    + "', '"
+                    + "', ?, '"
                     + product.getProductStructure()
                     + "', '"
                     + product.getTransferStatus()
@@ -315,7 +326,9 @@ public class DataSourceCatalog implements Catalog {
                     + ")";                       
 
             	LOG.log(Level.FINE, "addProduct: Executing: " + addProductSql);
-            	statement.execute(addProductSql);
+            	insert = conn.prepareStatement(addProductSql);
+            	insert.setString(1, product.getProductName());
+            	insert.execute();
             	
               product.setProductId(productId);
               conn.commit();
@@ -350,6 +363,14 @@ public class DataSourceCatalog implements Catalog {
             if (statement != null) {
                 try {
                     statement.close();
+                } catch (SQLException ignore) {
+                }
+
+            }
+
+            if (insert != null) {
+                try {
+                    insert.close();
                 } catch (SQLException ignore) {
                 }
 
@@ -1348,6 +1369,7 @@ public class DataSourceCatalog implements Catalog {
 
         Connection conn = null;
         Statement statement = null;
+        PreparedStatement insert = null;
 
         String metadataTable = product.getProductType().getName() + "_metadata";
 
@@ -1361,13 +1383,22 @@ public class DataSourceCatalog implements Catalog {
 
           valueClauseSql.append("VALUES ");
 
-            // now do the value clause
+            // The value is bound; the ids are not, because they come from the
+            // system rather than from a caller's text. The value used to be
+            // concatenated in with no escaping, so a metadata value
+            // containing an apostrophe broke the statement -- and, because
+            // addMetadata catches per value and carries on, the value was
+            // silently discarded. The product was catalogued, the ingest
+            // reported successful, and the field was simply not in the
+            // archive record afterwards. An apostrophe is ordinary in the
+            // data this system catalogues: instrument names, place names,
+            // O'Brien, free-text descriptions.
             if (fieldIdStringFlag) {
                 valueClauseSql.append("(").append(product.getProductId()).append(", '").append(element.getElementId())
-                              .append("', '").append(value).append("')");
+                              .append("', ?)");
             } else {
                 valueClauseSql.append("(").append(product.getProductId()).append(", ").append(element.getElementId())
-                              .append(", '").append(value).append("')");
+                              .append(", ?)");
             }
 
             String metaIngestSql = ("INSERT INTO " + metadataTable
@@ -1376,7 +1407,9 @@ public class DataSourceCatalog implements Catalog {
             LOG
                     .log(Level.FINE, "addMetadataValue: Executing: "
                             + metaIngestSql);
-            statement.execute(metaIngestSql);
+            insert = conn.prepareStatement(metaIngestSql);
+            insert.setString(1, value);
+            insert.execute();
             conn.commit();
         } catch (Exception e) {
             LOG.log(Level.SEVERE, e.getMessage());
@@ -1396,6 +1429,14 @@ public class DataSourceCatalog implements Catalog {
             if (statement != null) {
                 try {
                     statement.close();
+                } catch (SQLException ignore) {
+                }
+
+            }
+
+            if (insert != null) {
+                try {
+                    insert.close();
                 } catch (SQLException ignore) {
                 }
 
@@ -1732,8 +1773,14 @@ public class DataSourceCatalog implements Catalog {
                 if (!gotFirstClause) {
                   clause.append("(p.element_id = ").append(elementIdStr).append(" AND ");
                   if (criteria instanceof TermQueryCriteria) {
-                    clause.append(" metadata_value LIKE '%").append(((TermQueryCriteria) criteria).getValue())
-                          .append("%') ");
+                    // = , not LIKE '%..%'. Counting matched on substring while
+                    // getSqlQuery selects on equality, so a term that is a
+                    // substring of another stored value was counted and not
+                    // returned: getResultListSize reported more results than
+                    // the query could produce, and paging offered pages it
+                    // could not fill.
+                    clause.append(" metadata_value = '").append(((TermQueryCriteria) criteria).getValue())
+                          .append("') ");
                   } else if (criteria instanceof RangeQueryCriteria) {
                     String startVal = ((RangeQueryCriteria) criteria)
                         .getStartValue();
@@ -1782,8 +1829,9 @@ public class DataSourceCatalog implements Catalog {
                                                                    + "WHERE (element_id = " + elementIdStr
                                                                    + " AND ");
                   if (criteria instanceof TermQueryCriteria) {
-                    subSelectQuery.append(" metadata_value LIKE '%")
-                                  .append(((TermQueryCriteria) criteria).getValue()).append("%')");
+                    // Same mismatch in the joined sub-select; see above.
+                    subSelectQuery.append(" metadata_value = '")
+                                  .append(((TermQueryCriteria) criteria).getValue()).append("')");
                   } else if (criteria instanceof RangeQueryCriteria) {
                     String startVal = ((RangeQueryCriteria) criteria)
                         .getStartValue();

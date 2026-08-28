@@ -33,6 +33,7 @@ import org.apache.oodt.cas.filemgr.validation.ValidationLayer;
 import org.apache.oodt.cas.metadata.Metadata;
 
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -109,22 +110,25 @@ public class LenientDataSourceCatalog extends DataSourceCatalog {
             }
 
           for (String value : values) {
+            // Was caught, logged at WARNING and skipped, exactly as in the
+            // superclass: a value that could not be stored left addMetadata
+            // returning normally with the field missing from the archive
+            // record. A value that cannot be stored fails the ingest.
             try {
               addMetadataValue(metadataId, product, value);
             } catch (Exception e) {
-              LOG.log(Level.SEVERE, e.getMessage());
-              LOG
-                  .log(
-                      Level.WARNING,
-                      "Exception ingesting metadata. Error inserting field: ["
-                      + metadataId
-                      + "=>"
-                      + value
-                      + "]: for product: ["
-                      + product.getProductName()
-                      + "]: Message: "
-                      + e.getMessage()
-                      + ": Attempting to continue processing metadata");
+              LOG.log(Level.SEVERE,
+                  "Exception ingesting metadata. Error inserting field: ["
+                  + metadataId
+                  + "=>"
+                  + value
+                  + "]: for product: ["
+                  + product.getProductName()
+                  + "]: Message: "
+                  + e.getMessage(), e);
+              throw new CatalogException("Unable to store metadata field: ["
+                  + metadataId + "] for product: ["
+                  + product.getProductName() + "]: Message: " + e.getMessage(), e);
             }
           }
         }
@@ -408,6 +412,7 @@ public class LenientDataSourceCatalog extends DataSourceCatalog {
 
         Connection conn = null;
         Statement statement = null;
+        PreparedStatement insert = null;
 
         String metadataTable = product.getProductType().getName() + "_metadata";
                 
@@ -433,13 +438,17 @@ public class LenientDataSourceCatalog extends DataSourceCatalog {
             // the row survived.
             String elementId = key.getKey();
 
-            // now do the value clause
+            // The value is bound, as in the superclass. This class has its
+            // own copy of addMetadataValue, and its own copy of the defect:
+            // a metadata value containing an apostrophe broke the statement,
+            // and addMetadata caught per value and carried on, so the field
+            // was silently missing from the archive record afterwards.
             if (fieldIdStringFlag) {
                 valueClauseSql.append("(").append(quoteIt(product.getProductId())).append(", '").append(elementId)
-                              .append("', '").append(value).append("')");
+                              .append("', ?)");
             } else {
-                valueClauseSql.append("(").append(product.getProductId()).append(", ").append(elementId).append(", '")
-                              .append(value).append("')");
+                valueClauseSql.append("(").append(product.getProductId()).append(", ").append(elementId)
+                              .append(", ?)");
             }
 
             String metaIngestSql = ("INSERT INTO " + metadataTable
@@ -448,7 +457,9 @@ public class LenientDataSourceCatalog extends DataSourceCatalog {
             LOG
                     .log(Level.FINE, "addMetadataValue: Executing: "
                             + metaIngestSql);
-            statement.execute(metaIngestSql);
+            insert = conn.prepareStatement(metaIngestSql);
+            insert.setString(1, value);
+            insert.execute();
             
             // synchronize CAS.ProductReceivedTime with products.product_datetime
             if (key.equals("CAS.ProductReceivedTime") && this.productIdString) {
@@ -478,6 +489,14 @@ public class LenientDataSourceCatalog extends DataSourceCatalog {
             if (statement != null) {
                 try {
                     statement.close();
+                } catch (SQLException ignore) {
+                }
+
+            }
+
+            if (insert != null) {
+                try {
+                    insert.close();
                 } catch (SQLException ignore) {
                 }
 
