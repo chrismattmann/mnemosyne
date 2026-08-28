@@ -344,12 +344,41 @@ public class FileManager {
 
     }
 
+    /**
+     * Reports a product the catalog does not hold.
+     *
+     * Declared as returning Product so the call site reads as a return, which
+     * keeps the throw out of the try block that would otherwise log it at
+     * SEVERE with a stack trace.
+     *
+     * @param by  what the lookup was keyed on, for the message
+     * @param key the value looked up
+     * @return never returns
+     * @throws CatalogException always
+     */
+    private static Product missing(String by, String key) throws CatalogException {
+        LOG.log(Level.FINE, "Product with " + by + ": [" + key
+                + "] not found in the catalog");
+        throw new CatalogException("Product with " + by + ": [" + key
+                + "] NOT found in the catalog!");
+    }
+
     public Product getProductById(String productId)
             throws CatalogException {
         Product product = null;
 
         try {
             product = catalog.getProductById(productId);
+            if (product == null) {
+                // Thrown after the try, not inside it. The catch below
+                // stack-traces and logs at SEVERE before rethrowing, and a
+                // product that is simply not in the catalog is an ordinary
+                // answer to an ordinary question -- OPSUI asks for Solr
+                // posting ids and old job ids on every poll. Reporting it
+                // through the same path as a catalog failure would trade the
+                // NullPointerException for a stack trace per poll.
+                return missing("id", productId);
+            }
             // it is possible here that the underlying catalog did not
             // set the ProductType
             // to obey the contract of the File Manager, we need to make
@@ -378,6 +407,10 @@ public class FileManager {
         Product product = null;
         try {
             product = catalog.getProductByName(productName);
+            if (product == null) {
+                // See getProductById: reported without a stack trace.
+                return missing("name", productName);
+            }
             // it is possible here that the underlying catalog did not
             // set the ProductType
             // to obey the contract of the File Manager, we need to make
