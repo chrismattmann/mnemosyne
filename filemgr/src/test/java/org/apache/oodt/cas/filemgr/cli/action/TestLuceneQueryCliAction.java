@@ -212,4 +212,85 @@ public class TestLuceneQueryCliAction extends TestCase {
          };
       }
    }
+
+   /**
+    * Lucene leaves the bound null for an open end, and LuceneQueryCliAction
+    * dereferenced both unconditionally, so every half-open range typed at
+    * the CLI threw NullPointerException before it reached the file manager.
+    * RangeQueryCriteria already models an open end as a null bound -- that
+    * is what DataSourceCatalog:2148 tests for -- so the open end travels as
+    * null.
+    */
+   public void testOpenLowerBound() throws CmdLineActionException {
+      ActionMessagePrinter printer = new ActionMessagePrinter();
+      MockLuceneQueryCliAction cliAction = new MockLuceneQueryCliAction();
+
+      cliAction.setQuery("NominalDate:[* TO 20030101]");
+      cliAction.execute(printer);
+
+      RangeQueryCriteria rqc = (RangeQueryCriteria) clientSetQuery
+            .getCriteria().get(0);
+      assertEquals("NominalDate", rqc.getElementName());
+      assertNull("an open lower bound did not travel as null", rqc.getStartValue());
+      assertEquals("20030101", rqc.getEndValue());
+   }
+
+   public void testOpenUpperBound() throws CmdLineActionException {
+      ActionMessagePrinter printer = new ActionMessagePrinter();
+      MockLuceneQueryCliAction cliAction = new MockLuceneQueryCliAction();
+
+      cliAction.setQuery("NominalDate:[20020101 TO *]");
+      cliAction.execute(printer);
+
+      RangeQueryCriteria rqc = (RangeQueryCriteria) clientSetQuery
+            .getCriteria().get(0);
+      assertEquals("NominalDate", rqc.getElementName());
+      assertEquals("20020101", rqc.getStartValue());
+      assertNull("an open upper bound did not travel as null", rqc.getEndValue());
+   }
+
+   public void testBothBoundsOpen() throws CmdLineActionException {
+      ActionMessagePrinter printer = new ActionMessagePrinter();
+      MockLuceneQueryCliAction cliAction = new MockLuceneQueryCliAction();
+
+      cliAction.setQuery("NominalDate:{* TO *}");
+      cliAction.execute(printer);
+
+      RangeQueryCriteria rqc = (RangeQueryCriteria) clientSetQuery
+            .getCriteria().get(0);
+      assertEquals("NominalDate", rqc.getElementName());
+      assertNull(rqc.getStartValue());
+      assertNull(rqc.getEndValue());
+   }
+
+   /** a half-open range inside a boolean query is the same path. */
+   public void testOpenBoundInsideABooleanQuery() throws CmdLineActionException {
+      ActionMessagePrinter printer = new ActionMessagePrinter();
+      MockLuceneQueryCliAction cliAction = new MockLuceneQueryCliAction();
+
+      cliAction.setQuery("ProductId:TestProductId NominalDate:[20020101 TO *]");
+      cliAction.execute(printer);
+
+      BooleanQueryCriteria bqc = (BooleanQueryCriteria) clientSetQuery
+            .getCriteria().get(0);
+      RangeQueryCriteria rqc = (RangeQueryCriteria) bqc.getTerms().get(1);
+      assertEquals("20020101", rqc.getStartValue());
+      assertNull(rqc.getEndValue());
+   }
+
+   /** and a closed range still carries both bounds. */
+   public void testClosedRangeIsUnaffected() throws CmdLineActionException {
+      ActionMessagePrinter printer = new ActionMessagePrinter();
+      MockLuceneQueryCliAction cliAction = new MockLuceneQueryCliAction();
+
+      cliAction.setQuery("NominalDate:[20020101 TO 20030101]");
+      cliAction.execute(printer);
+
+      RangeQueryCriteria rqc = (RangeQueryCriteria) clientSetQuery
+            .getCriteria().get(0);
+      assertEquals("20020101", rqc.getStartValue());
+      assertEquals("20030101", rqc.getEndValue());
+      assertTrue(rqc.getInclusive());
+   }
+
 }

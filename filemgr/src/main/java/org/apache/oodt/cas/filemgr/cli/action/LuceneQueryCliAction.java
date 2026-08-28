@@ -95,6 +95,11 @@ public class LuceneQueryCliAction extends AbstractQueryCliAction {
          }
       } else if (luceneQuery instanceof PhraseQuery) {
          Term[] t = ((PhraseQuery) luceneQuery).getTerms();
+         // A PhraseQuery can carry no terms at all, and t[0] indexed into it
+         // unconditionally.
+         if (t.length == 0) {
+            throw new CatalogException("Empty phrase query!");
+         }
          if (t[0].field().equals(FREE_TEXT_BLOCK)) {
             throw new CatalogException("Free text blocks not supported!");
          } else {
@@ -114,8 +119,15 @@ public class LuceneQueryCliAction extends AbstractQueryCliAction {
          if(((TermRangeQuery) luceneQuery).includesLower() && ((TermRangeQuery) luceneQuery).includesUpper()){
             inc = true;
          }
-         return new RangeQueryCriteria(((TermRangeQuery) luceneQuery).getField(), startT
-               .utf8ToString(), endT.utf8ToString(), inc);
+         // Lucene leaves the bound null for an open end, and both were
+         // dereferenced unconditionally: every half-open range typed at the
+         // CLI -- f:[* TO b], f:[a TO *], f:{* TO *} -- threw
+         // NullPointerException. RangeQueryCriteria already models an open
+         // end as a null bound, which is what DataSourceCatalog:2148 tests
+         // for, so the open end travels as null rather than as prose.
+         return new RangeQueryCriteria(((TermRangeQuery) luceneQuery).getField(),
+               startT != null ? startT.utf8ToString() : null,
+               endT != null ? endT.utf8ToString() : null, inc);
       } else if (luceneQuery instanceof BooleanQuery) {
          List<BooleanClause> clauses = ((BooleanQuery) luceneQuery).clauses();
          BooleanQueryCriteria bqc = new BooleanQueryCriteria();

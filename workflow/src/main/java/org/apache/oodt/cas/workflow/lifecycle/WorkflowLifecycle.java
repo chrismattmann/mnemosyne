@@ -124,9 +124,31 @@ public class WorkflowLifecycle {
    *          The {@link WorkflowStage} to add to this WorkflowLifecycle.
    */
   public void addStage(WorkflowLifecycleStage stage) {
-    if (!stages.contains(stage)) {
+    // stages is a TreeSet, so contains() answers by the comparator -- which
+    // keys on order first -- while WorkflowLifecycleStage.equals is name-only.
+    // A stage whose name was already present but whose order differed
+    // therefore compared as a different element and was admitted, which is
+    // exactly the case this guard exists to catch. getNumStages then counted
+    // both, and that count is the denominator of getPercentageComplete.
+    if (stage != null && findStageNamed(stage.getName()) == null) {
       stages.add(stage);
     }
+  }
+
+  /**
+   * The stage held under this name, or null. Looked up by name rather than
+   * through the set, whose ordering is (order, name) and so cannot answer a
+   * name-only question.
+   */
+  private WorkflowLifecycleStage findStageNamed(String stageName) {
+    for (Object o : this.stages) {
+      WorkflowLifecycleStage candidate = (WorkflowLifecycleStage) o;
+      if (candidate.getName() == null ? stageName == null
+          : candidate.getName().equals(stageName)) {
+        return candidate;
+      }
+    }
+    return null;
   }
 
   /**
@@ -137,7 +159,16 @@ public class WorkflowLifecycle {
    * @return True on success, false on failure.
    */
   public boolean removeStage(WorkflowLifecycleStage stage) {
-    return stages.remove(stage);
+    // Same asymmetry as addStage: remove() searches by the (order, name)
+    // comparator, so a caller holding a stage with the right name but a
+    // different order removed nothing and was told so only by the return
+    // value. Now that a name identifies at most one stage, remove the one
+    // that name holds.
+    if (stage == null) {
+      return false;
+    }
+    WorkflowLifecycleStage held = findStageNamed(stage.getName());
+    return held != null && stages.remove(held);
   }
 
   /**

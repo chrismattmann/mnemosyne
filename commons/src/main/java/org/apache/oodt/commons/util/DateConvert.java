@@ -166,7 +166,12 @@ public class DateConvert {
 
 		// The length of the input string should be at least 24 characters.
 		if (inputString == null || inputString.length() < INT) {
-			throw new ParseException("An exception occurred because the input date/time string was null or under 24 characters in length.", inputString.length());
+			// The offset used to be inputString.length(), which dereferences
+			// the null the condition has just detected -- so the one input
+			// the javadoc names explicitly, null, threw NullPointerException
+			// instead of the ParseException it promises.
+			throw new ParseException("An exception occurred because the input date/time string was null or under 24 characters in length.",
+					inputString == null ? 0 : inputString.length());
 		}
 
 		// Evaluate the the specified offset and set the time zone.
