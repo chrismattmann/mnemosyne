@@ -109,15 +109,12 @@ public final class MimeTypeUtils {
             return null;
         }
 
-        // take the origType and split it on ';'
-        String[] tokenizedMimeType = origType.split(SEPARATOR);
-        if (tokenizedMimeType.length > 1) {
-            // there was a ';' in there, take the first value
-            return tokenizedMimeType[0];
-        } else {
-            // there wasn't a ';', so just return the orig type
-            return origType;
-        }
+        // String.split drops trailing empty tokens, so "text/aa;" -- legal in
+        // a Content-Type header -- came back with its semicolon still attached,
+        // defeating the comparison this method exists for. Cut at the
+        // separator instead of splitting on it.
+        int separator = origType.indexOf(SEPARATOR);
+        return separator < 0 ? origType : origType.substring(0, separator);
     }
 
     /**

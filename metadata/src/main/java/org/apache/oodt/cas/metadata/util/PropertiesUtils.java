@@ -88,7 +88,11 @@ public final class PropertiesUtils {
      * @return A string properties value
      */
     public static String getProperty(String property) {
-        return getProperties(property)[0];
+        // getProperties returns a zero-length array for an unset property, so
+        // indexing it threw ArrayIndexOutOfBoundsException where callers of
+        // System.getProperty would expect null.
+        String[] values = getProperties(property);
+        return values.length > 0 ? values[0] : null;
     }
 
 }
