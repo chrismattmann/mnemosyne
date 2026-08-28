@@ -32,6 +32,7 @@ import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Stack;
+import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
@@ -174,6 +175,29 @@ public class SqlParser {
     public static void resolveIdentifiers(ComplexQuery query,
             Collection<String> productTypeNames, Collection<String> elementNames)
             throws QueryFormulationException {
+        resolveIdentifiers(query, productTypeNames, elementNames, null);
+    }
+
+    /**
+     * As above, with the expensive half of the element names fetched only if
+     * they are needed.
+     *
+     * Enumerating every element of every product type costs one call per
+     * product type, and a query whose field names are already spelled the way
+     * the catalog spells them needs none of it. knownElementNames is consulted
+     * first -- the core keys a caller can supply for nothing -- and
+     * moreElementNames is asked only for a name that does not resolve against
+     * those, at most once per query however many names miss.
+     *
+     * @param query              the query to rewrite in place
+     * @param productTypeNames   every product type name the catalog holds
+     * @param knownElementNames  names available without a round trip
+     * @param moreElementNames   the rest, fetched on demand; may be null
+     */
+    public static void resolveIdentifiers(ComplexQuery query,
+            Collection<String> productTypeNames, Collection<String> knownElementNames,
+            Supplier<Collection<String>> moreElementNames)
+            throws QueryFormulationException {
         if (query == null) {
             return;
         }
@@ -184,17 +208,86 @@ public class SqlParser {
             }
             query.setReducedProductTypeNames(resolved);
         }
+
+        ElementNames elements = new ElementNames(knownElementNames, moreElementNames);
         if (query.getReducedMetadata() != null) {
             List<String> resolved = new LinkedList<String>();
             for (String name : query.getReducedMetadata()) {
-                resolved.add(resolveName(name, elementNames, false, "metadata field"));
+                resolved.add(elements.resolve(name));
             }
             query.setReducedMetadata(resolved);
         }
         if (query.getCriteria() != null) {
             for (QueryCriteria criterion : query.getCriteria()) {
-                resolveCriteria(criterion, elementNames);
+                resolveCriteria(criterion, elements);
             }
+        }
+    }
+
+    /**
+     * The element names a query is resolved against: the ones the caller had
+     * to hand, and the ones it can go and get.
+     */
+    private static final class ElementNames {
+
+        private final Collection<String> known;
+        private final Supplier<Collection<String>> more;
+        private Collection<String> everything;
+
+        private ElementNames(Collection<String> known,
+                Supplier<Collection<String>> more) {
+            this.known = known;
+            this.more = more;
+        }
+
+        /**
+         * @return the canonical spelling of a field name, or the name as
+         *         given when nothing matches -- an unknown field is left
+         *         alone so custom keys still work
+         */
+        private String resolve(String name) throws QueryFormulationException {
+            String resolved = resolveName(name, known, false, "metadata field");
+            if (!isUnresolved(name, resolved)) {
+                return resolved;
+            }
+            // Only now is the round trip worth making.
+            return resolveName(name, all(), false, "metadata field");
+        }
+
+        private boolean isUnresolved(String given, String resolved) {
+            return more != null && given != null && given.equals(resolved)
+                && !containsExactly(known, given);
+        }
+
+        private static boolean containsExactly(Collection<String> names, String given) {
+            if (names == null) {
+                return false;
+            }
+            for (String name : names) {
+                if (given.equals(name)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private Collection<String> all() {
+            if (everything == null) {
+                Collection<String> fetched = more == null ? null : more.get();
+                List<String> union = new LinkedList<String>();
+                if (known != null) {
+                    union.addAll(known);
+                }
+                if (fetched != null) {
+                    for (String name : fetched) {
+                        if (!union.contains(name)) {
+                            union.add(name);
+                        }
+                    }
+                }
+                everything = union;
+            }
+            return everything;
         }
     }
     
@@ -593,7 +686,7 @@ public class SqlParser {
      * string near the last few characters.
      */
     private static void resolveCriteria(QueryCriteria criteria,
-            Collection<String> elementNames) throws QueryFormulationException {
+            ElementNames elementNames) throws QueryFormulationException {
         if (criteria == null) {
             return;
         }
@@ -608,7 +701,7 @@ public class SqlParser {
         }
         String name = criteria.getElementName();
         if (name != null && !name.isEmpty()) {
-            criteria.setElementName(resolveName(name, elementNames, false, "metadata field"));
+            criteria.setElementName(elementNames.resolve(name));
         }
     }
 

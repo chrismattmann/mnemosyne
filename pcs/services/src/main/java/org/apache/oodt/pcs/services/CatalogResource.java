@@ -18,10 +18,13 @@ package org.apache.oodt.pcs.services;
 
 import java.io.IOException;
 import java.net.MalformedURLException;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.function.Supplier;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
@@ -184,7 +187,20 @@ public class CatalogResource extends PCSService {
         return queryJson(body);
       }
       ComplexQuery cq = SqlParser.parseSqlQuery(trimmed);
-      SqlParser.resolveIdentifiers(cq, catalogTypeNames(fm), catalogElementNames(fm));
+      // The product types are fetched once and shared: catalogTypeNames needs
+      // them, and so does the element lookup, which used to ask for them a
+      // second time. The elements themselves cost a call per product type, so
+      // they sit behind a supplier and are fetched only for a field name that
+      // does not resolve against the core keys below -- which, for a query
+      // spelled the way the catalog spells it, is never.
+      final List productTypes = fm.safeGetProductTypes();
+      SqlParser.resolveIdentifiers(cq, catalogTypeNames(productTypes),
+          CORE_ELEMENT_NAMES, new Supplier<Collection<String>>() {
+            @Override
+            public Collection<String> get() {
+              return catalogElementNames(fm, productTypes);
+            }
+          });
       List<QueryResult> found = fm.getFmgrClient().complexQuery(cq);
       List<Map<String, Object>> results = new ArrayList<Map<String, Object>>();
       int limit = found == null ? 0 : Math.min(found.size(), MAX_QUERY_RESULTS);
@@ -216,9 +232,8 @@ public class CatalogResource extends PCSService {
     }
   }
 
-  private static List<String> catalogTypeNames(FileManagerUtils fm) {
+  private static List<String> catalogTypeNames(List types) {
     List<String> names = new ArrayList<String>();
-    List types = fm.safeGetProductTypes();
     if (types == null) {
       return names;
     }
@@ -230,19 +245,26 @@ public class CatalogResource extends PCSService {
     return names;
   }
 
-  private static List<String> catalogElementNames(FileManagerUtils fm) {
-    List<String> names = new ArrayList<String>();
-    names.add("Filename");
-    names.add("FileLocation");
-    names.add("FileSize");
-    names.add("ProductType");
-    names.add("ProductName");
-    names.add("InputFiles");
-    names.add("MimeType");
-    names.add("CAS.ProductName");
-    names.add("CAS.ProductId");
-    names.add("CAS.ProductReceivedTime");
-    List types = fm.safeGetProductTypes();
+  /**
+   * The field names every catalog has, available without a round trip.
+   *
+   * A query naming one of these -- in any casing -- is resolved without
+   * asking the File Manager for anything.
+   */
+  private static final List<String> CORE_ELEMENT_NAMES =
+      Collections.unmodifiableList(Arrays.asList(
+          "Filename", "FileLocation", "FileSize", "ProductType", "ProductName",
+          "InputFiles", "MimeType", "CAS.ProductName", "CAS.ProductId",
+          "CAS.ProductReceivedTime"));
+
+  /**
+   * Every element name the catalog declares, at one call per product type.
+   *
+   * Reached only through the supplier in query(), for a field name that did
+   * not resolve against CORE_ELEMENT_NAMES.
+   */
+  private static List<String> catalogElementNames(FileManagerUtils fm, List types) {
+    List<String> names = new ArrayList<String>(CORE_ELEMENT_NAMES);
     if (types == null || fm.getFmgrClient() == null) {
       return names;
     }
