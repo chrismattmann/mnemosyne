@@ -74,6 +74,22 @@ public class DataSourceWorkflowInstanceRepository extends
      * 
      * @see org.apache.oodt.cas.workflow.engine.WorkflowInstanceRepository#addWorkflowInstance(org.apache.oodt.cas.workflow.structs.WorkflowInstance)
      */
+    /**
+     * Whether this driver can hand back the key it just generated.
+     *
+     * @param conn the connection about to be used
+     * @return true if getGeneratedKeys is usable
+     */
+    private static boolean supportsGeneratedKeys(Connection conn) {
+        try {
+            return conn.getMetaData().supportsGetGeneratedKeys();
+        } catch (Exception e) {
+            LOG.log(Level.FINE, "Could not ask the driver whether it returns "
+                + "generated keys; assuming not: " + e.getMessage());
+            return false;
+        }
+    }
+
     public synchronized void addWorkflowInstance(WorkflowInstance wInst)
             throws InstanceRepositoryException {
         Connection conn = null;
@@ -104,7 +120,14 @@ public class DataSourceWorkflowInstanceRepository extends
             // Bound, not concatenated: an apostrophe in any of these closed
             // the literal it sat in and took the statement with it.
             LOG.log(Level.FINE, "sql: Executing: " + startWorkflowSql);
-            insert = conn.prepareStatement(startWorkflowSql);
+            // Asked for the generated key where the driver can produce one.
+            // HSQLDB 1.8, which this project still pins, cannot -- it answers
+            // "This function is not supported" -- so the capability is asked
+            // for rather than assumed.
+            boolean generatedKeys = supportsGeneratedKeys(conn);
+            insert = generatedKeys
+                    ? conn.prepareStatement(startWorkflowSql, Statement.RETURN_GENERATED_KEYS)
+                    : conn.prepareStatement(startWorkflowSql);
             insert.setString(1, wInst.getStatus());
             insert.setString(2, workflowIdField);
             insert.setString(3, taskIdField);
@@ -116,17 +139,41 @@ public class DataSourceWorkflowInstanceRepository extends
             insert.setInt(9, wInst.getTimesBlocked());
             insert.execute();
 
+            // The id comes back from the insert that generated it, where the
+            // driver can do that.
+            //
+            // It used to be read with SELECT MAX(workflow_instance_id) in
+            // every case, which is the id of whichever row happens to be
+            // highest at that moment -- so two writers racing each other were
+            // both handed the same id, and each went on to attach its
+            // metadata to the other's instance. The synchronized block around
+            // it did nothing about that: it locked on a String constant,
+            // which the JVM interns, so every repository in the process
+            // contended on one lock and none of them excluded a second
+            // process.
+            //
+            // The MAX fallback is kept for drivers that cannot return the
+            // key, and carries that race with it. It is the best available
+            // answer there, not a good one.
             String workflowInstId = "";
-
-            synchronized (workflowInstId) {
-                String getWorkflowInstIdSql = "SELECT MAX(workflow_instance_id) "
-                        + "AS max_id FROM workflow_instances";
-
-                rs = statement.executeQuery(getWorkflowInstIdSql);
-
+            if (generatedKeys) {
+                rs = insert.getGeneratedKeys();
+                if (rs != null && rs.next()) {
+                    workflowInstId = String.valueOf(rs.getInt(1));
+                }
+            } else {
+                rs = statement.executeQuery("SELECT MAX(workflow_instance_id) "
+                        + "AS max_id FROM workflow_instances");
                 while (rs.next()) {
                     workflowInstId = String.valueOf(rs.getInt("max_id"));
                 }
+            }
+            if (workflowInstId.isEmpty()) {
+                throw new InstanceRepositoryException(
+                    "The database returned no id for the workflow instance it "
+                    + "just stored; the workflow_instances table needs an "
+                    + "identity column, as the shipped workflow.sql now "
+                    + "declares");
             }
 
             conn.commit();
