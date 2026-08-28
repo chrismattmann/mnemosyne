@@ -111,6 +111,38 @@ th {
   font-weight: 700;
 }
 
+th.sortable {
+  padding: 0;
+}
+
+th.sortable button {
+  background: transparent;
+  color: inherit;
+  border: 0;
+  border-radius: 0;
+  padding: 0.55rem 0.65rem;
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+th.sortable button:hover {
+  color: var(--copper);
+}
+
+th.sorted,
+th.sorted button {
+  color: var(--copper);
+}
+
+th.sortable .arrow {
+  font-size: 0.65rem;
+}
+
 tr:hover td {
   background: #f5f0ea;
 }

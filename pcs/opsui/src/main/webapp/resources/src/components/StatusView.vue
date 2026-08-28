@@ -23,8 +23,10 @@
     <p v-if="loading && !report" class="empty">Loading health report…</p>
     <template v-else-if="report">
       <div class="grid">
-        <article v-for="daemon in daemons" :key="daemon.key" class="card">
-          <h3>{{ daemon.label }}</h3>
+        <article v-for="daemon in daemons" :key="daemon.key" class="card daemon">
+          <h3>
+            <a href="#" @click.prevent="$emit('open-config', daemon.key)">{{ daemon.label }}</a>
+          </h3>
           <p>
             <span class="pill" :class="up(daemon.status) ? 'up' : 'down'">{{ daemon.status || 'unknown' }}</span>
           </p>
@@ -38,10 +40,13 @@
           <p v-if="!jobs.length" class="empty">No job counts yet.</p>
           <table v-else>
             <thead>
-              <tr><th>State</th><th>Count</th></tr>
+              <tr>
+                <SortHead field="state" :sort="jobSort" :dir="jobDir" @sort="sortJobs">State</SortHead>
+                <SortHead field="count" :sort="jobSort" :dir="jobDir" @sort="sortJobs">Count</SortHead>
+              </tr>
             </thead>
             <tbody>
-              <tr v-for="job in jobs" :key="job.state">
+              <tr v-for="job in sortedJobs" :key="job.state">
                 <td>
                   <a href="#" @click.prevent="$emit('open-instances', job.state)">{{ job.state }}</a>
                 </td>
@@ -66,8 +71,8 @@
                     {{ crawler.status || '—' }}
                   </span>
                 </td>
-                <td>{{ crawler.numCrawls != null ? crawler.numCrawls : '—' }}</td>
-                <td>{{ crawler.avgCrawlTime != null ? crawler.avgCrawlTime : '—' }}</td>
+                <td>{{ crawlCount(crawler) }}</td>
+                <td>{{ avgTime(crawler) }}</td>
               </tr>
             </tbody>
           </table>
@@ -114,18 +119,33 @@
 </template>
 
 <script>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import SortHead from './SortHead.vue'
+import { sortRows, toggleSort } from '../sort.js'
 
 export default {
   name: 'StatusView',
+  components: { SortHead },
   props: {
     report: { type: Object, default: null },
     loading: { type: Boolean, default: false }
   },
-  emits: ['open-product', 'open-instances'],
+  emits: ['open-product', 'open-instances', 'open-config'],
   setup(props) {
     function up(status) {
       return String(status || '').toUpperCase() === 'UP'
+    }
+
+    function missingStat(value) {
+      return value == null || value < 0
+    }
+
+    function crawlCount(crawler) {
+      return missingStat(crawler.numCrawls) ? 'None' : crawler.numCrawls
+    }
+
+    function avgTime(crawler) {
+      return missingStat(crawler.avgCrawlTime) ? 'N/A' : crawler.avgCrawlTime
     }
 
     const generated = computed(() => (props.report && props.report.generated) || '')
@@ -155,6 +175,22 @@ export default {
     })
 
     const jobs = computed(() => (props.report && props.report.jobHealth) || [])
+    const jobSort = ref('')
+    const jobDir = ref('asc')
+    const sortedJobs = computed(() => {
+      if (!jobSort.value) {
+        return jobs.value
+      }
+      const getter = jobSort.value === 'count'
+        ? (row) => Number(row.numJobs) || 0
+        : (row) => row.state || ''
+      return sortRows(jobs.value, getter, jobDir.value)
+    })
+    function sortJobs(field) {
+      const next = toggleSort(field, jobSort.value, jobDir.value)
+      jobSort.value = next.field
+      jobDir.value = next.dir
+    }
 
     const crawlers = computed(() => {
       const live = (props.report && props.report.crawlerStatus) || []
@@ -175,7 +211,10 @@ export default {
       return latest.files || []
     })
 
-    return { up, generated, daemons, stubs, jobs, crawlers, files }
+    return {
+      up, crawlCount, avgTime, generated, daemons, stubs, jobs, sortedJobs,
+      jobSort, jobDir, sortJobs, crawlers, files
+    }
   }
 }
 </script>
@@ -214,6 +253,10 @@ h2, h3 {
 .url {
   word-break: break-all;
   font-size: 0.82rem;
+}
+
+.daemon h3 {
+  margin-bottom: 0.45rem;
 }
 
 @media (max-width: 800px) {

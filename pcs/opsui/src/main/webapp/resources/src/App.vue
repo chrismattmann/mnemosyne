@@ -28,14 +28,15 @@
         </div>
       </div>
       <nav>
-        <button :class="{ active: route.view === 'status' }" @click="go({ view: 'status' })">Status</button>
+        <button :class="{ active: route.view === 'status' || route.view === 'config' }" @click="go({ view: 'status' })">Status</button>
         <button :class="{ active: route.view === 'catalog' || route.view === 'type' || route.view === 'product' }" @click="go({ view: 'catalog' })">Catalog</button>
         <button :class="{ active: route.view === 'instances' }" @click="go({ view: 'instances' })">Instances</button>
         <button :class="{ active: route.view === 'workflows' || route.view === 'workflow' || route.view === 'task' || route.view === 'condition' }" @click="go({ view: 'workflows' })">Workflows</button>
       </nav>
     </header>
 
-    <StatusView v-if="route.view === 'status'" :report="health" :loading="loading" @open-product="openProductByPath" @open-instances="openInstances"/>
+    <StatusView v-if="route.view === 'status'" :report="health" :loading="loading" @open-product="openProductByPath" @open-instances="openInstances" @open-config="openConfig"/>
+    <ConfigView v-else-if="route.view === 'config'" :payload="configPayload" :loading="loading" @back="go({ view: 'status' })"/>
     <CatalogView v-else-if="route.view === 'catalog'" :types="types" :loading="loading" @open="openType"/>
     <TypeView v-else-if="route.view === 'type'" :payload="typePayload" :loading="loading" @page="openTypePage" @open="openProduct" @back="go({ view: 'catalog' })"/>
     <ProductView v-else-if="route.view === 'product'" :payload="productPayload" :pedigree="pedigree" :loading="loading" @open-type="openType" @back="go({ view: 'catalog' })"/>
@@ -60,8 +61,9 @@ import WorkflowsView from './components/WorkflowsView.vue'
 import WorkflowView from './components/WorkflowView.vue'
 import TaskView from './components/TaskView.vue'
 import ConditionView from './components/ConditionView.vue'
+import ConfigView from './components/ConfigView.vue'
 import {
-  getCondition, getHealth, getInstances, getPedigree, getProduct,
+  getCondition, getConfig, getHealth, getInstances, getPedigree, getProduct,
   getTask, getTypeProducts, getTypes, getWorkflow, getWorkflows
 } from './api.js'
 
@@ -69,7 +71,7 @@ export default {
   name: 'App',
   components: {
     StatusView, CatalogView, TypeView, ProductView, InstancesView,
-    WorkflowsView, WorkflowView, TaskView, ConditionView
+    WorkflowsView, WorkflowView, TaskView, ConditionView, ConfigView
   },
   setup() {
     const route = ref(parseHash())
@@ -85,6 +87,7 @@ export default {
     const workflowPayload = ref(null)
     const taskPayload = ref(null)
     const conditionPayload = ref(null)
+    const configPayload = ref(null)
     let timer = null
 
     function parseHash() {
@@ -128,6 +131,9 @@ export default {
       if (head === 'condition' && parts[1]) {
         return { view: 'condition', id: parts[1] }
       }
+      if (head === 'config' && parts[1]) {
+        return { view: 'config', id: parts[1] }
+      }
       return { view: 'status' }
     }
 
@@ -161,6 +167,9 @@ export default {
       }
       if (next.view === 'condition') {
         return 'condition/' + encodeURIComponent(next.id)
+      }
+      if (next.view === 'config') {
+        return 'config/' + encodeURIComponent(next.id)
       }
       return 'status'
     }
@@ -222,6 +231,10 @@ export default {
       go({ view: 'condition', id })
     }
 
+    function openConfig(id) {
+      go({ view: 'config', id })
+    }
+
     async function load() {
       loading.value = true
       try {
@@ -255,6 +268,8 @@ export default {
           taskPayload.value = await getTask(r.id)
         } else if (r.view === 'condition') {
           conditionPayload.value = await getCondition(r.id)
+        } else if (r.view === 'config') {
+          configPayload.value = await getConfig(r.id)
         }
         error.value = ''
       } catch (e) {
@@ -291,8 +306,8 @@ export default {
     return {
       route, loading, error, health, types, typePayload, productPayload,
       pedigree, instancePayload, workflows, workflowPayload, taskPayload,
-      conditionPayload, go, openType, openTypePage, openProduct,
-      openProductByPath, openInstances, openInstancesPage, openWorkflow, openTask, openCondition
+      conditionPayload, configPayload, go, openType, openTypePage, openProduct,
+      openProductByPath, openInstances, openInstancesPage, openWorkflow, openTask, openCondition, openConfig
     }
   }
 }

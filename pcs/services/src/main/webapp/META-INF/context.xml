@@ -25,6 +25,13 @@ the License.
 
 	<Parameter name="org.apache.oodt.cas.rm.url"
 	    value="[RESMGR_URL]"/>
+
+	<Parameter name="org.apache.oodt.cas.fm.properties"
+	    value="[FILEMGR_HOME]/etc/filemgr.properties"/>
+	<Parameter name="org.apache.oodt.cas.wm.properties"
+	    value="[WORKFLOW_HOME]/etc/workflow.properties"/>
+	<Parameter name="org.apache.oodt.cas.rm.properties"
+	    value="[RESMGR_HOME]/etc/resource.properties"/>
 	    
 	<Parameter name="org.apache.oodt.pcs.ll.conf.filePath"
 	    value="[PCS_HOME]/aux/pcs/pcs-ll-conf.xmnl"/>

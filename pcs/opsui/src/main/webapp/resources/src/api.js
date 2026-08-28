@@ -80,6 +80,10 @@ export function getCondition(id) {
   return fetch(`${services()}/workflow/conditions/${encodeURIComponent(id)}`).then(readJson)
 }
 
+export function getConfig(component) {
+  return fetch(`${services()}/config/${encodeURIComponent(component)}`).then(readJson)
+}
+
 export function productDataUrl(id, refIndex) {
   const params = new URLSearchParams()
   params.set('productID', id)
