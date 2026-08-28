@@ -183,6 +183,19 @@ public abstract class AbstractPaginatibleInstanceRepository implements
             for (Object wInstId : wInstIds) {
                 String workflowInstId = (String) wInstId;
                 WorkflowInstance inst = getWorkflowInstanceById(workflowInstId);
+                // An id that no longer resolves is skipped rather than added
+                // as a null. paginateWorkflows lists ids and this reads each
+                // one back, so an instance written or removed between the two
+                // -- which is ordinary while an engine is starting work --
+                // put a null in the page. AvroTypeFactory then dereferenced
+                // it while serialising, so paging the instances during
+                // ingest intermittently took the workflow manager's RPC down.
+                if (inst == null) {
+                    LOG.log(Level.FINE, "Workflow instance: [" + workflowInstId
+                        + "] was listed but could not be read; leaving it off "
+                        + "the page");
+                    continue;
+                }
                 workflowInstances.add(inst);
             }
 
