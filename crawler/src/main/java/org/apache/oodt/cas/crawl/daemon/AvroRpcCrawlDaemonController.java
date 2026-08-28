@@ -19,6 +19,7 @@ package org.apache.oodt.cas.crawl.daemon;
 
 //Avro imports
 import org.apache.avro.ipc.NettyTransceiver;
+import org.apache.oodt.commons.rpc.AvroTransceivers;
 import org.apache.avro.ipc.Transceiver;
 import org.apache.avro.ipc.specific.SpecificRequestor;
 import org.jboss.netty.channel.ChannelFactory;
@@ -184,30 +185,10 @@ public class AvroRpcCrawlDaemonController implements Closeable {
 
     private static void closeSharedNettyTransceiver(NettyTransceiver transceiver)
             throws IOException {
-        try {
-            Field stopping = NettyTransceiver.class.getDeclaredField("stopping");
-            stopping.setAccessible(true);
-            stopping.set(transceiver, Boolean.TRUE);
-
-            Method disconnect = NettyTransceiver.class.getDeclaredMethod(
-                "disconnect", boolean.class, boolean.class, Throwable.class);
-            disconnect.setAccessible(true);
-            disconnect.invoke(transceiver, Boolean.TRUE, Boolean.TRUE, null);
-        } catch (NoSuchFieldException | NoSuchMethodException | IllegalAccessException e) {
-            throw new IOException("Unable to close shared Avro Netty transceiver", e);
-        } catch (InvocationTargetException e) {
-            Throwable cause = e.getCause();
-            if (cause instanceof IOException) {
-                throw (IOException) cause;
-            }
-            if (cause instanceof RuntimeException) {
-                throw (RuntimeException) cause;
-            }
-            if (cause instanceof Error) {
-                throw (Error) cause;
-            }
-            throw new IOException("Unable to close shared Avro Netty transceiver", cause);
-        }
+        // Was the same reflection block as AvroFileManagerClient's, which was
+        // in turn the same as the resource manager client needed. One copy
+        // now, in commons, where the reasoning lives with it.
+        AvroTransceivers.closeSharing(transceiver);
     }
 
     private static ExecutorService newDaemonCachedThreadPool(final String namePrefix) {

@@ -225,4 +225,10 @@ public class MockResourceManagerClient implements ResourceManagerClient {
   public List getQueuedJobs() throws JobQueueException {
     return Collections.emptyList();
   }
+
+   /** Nothing to release: this mock never opens a transport. */
+   @Override
+   public void close() {
+   }
+
 }

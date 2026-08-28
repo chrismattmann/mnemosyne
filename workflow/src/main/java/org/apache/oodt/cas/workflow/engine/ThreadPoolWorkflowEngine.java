@@ -124,6 +124,22 @@ public class ThreadPoolWorkflowEngine implements WorkflowEngine, WorkflowStatus 
     }
   }
 
+  /**
+   * Stops the worker pool this engine started.
+   *
+   * WorkflowEngine.shutdown() defaults to doing nothing, and this engine --
+   * the one you get when no factory is named, so the one most deployments run
+   * -- did not override it. Its PooledExecutor therefore outlived every
+   * shutdown of the manager that owned it, which is what left the threads
+   * running that AvroRpcWorkflowManager.shutdown() was supposed to release.
+   */
+  @Override
+  public void shutdown() {
+    if (pool != null) {
+      pool.shutdownNow();
+    }
+  }
+
   /*
    * (non-Javadoc)
    * 

@@ -258,4 +258,57 @@ public class TestAvroRpcResourceManagerClient {
     public static void tearDown() {
         rm.shutdown();
     }
+
+    /**
+     * There was no close() on this client at all -- ResourceManagerClient
+     * extended only Serializable -- so every client built here held its
+     * socket until the process exited. Same leak as #144, one interface
+     * along.
+     *
+     * The naive fix is worse than the leak: NettyTransceiver.close() calls
+     * releaseExternalResources() on the ChannelFactory in a finally block,
+     * and that factory is process-wide and shared by every client. Closing
+     * one client would take the I/O threads out from under all the others.
+     * This test is the one that tells the two apart -- it closes a client and
+     * then keeps using the others.
+     */
+    @Test
+    public void testClosingOneClientLeavesTheSharedTransportRunning() throws Exception {
+        AvroRpcResourceManagerClient first =
+                new AvroRpcResourceManagerClient(new URL("http://localhost:" + RM_PORT));
+        assertNotNull(first.getNodes());
+        first.close();
+
+        // the client that was already open is unaffected
+        assertNotNull("closing one client broke the shared transport", rmc.getNodes());
+
+        // and a client opened afterwards still connects
+        AvroRpcResourceManagerClient second =
+                new AvroRpcResourceManagerClient(new URL("http://localhost:" + RM_PORT));
+        try {
+            assertNotNull("no client could be opened after another was closed",
+                    second.getNodes());
+        } finally {
+            second.close();
+        }
+    }
+
+    /** close() is idempotent: shutdown paths call it more than once. */
+    @Test
+    public void testClosingTwiceIsHarmless() throws Exception {
+        AvroRpcResourceManagerClient client =
+                new AvroRpcResourceManagerClient(new URL("http://localhost:" + RM_PORT));
+        client.close();
+        client.close();
+
+        assertNotNull(rmc.getNodes());
+    }
+
+    /** the interface itself carries close(), so callers can use it. */
+    @Test
+    public void testTheInterfaceIsCloseable() {
+        assertTrue("ResourceManagerClient does not extend Closeable",
+                java.io.Closeable.class.isAssignableFrom(ResourceManagerClient.class));
+    }
+
 }

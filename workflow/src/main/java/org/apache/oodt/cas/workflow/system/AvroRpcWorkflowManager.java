@@ -74,6 +74,7 @@ public class AvroRpcWorkflowManager implements WorkflowManager,org.apache.oodt.c
     private static final org.slf4j.Logger logger = LoggerFactory.getLogger(AvroRpcWorkflowManager.class);
 
     private Server server;
+    private volatile Thread shutdownHook;
     private final WorkflowEngine engine;
     private WorkflowRepository repo;
 
@@ -121,12 +122,19 @@ public class AvroRpcWorkflowManager implements WorkflowManager,org.apache.oodt.c
         logger.debug("Server created. Starting ...");
         server.start();
 
-        Runtime.getRuntime().addShutdownHook(new Thread() {
+        // Held so shutdown() can take it back off. An anonymous hook was
+        // registered per instance and never removed, so it outlived the
+        // manager it was closing: every manager built in a JVM -- which is
+        // every test that starts one -- left a hook behind holding a strong
+        // reference to it, and the hooks ran at exit against servers that had
+        // been shut down long before.
+        this.shutdownHook = new Thread("workflow-manager-shutdown") {
             @Override
             public void run() {
-                shutdown();
+                shutdownInternal();
             }
-        });
+        };
+        Runtime.getRuntime().addShutdownHook(this.shutdownHook);
         logger.info("Workflow Manager started by {} for url: {}",
                 System.getProperty("user.name", "unknown"), workflowManagerUrl);
 
@@ -134,14 +142,44 @@ public class AvroRpcWorkflowManager implements WorkflowManager,org.apache.oodt.c
 
     @Override
     public boolean shutdown() {
+        Thread hook = this.shutdownHook;
+        this.shutdownHook = null;
+        if (hook != null) {
+            try {
+                Runtime.getRuntime().removeShutdownHook(hook);
+            } catch (IllegalStateException alreadyShuttingDown) {
+                // The JVM is on its way out and is running the hooks itself;
+                // there is nothing to deregister and nothing to report.
+            }
+        }
+        return shutdownInternal();
+    }
+
+    /**
+     * The shutdown itself, without touching the hook -- so the hook can call
+     * it without trying to remove itself while it is running.
+     */
+    private boolean shutdownInternal() {
         logger.debug("Shutting down");
+        // The engine starts threads of its own and was never told to stop, so
+        // shutting the manager down left them running for the life of the
+        // process. Stopped before the server, so nothing new is accepted
+        // while it winds down.
+        if (engine != null) {
+            try {
+                engine.shutdown();
+            } catch (RuntimeException e) {
+                logger.warn("Error shutting down the workflow engine", e);
+            }
+        }
         if (server != null) {
             server.close();
             server = null;
             logger.info("Successfully shutdown");
             return true;
-        } else
+        } else {
             return false;
+        }
     }
 
     @Override

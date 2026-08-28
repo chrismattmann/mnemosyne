@@ -20,6 +20,7 @@ package org.apache.oodt.cas.resource.system;
 import org.apache.avro.AvroRemoteException;
 import org.apache.oodt.cas.resource.structs.avrotypes.OodtError;
 import org.apache.avro.ipc.NettyTransceiver;
+import org.apache.oodt.commons.rpc.AvroTransceivers;
 import org.apache.avro.ipc.Transceiver;
 import org.apache.avro.ipc.specific.SpecificRequestor;
 import org.jboss.netty.channel.ChannelFactory;
@@ -117,6 +118,23 @@ public class AvroRpcResourceManagerClient implements ResourceManagerClient {
         }
         throw new IllegalStateException("Unable to connect to Resource Manager at: " + url, lastException);
 
+    }
+
+    /**
+     * Releases the transport this client opened.
+     *
+     * There was no close() at all, so every client built here held its socket
+     * until the process exited -- the same leak as #144, one interface along.
+     * The Netty threads are process-wide and shared with every other client,
+     * so they are deliberately left running; AvroTransceivers explains why
+     * that needs saying.
+     */
+    @Override
+    public void close() throws IOException {
+        Transceiver toClose = this.client;
+        this.client = null;
+        this.proxy = null;
+        AvroTransceivers.closeSharing(toClose);
     }
 
     public static void main(String[] args) {
