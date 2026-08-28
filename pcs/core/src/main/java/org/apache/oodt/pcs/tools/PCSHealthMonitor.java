@@ -743,7 +743,36 @@ public final class PCSHealthMonitor implements CoreMetKeys,
   }
 
   private boolean getFmUp() {
-    return fm.getFmgrClient() != null && fm.getFmgrClient().isAlive();
+    try {
+      if (fm.getFmgrClient() != null && fm.getFmgrClient().isAlive()) {
+        return true;
+      }
+    } catch (Exception e) {
+      LOG.log(Level.FINE, "File Manager isAlive failed", e);
+    }
+    // The health monitor keeps one client for the JVM lifetime. If File
+    // Manager was down at first check, or an Avro call left that socket
+    // wedged, isAlive stays false even after the daemon is back. Try a
+    // fresh client before declaring it down.
+    try {
+      FileManagerUtils retry = new FileManagerUtils(fm.getFmUrl());
+      boolean up = retry.getFmgrClient() != null && retry.getFmgrClient().isAlive();
+      if (up) {
+        try {
+          fm.close();
+        } catch (Exception ignored) {
+        }
+        fm = retry;
+      } else {
+        try {
+          retry.close();
+        } catch (Exception ignored) {
+        }
+      }
+      return up;
+    } catch (Exception e) {
+      return false;
+    }
   }
 
   private boolean getWmUp() {

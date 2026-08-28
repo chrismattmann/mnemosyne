@@ -350,6 +350,10 @@ public class FileManager {
 
         try {
             product = catalog.getProductById(productId);
+            if (product == null) {
+                throw new CatalogException("Product: [" + productId
+                        + "] NOT found in the catalog!");
+            }
             // it is possible here that the underlying catalog did not
             // set the ProductType
             // to obey the contract of the File Manager, we need to make
@@ -378,6 +382,10 @@ public class FileManager {
         Product product = null;
         try {
             product = catalog.getProductByName(productName);
+            if (product == null) {
+                throw new CatalogException("Product: [" + productName
+                        + "] NOT found in the catalog!");
+            }
             // it is possible here that the underlying catalog did not
             // set the ProductType
             // to obey the contract of the File Manager, we need to make
