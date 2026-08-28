@@ -199,8 +199,16 @@ public class PgeMetadata {
          commitKeys.retainAll(markedAsDynamicMetKeys);
       }
       for (String key : commitKeys) {
-         dynamicMetadata.replaceMetadata(key,
-               localMetadata.getAllMetadata(resolveKey(key)));
+         // Metadata.getAllMetadata returns null for a key it does not hold,
+         // and replaceMetadata then reached values.addAll(null). linkKey
+         // removes the LOCAL value as it creates the link, so the documented
+         // sequence -- set a local value, mark it dynamic, then link that key
+         // to one held in STATIC -- guaranteed the marked key was absent by
+         // the time this ran.
+         List<String> values = localMetadata.getAllMetadata(resolveKey(key));
+         if (values != null && !values.isEmpty()) {
+            dynamicMetadata.replaceMetadata(key, values);
+         }
          localMetadata.removeMetadata(key);
          markedAsDynamicMetKeys.remove(key);
       }
@@ -227,6 +235,22 @@ public class PgeMetadata {
    public void linkKey(String keyLink, String key) {
       Validate.notNull(keyLink, "keyLink cannot be null");
       Validate.notNull(key, "key cannot be null");
+
+      // Refused at the point the caller makes the mistake, which is a better
+      // place to report it than the read that trips over it later.
+      String resolved = key;
+      Set<String> seen = Sets.newLinkedHashSet();
+      seen.add(keyLink);
+      while (keyLinkMap.containsKey(resolved)) {
+         if (!seen.add(resolved)) {
+            break;
+         }
+         resolved = keyLinkMap.get(resolved);
+      }
+      if (keyLink.equals(resolved) || seen.contains(resolved)) {
+         throw new IllegalArgumentException("Linking [" + keyLink + "] to ["
+               + key + "] would form a cycle in the key links");
+      }
 
       localMetadata.removeMetadata(keyLink);
       keyLinkMap.put(keyLink, key);
@@ -273,10 +297,28 @@ public class PgeMetadata {
    public String resolveKey(String key) {
       Validate.notNull(key, "key cannot be null");
 
+      // The walk used to have no visited set, so a key linked to itself --
+      // the smallest possible case -- or any cycle a -> b -> a wedged the
+      // thread permanently. Every read and every write in this class goes
+      // through here, so one such link stops the whole PGE.
+      Set<String> visited = Sets.newLinkedHashSet();
       while (keyLinkMap.containsKey(key)) {
+         if (!visited.add(key)) {
+            throw new IllegalStateException("Key links form a cycle: "
+                  + describeCycle(visited, key));
+         }
          key = keyLinkMap.get(key);
       }
       return key;
+   }
+
+   /** Renders a cycle as "a -> b -> a", for the message above. */
+   private static String describeCycle(Set<String> visited, String repeated) {
+      StringBuilder path = new StringBuilder();
+      for (String step : visited) {
+         path.append(step).append(" -> ");
+      }
+      return path.append(repeated).toString();
    }
 
    /**
@@ -297,8 +339,16 @@ public class PgeMetadata {
    public List<String> getReferenceKeyPath(String key) {
       Validate.notNull(key, "key cannot be null");
 
+      // Same unguarded walk as resolveKey, but this one also appends to
+      // keyPath each time round -- so on a cycle it did not merely spin, it
+      // allocated until the heap was gone.
       List<String> keyPath = Lists.newArrayList();
+      Set<String> visited = Sets.newLinkedHashSet();
       while (keyLinkMap.containsKey(key)) {
+         if (!visited.add(key)) {
+            throw new IllegalStateException("Key links form a cycle: "
+                  + describeCycle(visited, key));
+         }
          keyPath.add(key = keyLinkMap.get(key));
       }
       return keyPath;
@@ -401,6 +451,19 @@ public class PgeMetadata {
       List<Type> combineOrder = Lists.newArrayList(types);
       if (combineOrder.isEmpty()) {
          combineOrder.addAll(DEFAULT_COMBINE_ORDER);
+      } else {
+         // Reversed, so the *first* type listed wins -- which is what the
+         // javadoc above says, with a worked example, and what
+         // getAllMetadata(key, types...) does. This applied each layer in
+         // turn with replaceMetadata, so the last listed type won and the
+         // same argument list gave the two methods opposite answers.
+         //
+         // Only explicit types are reversed. DEFAULT_COMBINE_ORDER is
+         // already the exact reverse of DEFAULT_QUERY_ORDER, which is why
+         // the two agreed by accident when no types were passed, and is the
+         // behaviour every existing caller of the no-argument form relies
+         // on.
+         Collections.reverse(combineOrder);
       }
 
       Metadata combinedMetadata = new Metadata();
