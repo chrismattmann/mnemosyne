@@ -25,21 +25,21 @@
     </form>
     <p class="muted cap-note">A query returns at most {{ queryCap }} products.</p>
     <p v-if="queryError || error" class="banner">{{ queryError || error }}</p>
-    <p v-else-if="loading && !results.length" class="empty">Running query…</p>
-    <p v-else-if="!results.length" class="empty">No products matched.</p>
+    <p v-else-if="loading && !rows.length" class="empty">Running query…</p>
+    <p v-else-if="!rows.length" class="empty">No products matched.</p>
     <p v-if="truncated" class="notice cap">
       Showing the first {{ limit }} of more than {{ limit }} matches. Add a WHERE clause to narrow the query.
     </p>
-    <table v-if="results.length">
+    <table v-if="rows.length">
       <thead>
         <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Status</th>
+          <SortHead field="name" :sort="sort" :dir="dir" @sort="onSort">Name</SortHead>
+          <SortHead field="type" :sort="sort" :dir="dir" @sort="onSort">Type</SortHead>
+          <SortHead field="status" :sort="sort" :dir="dir" @sort="onSort">Status</SortHead>
         </tr>
       </thead>
       <tbody>
-        <tr v-for="product in results" :key="product.id || product.name">
+        <tr v-for="product in rows" :key="product.id || product.name">
           <td>
             <a v-if="product.id || product.name" href="#" @click.prevent="$emit('open', product.id || product.name)">
               {{ product.name || product.id }}
@@ -61,10 +61,13 @@
 
 <script>
 import { computed, ref, watch } from 'vue'
+import SortHead from './SortHead.vue'
 import { EXAMPLE_CATALOG_SQL, QUERY_RESULT_CAP, catalogSqlError } from '../sqlQuery.js'
+import { sortRows, toggleSort } from '../sort.js'
 
 export default {
   name: 'SearchView',
+  components: { SortHead },
   props: {
     payload: { type: Object, default: null },
     loading: { type: Boolean, default: false }
@@ -88,19 +91,42 @@ export default {
       }
     }
     const results = computed(() => query.value.results || [])
+    const sort = ref('')
+    const dir = ref('asc')
+    function typeName(product) {
+      return (product && product.type && product.type.name) || ''
+    }
+    const rows = computed(() => {
+      if (!sort.value) {
+        return results.value
+      }
+      const getter = sort.value === 'type'
+        ? (row) => typeName(row)
+        : sort.value === 'status'
+          ? (row) => row.transferStatus || ''
+          : (row) => row.name || row.id || ''
+      return sortRows(results.value, getter, dir.value)
+    })
+    function onSort(field) {
+      const next = toggleSort(field, sort.value, dir.value)
+      sort.value = next.field
+      dir.value = next.dir
+    }
     return {
       sql,
       queryError,
       exampleSql: EXAMPLE_CATALOG_SQL,
       queryCap: QUERY_RESULT_CAP,
       results,
+      rows,
+      sort,
+      dir,
+      onSort,
       error: computed(() => query.value.error || ''),
       truncated: computed(() => Boolean(query.value.truncated)),
       limit: computed(() => Number(query.value.limit) || QUERY_RESULT_CAP),
       submit,
-      typeName(product) {
-        return (product && product.type && product.type.name) || ''
-      }
+      typeName
     }
   }
 }

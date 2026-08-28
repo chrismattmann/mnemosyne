@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.net.MalformedURLException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -58,6 +59,7 @@ public class WorkflowResource extends PCSService {
 
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = Logger.getLogger(WorkflowResource.class.getName());
+  static final int RECENT_INSTANCE_LIMIT = 25;
 
   private WorkflowManagerClient wm() throws MalformedURLException {
     return RpcCommunicationFactory.createClient(PCSService.conf.getWmUrl());
@@ -105,12 +107,16 @@ public class WorkflowResource extends PCSService {
   @Produces("application/json")
   public String instances(
       @QueryParam("status") @DefaultValue("ALL") String status,
-      @QueryParam("page") @DefaultValue("1") int pageNum) throws Exception {
+      @QueryParam("page") @DefaultValue("1") int pageNum,
+      @QueryParam("workflow") String workflow) throws Exception {
     if (pageNum < 1) {
       pageNum = 1;
     }
     WorkflowManagerClient client = wm();
     try {
+      if (workflow != null && workflow.trim().length() > 0) {
+        return instancesForWorkflow(client, status, workflow.trim());
+      }
       WorkflowInstancePage page;
       if (status == null || status.trim().isEmpty() || "ALL".equalsIgnoreCase(status.trim())) {
         page = client.paginateWorkflowInstances(pageNum);
@@ -140,6 +146,70 @@ public class WorkflowResource extends PCSService {
       closeQuietly(client);
     }
   }
+
+  private String instancesForWorkflow(WorkflowManagerClient client, String status,
+      String workflow) throws Exception {
+    List all = client.getWorkflowInstances();
+    List<WorkflowInstance> matched = new ArrayList<WorkflowInstance>();
+    if (all != null) {
+      for (int i = 0; i < all.size(); i++) {
+        Object item = all.get(i);
+        if (!(item instanceof WorkflowInstance)) {
+          continue;
+        }
+        WorkflowInstance inst = (WorkflowInstance) item;
+        if (!matchesWorkflow(inst, workflow)) {
+          continue;
+        }
+        if (status != null && status.trim().length() > 0
+            && !"ALL".equalsIgnoreCase(status.trim())
+            && (inst.getStatus() == null || !status.trim().equals(inst.getStatus()))) {
+          continue;
+        }
+        matched.add(inst);
+      }
+    }
+    Collections.sort(matched, START_DESC);
+    boolean truncated = matched.size() > RECENT_INSTANCE_LIMIT;
+    if (truncated) {
+      matched = matched.subList(0, RECENT_INSTANCE_LIMIT);
+    }
+    List<Map<String, Object>> insts = new ArrayList<Map<String, Object>>();
+    for (int i = 0; i < matched.size(); i++) {
+      insts.add(encodeInstance(matched.get(i)));
+    }
+    Map<String, Object> body = new LinkedHashMap<String, Object>();
+    body.put("status", status);
+    body.put("workflow", workflow);
+    body.put("page", Integer.valueOf(1));
+    body.put("totalPages", Integer.valueOf(1));
+    body.put("pageSize", Integer.valueOf(insts.size()));
+    body.put("truncated", Boolean.valueOf(truncated));
+    body.put("instances", insts);
+    JSONObject response = new JSONObject();
+    response.put("page", body);
+    return response.toString();
+  }
+
+  static boolean matchesWorkflow(WorkflowInstance inst, String workflow) {
+    if (inst == null || workflow == null || workflow.length() == 0) {
+      return false;
+    }
+    if (inst.getWorkflow() == null) {
+      return false;
+    }
+    String id = inst.getWorkflow().getId();
+    String name = inst.getWorkflow().getName();
+    return workflow.equals(id) || workflow.equalsIgnoreCase(name);
+  }
+
+  private static final Comparator<WorkflowInstance> START_DESC = new Comparator<WorkflowInstance>() {
+    public int compare(WorkflowInstance a, WorkflowInstance b) {
+      String as = a == null ? "" : nullToEmpty(a.getStartDateTimeIsoStr());
+      String bs = b == null ? "" : nullToEmpty(b.getStartDateTimeIsoStr());
+      return bs.compareTo(as);
+    }
+  };
 
   @GET
   @Path("instances/{id}")

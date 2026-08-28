@@ -80,7 +80,7 @@
             <span class="pill" :class="pillClass(inst.status)">{{ inst.status }}</span>
           </td>
           <td>
-            <a v-if="inst.currentTaskId" href="#" @click.prevent="$emit('open-task', inst.currentTaskId)">
+            <a v-if="inst.currentTaskId" href="#" @click.prevent="$emit('open-task', inst.currentTaskId, inst.workflowId)">
               {{ inst.currentTaskName || inst.currentTaskId }}
             </a>
             <span v-else>—</span>

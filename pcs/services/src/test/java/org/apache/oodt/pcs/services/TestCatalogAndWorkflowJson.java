@@ -118,6 +118,18 @@ public class TestCatalogAndWorkflowJson extends TestCase {
     assertEquals("jobs.tsv.aaaa", rows.get(0).get("name"));
   }
 
+  public void testMatchesWorkflowByIdOrName() {
+    Workflow workflow = new Workflow();
+    workflow.setId("urn:bt:Split");
+    workflow.setName("SplitWorkflow");
+    WorkflowInstance inst = new WorkflowInstance();
+    inst.setWorkflow(workflow);
+    assertTrue(WorkflowResource.matchesWorkflow(inst, "urn:bt:Split"));
+    assertTrue(WorkflowResource.matchesWorkflow(inst, "SplitWorkflow"));
+    assertFalse(WorkflowResource.matchesWorkflow(inst, "BigTranslateWorkflow"));
+    assertFalse(WorkflowResource.matchesWorkflow(inst, null));
+  }
+
   public void testEncodeInstanceDetailIncludesMetadata() {
     WorkflowInstance inst = new WorkflowInstance();
     inst.setId("inst-2");

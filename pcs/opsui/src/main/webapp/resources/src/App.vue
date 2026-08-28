@@ -42,13 +42,13 @@
     <SearchView v-else-if="route.view === 'search'" :payload="searchPayload" :loading="loading" @query="openSearch" @open="openProduct" @open-type="openType" @back="go({ view: 'catalog' })"/>
     <TypeView v-else-if="route.view === 'type'" :payload="typePayload" :loading="loading" @more="openTypeMore" @open="openProduct" @back="go({ view: 'catalog' })"/>
     <ProductView v-else-if="route.view === 'product'" :payload="productPayload" :pedigree="pedigree" :loading="loading" @open-type="openType" @open-instance="openInstance" @open-workflow="openWorkflow" @open-task="openTask" @open-product="openProduct" @back="go({ view: 'catalog' })"/>
-    <InstancesView v-else-if="route.view === 'instances'" :payload="instancePayload" :workflows="workflows" :status="route.status || 'ALL'" :loading="loading" @status="openInstances" @page="openInstancesPage" @open-workflow="openWorkflow" @open-task="openTask" @open-instance="openInstance" @open-product="openProduct"/>
-    <InstanceView v-else-if="route.view === 'instance'" :payload="instanceDetail" :loading="loading" @open-workflow="openWorkflow" @open-task="openTask" @open-instance="openInstance" @open-type="openType" @open-product="openProduct" @back="go({ view: 'instances', status: route.status || 'ALL', page: 1 })"/>
+    <InstancesView v-else-if="route.view === 'instances'" :payload="instancePayload" :workflows="workflows" :status="route.status || 'ALL'" :loading="loading" @status="openInstances" @page="openInstancesPage" @open-workflow="openWorkflow" @open-task="openTaskFromInstanceRow" @open-instance="openInstance" @open-product="openProduct"/>
+    <InstanceView v-else-if="route.view === 'instance'" :payload="instanceDetail" :loading="loading" @open-workflow="openWorkflow" @open-task="openTaskFromInstance" @open-instance="openInstance" @open-type="openType" @open-product="openProduct" @back="go({ view: 'instances', status: route.status || 'ALL', page: 1 })"/>
     <ResourcesView v-else-if="route.view === 'resources'" :payload="resourcePayload" :stubs="resourceStubs" :loading="loading"/>
     <WorkflowsView v-else-if="route.view === 'workflows'" :workflows="workflows" :loading="loading" @open="openWorkflow"/>
-    <WorkflowView v-else-if="route.view === 'workflow'" :payload="workflowPayload" :loading="loading" @open-task="openTask" @back="go({ view: 'workflows' })"/>
-    <TaskView v-else-if="route.view === 'task'" :payload="taskPayload" :loading="loading" @open-condition="openCondition" @back="go({ view: 'workflows' })"/>
-    <ConditionView v-else-if="route.view === 'condition'" :payload="conditionPayload" :loading="loading" @back="go({ view: 'workflows' })"/>
+    <WorkflowView v-else-if="route.view === 'workflow'" :payload="workflowPayload" :loading="loading" @open-task="openTaskFromWorkflow" @open-instance="openInstance" @open-product="openProduct" @back="go({ view: 'workflows' })"/>
+    <TaskView v-else-if="route.view === 'task'" :payload="taskPayload" :back-label="route.workflowId ? 'Workflow' : 'Workflows'" :loading="loading" @open-condition="openConditionFromTask" @back="backFromTask"/>
+    <ConditionView v-else-if="route.view === 'condition'" :payload="conditionPayload" :back-label="route.taskId ? 'Task' : 'Workflows'" :loading="loading" @back="backFromCondition"/>
 
     <p v-if="error" class="banner">{{ error }}</p>
   </div>
@@ -147,10 +147,10 @@ export default {
         return { view: 'workflow', id: parts[1] }
       }
       if (head === 'task' && parts[1]) {
-        return { view: 'task', id: parts[1] }
+        return { view: 'task', id: parts[1], workflowId: parts[2] || '' }
       }
       if (head === 'condition' && parts[1]) {
-        return { view: 'condition', id: parts[1] }
+        return { view: 'condition', id: parts[1], taskId: parts[2] || '', workflowId: parts[3] || '' }
       }
       if (head === 'config' && parts[1]) {
         return { view: 'config', id: parts[1] }
@@ -193,10 +193,13 @@ export default {
         return 'workflow/' + encodeURIComponent(next.id)
       }
       if (next.view === 'task') {
-        return 'task/' + encodeURIComponent(next.id)
+        const workflow = next.workflowId ? '/' + encodeURIComponent(next.workflowId) : ''
+        return 'task/' + encodeURIComponent(next.id) + workflow
       }
       if (next.view === 'condition') {
-        return 'condition/' + encodeURIComponent(next.id)
+        const task = next.taskId ? '/' + encodeURIComponent(next.taskId) : ''
+        const workflow = next.taskId && next.workflowId ? '/' + encodeURIComponent(next.workflowId) : ''
+        return 'condition/' + encodeURIComponent(next.id) + task + workflow
       }
       if (next.view === 'config') {
         return 'config/' + encodeURIComponent(next.id)
@@ -279,12 +282,59 @@ export default {
       go({ view: 'workflow', id })
     }
 
-    function openTask(id) {
-      go({ view: 'task', id })
+    function openTask(id, workflowId) {
+      go({
+        view: 'task',
+        id,
+        workflowId: workflowId || ''
+      })
+    }
+
+    function openTaskFromWorkflow(id) {
+      openTask(id, route.value.id)
+    }
+
+    function openTaskFromInstance(id) {
+      const inst = instanceDetail.value && instanceDetail.value.instance
+      openTask(id, (inst && inst.workflowId) || '')
+    }
+
+    function openTaskFromInstanceRow(id, workflowId) {
+      openTask(id, workflowId)
     }
 
     function openCondition(id) {
-      go({ view: 'condition', id })
+      go({
+        view: 'condition',
+        id,
+        taskId: route.value.view === 'task' ? route.value.id : '',
+        workflowId: route.value.workflowId || ''
+      })
+    }
+
+    function openConditionFromTask(id) {
+      go({
+        view: 'condition',
+        id,
+        taskId: route.value.id,
+        workflowId: route.value.workflowId || ''
+      })
+    }
+
+    function backFromTask() {
+      if (route.value.workflowId) {
+        openWorkflow(route.value.workflowId)
+      } else {
+        go({ view: 'workflows' })
+      }
+    }
+
+    function backFromCondition() {
+      if (route.value.taskId) {
+        openTask(route.value.taskId, route.value.workflowId)
+      } else {
+        go({ view: 'workflows' })
+      }
     }
 
     function openConfig(id) {
@@ -368,7 +418,14 @@ export default {
           const body = await getWorkflows()
           workflows.value = body.workflows || []
         } else if (r.view === 'workflow') {
-          workflowPayload.value = await getWorkflow(r.id)
+          const [def, insts] = await Promise.all([
+            getWorkflow(r.id),
+            getInstances('ALL', 1, r.id)
+          ])
+          workflowPayload.value = {
+            workflow: def.workflow || def,
+            page: (insts && insts.page) || { instances: [] }
+          }
         } else if (r.view === 'task') {
           taskPayload.value = await getTask(r.id)
         } else if (r.view === 'condition') {
@@ -396,7 +453,7 @@ export default {
       writeHash()
       load()
       timer = setInterval(() => {
-        if (route.value.view === 'status' || route.value.view === 'instances' || route.value.view === 'instance' || route.value.view === 'resources') {
+        if (route.value.view === 'status' || route.value.view === 'instances' || route.value.view === 'instance' || route.value.view === 'resources' || route.value.view === 'workflow') {
           load()
         }
       }, 8000)
@@ -417,7 +474,7 @@ export default {
       route, loading, error, health, types, typePayload, productPayload,
       pedigree, instancePayload, instanceDetail, workflows, workflowPayload, taskPayload,
       conditionPayload, configPayload, searchPayload, resourcePayload, resourceStubs, go, openType, openTypePage, openTypeMore, openProduct,
-      openProductByPath, openLatestFile, openInstances, openInstancesPage, openInstance, openWorkflow, openTask, openCondition, openConfig, openSearch
+      openProductByPath, openLatestFile, openInstances, openInstancesPage, openInstance, openWorkflow, openTask, openTaskFromWorkflow, openTaskFromInstance, openTaskFromInstanceRow, openCondition, openConditionFromTask, backFromTask, backFromCondition, openConfig, openSearch
     }
   }
 }
