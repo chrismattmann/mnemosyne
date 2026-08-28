@@ -17,7 +17,10 @@
 
 package org.apache.oodt.cas.workflow.instrepo;
 
+import org.apache.oodt.cas.metadata.Metadata;
+import org.apache.oodt.cas.workflow.structs.Workflow;
 import org.apache.oodt.cas.workflow.structs.WorkflowInstance;
+import org.apache.oodt.cas.workflow.structs.WorkflowTask;
 import org.apache.oodt.cas.workflow.structs.WorkflowInstancePage;
 import org.apache.oodt.commons.database.DatabaseConnectionBuilder;
 import org.apache.oodt.commons.database.SqlScript;
@@ -32,6 +35,7 @@ import java.sql.PreparedStatement;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Vector;
 import java.util.Set;
 
 import javax.sql.DataSource;
@@ -54,6 +58,7 @@ public class TestDataSourceWorkflowInstancePaging {
 
   private DataSource ds;
   private String tmpDirPath;
+  private final List<String> seededIds = new ArrayList<String>();
 
   @Before
   public void setUp() throws Exception {
@@ -77,37 +82,40 @@ public class TestDataSourceWorkflowInstancePaging {
     ds.getConnection().close();
   }
 
-  /*
-   * Written straight through JDBC rather than through addWorkflowInstance:
-   * that method omits workflow_instance_id from its INSERT and reads the id
-   * back with SELECT MAX, which the schema's NOT NULL primary key rejects.
-   * That is its own defect; this test is about the paging arithmetic, so it
-   * puts the rows in place itself. Every instance points at workflow 1,
-   * which the schema seeds along with its tasks.
+  /**
+   * Seeds instances through addWorkflowInstance, the real path.
+   *
+   * This used to write the rows straight through JDBC, because that method
+   * omitted workflow_instance_id from its INSERT and the schema's plain
+   * NOT NULL primary key rejected it. That was #137, and it is fixed, so the
+   * workaround is gone and the test exercises the path a caller takes.
+   *
+   * Every instance points at workflow 1, which the schema seeds along with
+   * its tasks.
    */
   private void seedInstances() throws Exception {
-    Connection conn = ds.getConnection();
-    PreparedStatement insert = conn.prepareStatement(
-        "INSERT INTO workflow_instances (workflow_instance_id, "
-        + "workflow_instance_status, workflow_id, current_task_id, "
-        + "start_date_time, end_date_time, current_task_start_date_time, "
-        + "current_task_end_date_time, priority, times_blocked) "
-        + "VALUES (?, ?, 1, 1, ?, ?, ?, ?, ?, 0)");
-    try {
-      for (int i = 1; i <= INSTANCE_COUNT; i++) {
-        insert.setInt(1, i);
-        insert.setString(2, "QUEUED");
-        insert.setString(3, "2026-01-0" + i + "T00:00:00.000Z");
-        insert.setString(4, "2026-01-0" + i + "T01:00:00.000Z");
-        insert.setString(5, "2026-01-0" + i + "T00:00:00.000Z");
-        insert.setString(6, "2026-01-0" + i + "T01:00:00.000Z");
-        insert.setDouble(7, 1.0d);
-        insert.execute();
-      }
-      conn.commit();
-    } finally {
-      insert.close();
-      conn.close();
+    DataSourceWorkflowInstanceRepository repo = repo();
+    for (int i = 1; i <= INSTANCE_COUNT; i++) {
+      WorkflowInstance inst = new WorkflowInstance();
+      Workflow w = new Workflow();
+      w.setId("1");
+      w.setName("Test Workflow");
+      WorkflowTask task = new WorkflowTask();
+      task.setTaskId("1");
+      task.setTaskName("Test Task");
+      Vector<WorkflowTask> tasks = new Vector<WorkflowTask>();
+      tasks.add(task);
+      w.setTasks(tasks);
+      inst.setWorkflow(w);
+      inst.setCurrentTaskId("1");
+      inst.setStatus("QUEUED");
+      inst.setStartDateTimeIsoStr("2026-01-0" + i + "T00:00:00.000Z");
+      inst.setEndDateTimeIsoStr("2026-01-0" + i + "T01:00:00.000Z");
+      inst.setCurrentTaskStartDateTimeIsoStr("2026-01-0" + i + "T00:00:00.000Z");
+      inst.setCurrentTaskEndDateTimeIsoStr("2026-01-0" + i + "T01:00:00.000Z");
+      inst.setSharedContext(new Metadata());
+      repo.addWorkflowInstance(inst);
+      seededIds.add(inst.getId());
     }
   }
 
@@ -161,8 +169,8 @@ public class TestDataSourceWorkflowInstancePaging {
 
     assertEquals("an instance appears on no page at all", INSTANCE_COUNT,
         seen.size());
-    for (int i = 1; i <= INSTANCE_COUNT; i++) {
-      assertTrue("instance " + i + " is on no page", seen.contains(String.valueOf(i)));
+    for (String id : seededIds) {
+      assertTrue("instance " + id + " is on no page", seen.contains(id));
     }
   }
 
