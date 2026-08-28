@@ -35,8 +35,11 @@
           </select>
         </label>
         <label>
-          Started after
-          <input v-model="since" type="date"/>
+          On or after
+          <span class="date-field">
+            <input v-model="since" type="date"/>
+            <button v-if="since" type="button" class="ghost" @click="since = ''">Clear</button>
+          </span>
         </label>
       </div>
     </div>
@@ -219,6 +222,12 @@ label {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+}
+
+.date-field {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
 }
 
 .mono {

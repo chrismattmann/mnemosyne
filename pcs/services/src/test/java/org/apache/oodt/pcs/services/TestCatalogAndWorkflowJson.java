@@ -107,6 +107,17 @@ public class TestCatalogAndWorkflowJson extends TestCase {
     assertEquals("jobs.tsv.aaaa", row.get("productName"));
   }
 
+  public void testEncodeInstanceProductsSkipsNulls() {
+    assertEquals(0, WorkflowResource.encodeInstanceProducts(null, null).size());
+    Product product = new Product();
+    product.setProductId("p1");
+    product.setProductName("jobs.tsv.aaaa");
+    List<Map<String, Object>> rows = WorkflowResource.encodeInstanceProducts(
+        Arrays.asList(product, null), null);
+    assertEquals(1, rows.size());
+    assertEquals("jobs.tsv.aaaa", rows.get(0).get("name"));
+  }
+
   public void testEncodeInstanceDetailIncludesMetadata() {
     WorkflowInstance inst = new WorkflowInstance();
     inst.setId("inst-2");

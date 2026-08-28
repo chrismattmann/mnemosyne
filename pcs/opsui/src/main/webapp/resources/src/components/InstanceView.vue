@@ -67,6 +67,37 @@
     </article>
 
     <article class="card">
+      <h3>Files this run produced</h3>
+      <p v-if="!products.length" class="empty">No File Manager products recorded for this run.</p>
+      <table v-else>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Received</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="product in products" :key="product.id || product.name">
+            <td>
+              <a v-if="product.id || product.name" href="#" @click.prevent="$emit('open-product', product.id || product.name)">
+                {{ product.name || product.id }}
+              </a>
+              <span v-else>—</span>
+            </td>
+            <td>
+              <a v-if="productType(product)" href="#" @click.prevent="$emit('open-type', productType(product))">
+                {{ productType(product) }}
+              </a>
+              <span v-else>—</span>
+            </td>
+            <td>{{ product.receivedTime || '—' }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </article>
+
+    <article class="card">
       <h3>Instance metadata</h3>
       <MetadataTable
         :metadata="metadata"
@@ -102,6 +133,10 @@ export default {
       inst,
       metadata,
       tasks: computed(() => inst.value.tasks || []),
+      products: computed(() => inst.value.products || []),
+      productType(product) {
+        return (product && product.type && product.type.name) || ''
+      },
       title: computed(() => inst.value.workflowName || 'Workflow instance'),
       finished: computed(() => instanceFinished(inst.value.status)),
       wallMs: computed(() => wallClockMs(inst.value.startDateTime, inst.value.endDateTime, Date.now())),

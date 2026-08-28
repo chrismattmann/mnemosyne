@@ -15,7 +15,15 @@
  * limitations under the License.
  */
 
-import { parseStamp } from './sort.js'
+/**
+ * Calendar date as written on the instance (YYYY-MM-DD), not the UTC
+ * day of the instant. 20:28 PDT on the 27th is the 28th in UTC; the
+ * Started column still says the 27th, so the filter must too.
+ */
+export function instanceStartDate(iso) {
+  const match = String(iso || '').match(/^(\d{4}-\d{2}-\d{2})/)
+  return match ? match[1] : ''
+}
 
 export function instanceMatches(inst, workflow, since) {
   if (!inst) {
@@ -29,9 +37,8 @@ export function instanceMatches(inst, workflow, since) {
     }
   }
   if (since) {
-    const started = parseStamp(inst.startDateTime)
-    const day = Date.parse(String(since) + 'T00:00:00')
-    if (started == null || !Number.isFinite(day) || started < day) {
+    const day = instanceStartDate(inst.startDateTime)
+    if (day && day < since) {
       return false
     }
   }

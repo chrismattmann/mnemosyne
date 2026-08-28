@@ -35,6 +35,7 @@ import javax.ws.rs.QueryParam;
 
 import net.sf.json.JSONObject;
 
+import org.apache.oodt.cas.filemgr.structs.Product;
 import org.apache.oodt.cas.metadata.Metadata;
 import org.apache.oodt.cas.workflow.structs.Priority;
 import org.apache.oodt.cas.workflow.structs.Workflow;
@@ -45,6 +46,8 @@ import org.apache.oodt.cas.workflow.structs.WorkflowTask;
 import org.apache.oodt.cas.workflow.structs.WorkflowTaskConfiguration;
 import org.apache.oodt.cas.workflow.system.WorkflowManagerClient;
 import org.apache.oodt.cas.workflow.system.rpc.RpcCommunicationFactory;
+import org.apache.oodt.pcs.pedigree.Pedigree;
+import org.apache.oodt.pcs.util.FileManagerUtils;
 
 /**
  * JSON workflow browse for the Vue OPSUI. Same data the Wicket monitor
@@ -183,6 +186,7 @@ public class WorkflowResource extends PCSService {
       } catch (Exception e) {
         LOG.fine("No current-task wall clock for " + id);
       }
+      row.put("products", loadInstanceProducts(id));
       JSONObject response = new JSONObject();
       response.put("instance", row);
       return response.toString();
@@ -258,6 +262,40 @@ public class WorkflowResource extends PCSService {
       row.put("productName", productName);
     }
     return row;
+  }
+
+  static List<Map<String, Object>> encodeInstanceProducts(List products, FileManagerUtils fm) {
+    List<Map<String, Object>> out = new ArrayList<Map<String, Object>>();
+    if (products == null) {
+      return out;
+    }
+    for (int i = 0; i < products.size(); i++) {
+      Object item = products.get(i);
+      if (item instanceof Product) {
+        out.add(CatalogResource.encodeProduct((Product) item, fm));
+      }
+    }
+    return out;
+  }
+
+  private List<Map<String, Object>> loadInstanceProducts(String instanceId) {
+    FileManagerUtils fm = null;
+    try {
+      fm = new FileManagerUtils(PCSService.conf.getFmUrl());
+      Pedigree pedigree = new Pedigree(fm, false, Collections.emptyList());
+      return encodeInstanceProducts(pedigree.getWorkflowInstProds(instanceId), fm);
+    } catch (Exception e) {
+      LOG.fine("No catalog products for instance " + instanceId + ": "
+          + e.getLocalizedMessage());
+      return Collections.emptyList();
+    } finally {
+      if (fm != null) {
+        try {
+          fm.close();
+        } catch (IOException ignored) {
+        }
+      }
+    }
   }
 
   static String firstMetadata(Metadata met, String... keys) {

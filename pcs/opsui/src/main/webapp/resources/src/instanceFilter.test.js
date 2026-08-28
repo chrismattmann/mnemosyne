@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { instanceMatches, workflowFilterOptions } from './instanceFilter.js'
+import { instanceMatches, instanceStartDate, workflowFilterOptions } from './instanceFilter.js'
 
 const split = {
   workflowName: 'SplitWorkflow',
@@ -19,6 +19,23 @@ test('workflow and started-after filters combine', () => {
   assert.equal(instanceMatches(split, 'BigTranslateWorkflow', ''), false)
   assert.equal(instanceMatches(translate, '', '2026-08-27'), true)
   assert.equal(instanceMatches(translate, '', '2026-08-28'), false)
+})
+
+test('on or after uses the displayed calendar date, not the UTC day', () => {
+  assert.equal(instanceStartDate(split.startDateTime), '2026-08-27')
+  assert.equal(instanceStartDate(translate.startDateTime), '2026-08-27')
+  assert.equal(instanceMatches(split, '', '2026-08-27'), true)
+  assert.equal(instanceMatches(translate, '', '2026-08-27'), true)
+  const utcForm = {
+    workflowName: 'SplitWorkflow',
+    startDateTime: '2026-08-28T03:28:56.401Z'
+  }
+  assert.equal(instanceMatches(utcForm, '', '2026-08-27'), true)
+  assert.equal(instanceMatches(utcForm, '', '2026-08-28'), true)
+})
+
+test('a missing start date is not dropped when a day is selected', () => {
+  assert.equal(instanceMatches({ workflowName: 'SplitWorkflow' }, '', '2026-08-27'), true)
 })
 
 test('workflow options union instances and definitions', () => {
