@@ -229,6 +229,15 @@ public class LuceneWorkflowInstanceRepository extends
      */
     public synchronized void updateWorkflowInstance(WorkflowInstance wInst)
             throws InstanceRepositoryException {
+        // This is remove plus add, so an id the repository has never seen was
+        // silently created by an update. The Memory repository logs and
+        // returns; the DataSource one updates nothing. A stale status update
+        // should not resurrect a workflow nobody is running.
+        if (wInst.getId() != null && getWorkflowInstanceById(wInst.getId()) == null) {
+            LOG.log(Level.WARNING, "Attempt to update unknown workflow instance: ["
+                    + wInst.getId() + "]: ignoring");
+            return;
+        }
         removeWorkflowInstanceDocument(wInst);
         addWorkflowInstanceToCatalog(wInst);
     }
@@ -468,7 +477,9 @@ public class LuceneWorkflowInstanceRepository extends
     public List getWorkflowInstancesByStatus(String status)
             throws InstanceRepositoryException {
         IndexSearcher searcher = null;
-        List wInsts = null;
+        // The interface promises a List, and the Memory and DataSource
+        // repositories both return an empty one when nothing matches.
+        List wInsts = new Vector();
         try {
             reader = DirectoryReader.open(indexDir);
         } catch (IOException e) {
@@ -491,8 +502,6 @@ public class LuceneWorkflowInstanceRepository extends
                 TopDocs topDocs = searcher.search(query, checkCount, sort);
                 ScoreDoc[] hits = topDocs.scoreDocs;
                 if (hits.length > 0) {
-                    wInsts = new Vector(hits.length);
-
                     for (ScoreDoc hit : hits) {
                         Document doc = searcher.storedFields().document(hit.doc);
                         WorkflowInstance wInst = toWorkflowInstance(doc);
@@ -877,6 +886,18 @@ public class LuceneWorkflowInstanceRepository extends
         }        
         inst.setState(state);
         inst.setCurrentTaskId(doc.get("workflow_inst_current_task_id"));
+        // The two setters below route the value to the task named by
+        // currentTaskId and do nothing when no such task is present. The
+        // workflow was not built until the end of this method, so the instance
+        // held an empty one here and both values were dropped: the write
+        // reported success and the read came back empty.
+        Workflow workflow = new Workflow();
+        workflow.setId(doc.get("workflow_id"));
+        workflow.setName(doc.get("workflow_name"));
+        workflow.setTasks(toTasks(doc));
+        workflow.setConditions(toConditions("workflow_condition_" + workflow.getId(), doc));
+        inst.setWorkflow(workflow);
+
         inst.setCurrentTaskStartDateTimeIsoStr(doc
                 .get("workflow_inst_currenttask_startdatetime"));
         inst.setCurrentTaskEndDateTimeIsoStr(doc
@@ -901,17 +922,6 @@ public class LuceneWorkflowInstanceRepository extends
         }
 
         inst.setSharedContext(sharedContext);
-
-        // now read all of the workflow info
-
-        Workflow workflow = new Workflow();
-
-        workflow.setId(doc.get("workflow_id"));
-        workflow.setName(doc.get("workflow_name"));
-        workflow.setTasks(toTasks(doc));
-        workflow.setConditions(toConditions("workflow_condition_"+workflow.getId(), doc));
-
-        inst.setWorkflow(workflow);
 
         return inst;
     }

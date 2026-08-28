@@ -20,9 +20,11 @@ package org.apache.oodt.cas.workflow.instrepo;
 
 //OODT imports
 import org.apache.oodt.cas.metadata.Metadata;
+import org.apache.oodt.commons.util.DateConvert;
 import org.apache.oodt.cas.workflow.structs.Workflow;
 import org.apache.oodt.cas.workflow.structs.WorkflowCondition;
 import org.apache.oodt.cas.workflow.structs.WorkflowInstance;
+import org.apache.oodt.cas.workflow.structs.WorkflowInstancePage;
 import org.apache.oodt.cas.workflow.structs.WorkflowStatus;
 import org.apache.oodt.cas.workflow.structs.WorkflowTask;
 import org.apache.oodt.cas.workflow.structs.WorkflowTaskConfiguration;
@@ -263,4 +265,104 @@ public class TestLuceneWorkflowInstanceRepository extends TestCase implements
                 "TestKey2"));
     }
 
+
+    /**
+     * The current-task times are routed to the task named by currentTaskId,
+     * and dropped when no such task is present. They were read back before the
+     * instance had been given its workflow, so they went nowhere: the write
+     * reported success and the read came back empty.
+     */
+    public void testCurrentTaskTimesSurviveARoundTrip() throws Exception {
+        WorkflowInstance inst = new WorkflowInstance();
+        inst.setWorkflow(testWkflw);
+        inst.setCurrentTaskId("test.task.id");      // a task the workflow has
+        inst.setStatus(STARTED);
+        inst.setCurrentTaskStartDateTimeIsoStr("2026-01-01T00:00:00.000Z");
+        inst.setCurrentTaskEndDateTimeIsoStr("2026-01-01T01:00:00.000Z");
+
+        repo.addWorkflowInstance(inst);
+        WorkflowInstance read = repo.getWorkflowInstanceById(inst.getId());
+
+        assertNotNull(read);
+        // The same instant, not necessarily the same spelling: the repository
+        // may render it in the local zone rather than as it was written.
+        assertNotNull("the current task start time was dropped on read",
+                read.getCurrentTaskStartDateTimeIsoStr());
+        assertNotNull("the current task end time was dropped on read",
+                read.getCurrentTaskEndDateTimeIsoStr());
+        assertEquals(DateConvert.isoParse("2026-01-01T00:00:00.000Z"),
+                DateConvert.isoParse(read.getCurrentTaskStartDateTimeIsoStr()));
+        assertEquals(DateConvert.isoParse("2026-01-01T01:00:00.000Z"),
+                DateConvert.isoParse(read.getCurrentTaskEndDateTimeIsoStr()));
+    }
+
+    /**
+     * The interface says a List, and the Memory and DataSource repositories
+     * both return an empty one. This returned null, so a caller that does not
+     * null-guard gets an NPE where the others give it nothing to iterate.
+     */
+    public void testNoMatchingStatusYieldsAnEmptyListNotNull() throws Exception {
+        List insts = repo.getWorkflowInstancesByStatus("NO_SUCH_STATUS");
+        assertNotNull("null where the interface promises a List", insts);
+        assertTrue(insts.isEmpty());
+    }
+
+    /**
+     * update is remove plus add, so updating an id the repository has never
+     * seen silently created it. A stale status update resurrects a workflow
+     * nobody is running.
+     */
+    public void testUpdatingAnUnknownInstanceDoesNotCreateIt() throws Exception {
+        int before = repo.getNumWorkflowInstances();
+
+        WorkflowInstance stranger = new WorkflowInstance();
+        stranger.setWorkflow(testWkflw);
+        stranger.setId("an-id-this-repository-has-never-seen");
+        stranger.setCurrentTaskId("test.task.id");
+        stranger.setStatus(STARTED);
+        repo.updateWorkflowInstance(stranger);
+
+        assertEquals("updating an unknown instance created it",
+                before, repo.getNumWorkflowInstances());
+        assertNull(repo.getWorkflowInstanceById("an-id-this-repository-has-never-seen"));
+    }
+
+    /** Updating one it does know must still work. */
+    public void testUpdatingAKnownInstanceStillWorks() throws Exception {
+        WorkflowInstance inst = new WorkflowInstance();
+        inst.setWorkflow(testWkflw);
+        inst.setCurrentTaskId("test.task.id");
+        inst.setStatus(STARTED);
+        repo.addWorkflowInstance(inst);
+
+        inst.setStatus(FINISHED);
+        repo.updateWorkflowInstance(inst);
+
+        assertEquals(FINISHED, repo.getWorkflowInstanceById(inst.getId()).getStatus());
+        assertEquals(1, repo.getNumWorkflowInstances());
+    }
+
+    /**
+     * getPrevPage tested isLastPage where it meant isFirstPage, so paging back
+     * from the last page returned that same page. All three repositories
+     * inherit it.
+     */
+    public void testPagingBackFromTheLastPageMoves() throws Exception {
+        for (int i = 0; i < 40; i++) {
+            WorkflowInstance inst = new WorkflowInstance();
+            inst.setWorkflow(testWkflw);
+            inst.setCurrentTaskId("test.task.id");
+            inst.setStatus(STARTED);
+            repo.addWorkflowInstance(inst);
+        }
+
+        WorkflowInstancePage first = repo.getFirstPage();
+        WorkflowInstancePage last = repo.getLastPage();
+        assertTrue("need more than one page for this to mean anything",
+                last.getPageNum() > first.getPageNum());
+
+        WorkflowInstancePage back = repo.getPrevPage(last);
+        assertEquals("could not page back from the last page",
+                last.getPageNum() - 1, back.getPageNum());
+    }
 }
