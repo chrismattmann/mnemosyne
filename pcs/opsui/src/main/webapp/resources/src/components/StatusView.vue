@@ -18,7 +18,11 @@
   <section>
     <div class="head">
       <h2>Status</h2>
-      <p class="muted">{{ generated }}</p>
+      <p class="muted">
+        <span v-if="generated">Report {{ generated }}</span>
+        <span v-if="ago"> · refreshed {{ ago }}</span>
+        <span v-if="stale" class="pill warn">stale</span>
+      </p>
     </div>
     <p v-if="loading && !report" class="empty">Loading health report…</p>
     <template v-else-if="report">
@@ -121,17 +125,20 @@
 </template>
 
 <script>
-import { computed, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import SortHead from './SortHead.vue'
 import { sortRows, toggleSort } from '../sort.js'
 import { onDemandLabel, onDemandPill } from '../onDemandStatus.js'
+import { formatAgo } from '../statusRefresh.js'
 
 export default {
   name: 'StatusView',
   components: { SortHead },
   props: {
     report: { type: Object, default: null },
-    loading: { type: Boolean, default: false }
+    loading: { type: Boolean, default: false },
+    refreshedAt: { type: Number, default: 0 },
+    stale: { type: Boolean, default: false }
   },
   emits: ['open-product', 'open-instances', 'open-config'],
   setup(props) {
@@ -152,6 +159,19 @@ export default {
     }
 
     const generated = computed(() => (props.report && props.report.generated) || '')
+    const now = ref(Date.now())
+    let tick = null
+    const ago = computed(() => formatAgo(props.refreshedAt, now.value))
+    onMounted(() => {
+      tick = setInterval(() => {
+        now.value = Date.now()
+      }, 1000)
+    })
+    onUnmounted(() => {
+      if (tick) {
+        clearInterval(tick)
+      }
+    })
 
     const daemons = computed(() => {
       const status = (props.report && props.report.daemonStatus) || {}
@@ -223,7 +243,7 @@ export default {
     })
 
     return {
-      up, onDemandPill, onDemandLabel, crawlCount, avgTime, generated, daemons, stubs, jobs, sortedJobs,
+      up, onDemandPill, onDemandLabel, crawlCount, avgTime, generated, ago, daemons, stubs, jobs, sortedJobs,
       jobSort, jobDir, sortJobs, crawlers, files, filesEmpty
     }
   }
