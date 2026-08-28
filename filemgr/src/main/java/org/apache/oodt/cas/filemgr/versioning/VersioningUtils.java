@@ -184,7 +184,27 @@ public final class VersioningUtils {
         String toDirRef = references.get(0)
                 .getDataStoreReference();
         String origDirRef = references.get(0).getOrigReference();
-        String origDirRefName = new File(origDirRef).getName();
+
+        // Each child is located by cutting its reference at the staging
+        // root's full prefix. The two share that prefix by construction --
+        // the children were found by walking the root -- so this is both
+        // simpler and correct.
+        //
+        // It used to search for the *name* of the staging directory inside
+        // the child's URL with indexOf, which finds the first occurrence. So
+        // whenever the directory's name also appeared earlier in the path,
+        // the child was cut at the wrong segment and archived one level
+        // deeper than the catalog and the versioner agree it should be:
+        //
+        //   staging root : file:/data/data
+        //   child        : file:/data/data/data
+        //   produced     : file:/archive/AProduct/data/data
+        //   correct      : file:/archive/AProduct/data
+        //
+        // A repeated segment is entirely ordinary -- /data/data, /2024/2024,
+        // a product type named after its parent directory.
+        String origDirPrefix = origDirRef.endsWith("/") ? origDirRef : origDirRef + "/";
+        String toDirPrefix = toDirRef.endsWith("/") ? toDirRef : toDirRef + "/";
 
         for (Reference r : references) {
             // don't bother with the first one, because it's already set
@@ -193,25 +213,38 @@ public final class VersioningUtils {
                 continue;
             }
 
-            // get the first occurence of the origDir name in the string
-            // then, the ref becomes:
-            // toDir+r.getOrigRef.substring(first occurence of
-            // origDir).substring(first occurence of '/'+1)
+            String origRef = r.getOrigReference();
+            if (!origRef.startsWith(origDirPrefix)) {
+                LOG.log(Level.WARNING, "VersioningUtils: reference [" + origRef
+                    + "] is not below the staging root [" + origDirRef
+                    + "]; leaving its data store reference alone");
+                continue;
+            }
 
-            String dataStoreRef = toDirRef;
-            int firstOccurenceOfOrigDir = r.getOrigReference().indexOf(
-                origDirRefName);
-            String tmpRef = r.getOrigReference().substring(
-                firstOccurenceOfOrigDir);
-            LOG.log(Level.FINER, "tmpRef: " + tmpRef);
-            int firstOccurenceSlash = tmpRef.indexOf("/");
-            dataStoreRef += tmpRef.substring(firstOccurenceSlash + 1);
+            String dataStoreRef = toDirPrefix
+                + origRef.substring(origDirPrefix.length());
 
             LOG.log(Level.FINE, "VersioningUtils: Generated data store ref: "
                                 + dataStoreRef + " from origRef: " + r.getOrigReference());
             r.setDataStoreReference(dataStoreRef);
         }
 
+    }
+
+    /**
+     * The last path segment of a URI reference, left in whatever encoded form
+     * it already carries.
+     *
+     * Taking it as text rather than through File.getName() keeps a name like
+     * "%25" escaped, so the reference built from it is still a URI that
+     * LocalDataTransferer can resolve.
+     */
+    private static String encodedFinalSegment(String reference) {
+        String trimmed = reference.endsWith("/")
+            ? reference.substring(0, reference.length() - 1)
+            : reference;
+        int lastSlash = trimmed.lastIndexOf('/');
+        return lastSlash >= 0 ? trimmed.substring(lastSlash + 1) : trimmed;
     }
 
     public static void createBasicDataStoreRefsFlat(String productName,
@@ -228,9 +261,21 @@ public final class VersioningUtils {
                     productRepoPathRef += "/";
                 }
 
+                // The final segment is taken in the encoded form it already
+                // has, rather than decoded out of the URI and concatenated
+                // back in raw. new File(new URI(...)).getName() decodes, so
+                // a file named "%" arrived as "%" and produced
+                // "file:/archive/AProduct/%" -- not a parseable URI
+                // ("Malformed escape pair at index 23"). LocalDataTransferer
+                // does new File(new URI(getDataStoreReference())) on this
+                // value, so it threw at transfer time, after the catalog
+                // entry had been made. A space failed the same way, and a
+                // "#" was worse: it parsed, but everything after it became a
+                // fragment, so the transferer wrote to a different path than
+                // the one recorded.
                 dataStoreRef = productRepoPathRef
                                + URLEncoder.encode(productName, "UTF-8") + "/"
-                               + new File(new URI(r.getOrigReference())).getName();
+                               + encodedFinalSegment(r.getOrigReference());
             } catch (IOException e) {
                 LOG.log(Level.WARNING,
                     "VersioningUtils: Error generating dataStoreRef for "
