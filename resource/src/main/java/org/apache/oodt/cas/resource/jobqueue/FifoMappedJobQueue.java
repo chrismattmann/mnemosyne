@@ -466,7 +466,14 @@ public class FifoMappedJobQueue implements MappedJobQueue {
         } catch (JobRepositoryException e) {
           LOG.log(Level.WARNING, "Failed to fetch JobSpec from repo: " + jobId);
         }
-        if (spec.getIn().getMetadata().get(key).equals(val)) {
+        // getJobById logs and leaves spec null on failure, and a job whose
+        // input simply lacks this key is an ordinary case rather than an
+        // error -- both used to be a NullPointerException here.
+        if (spec == null || spec.getIn() == null) {
+          continue;
+        }
+        Vector<String> values = spec.getIn().getMetadata().get(key);
+        if (values != null && values.contains(val)) {
           specsToPromote.add(spec);
         }
       }

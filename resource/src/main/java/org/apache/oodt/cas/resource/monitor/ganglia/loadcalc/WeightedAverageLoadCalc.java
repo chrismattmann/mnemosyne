@@ -90,8 +90,15 @@ public class WeightedAverageLoadCalc implements LoadCalculator {
             double weightedLoadAverage = (weightedLoadOne + weightedLoadFive + weightedLoadFifteen) /
                     (loadOneWeight + loadFiveWeight + loadFifteenWeight);
             
-            System.out.println("Weighted load one: ["+weightedLoadOne+"]: weighted load five: ["+weightedLoadFive+"] weighted load fifteen: ["+weightedLoadFifteen+"]");
-            return Double.valueOf(numberFormat.format(weightedLoadAverage));
+            // Rounded arithmetically. This used to format the value with a
+            // default-locale NumberFormat and re-parse it with the
+            // locale-independent Double.valueOf, so on any comma-decimal
+            // locale the formatter emitted "0,333" and the parse threw
+            // NumberFormatException -- the Ganglia monitor could not read
+            // the load on an ordinary German or French host. Above 1000 the
+            // grouping separator would have done the same.
+            double scale = Math.pow(10, MAXIMUM_FRACTION_DIGITS);
+            return Math.round(weightedLoadAverage * scale) / scale;
         }
     }
 }

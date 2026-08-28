@@ -223,7 +223,13 @@ public class TaskJobInput implements JobInput {
         this.dynMetadata.getAllKeys().size() > 0){
       for(String metName: this.dynMetadata.getAllKeys()){
         Vector<String> vals = new Vector<String>();
-        vals.addAll(this.dynMetadata.getAllValues(metName));
+        // Was getAllValues(metName), which returns the values of everything
+        // *below* a group and excludes the group's own. A flat key has
+        // nothing below it, so vals was always empty, the guard never fired
+        // and every dynamic key was silently dropped -- leaving the note
+        // above, that dynamic metadata takes precedence over configuration,
+        // true only in the sense that it contributed nothing at all.
+        vals.addAll(this.dynMetadata.getAllMetadata(metName));
         if (vals.size() > 0){
           met.put(metName, vals);
         }

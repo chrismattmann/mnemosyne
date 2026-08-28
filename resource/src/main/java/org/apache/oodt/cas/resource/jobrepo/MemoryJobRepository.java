@@ -27,6 +27,7 @@ import org.apache.oodt.commons.util.DateConvert;
 import org.apache.oodt.cas.resource.structs.JobSpec;
 import org.apache.oodt.cas.resource.structs.JobStatus;
 import org.apache.oodt.cas.resource.structs.exceptions.JobRepositoryException;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * @author mattmann
@@ -36,6 +37,9 @@ import org.apache.oodt.cas.resource.structs.exceptions.JobRepositoryException;
  * {@link ConcurrentHashMap} for persisting its {@link JobSpec}s.
  */
 public class MemoryJobRepository implements JobRepository {
+
+  /** Distinguishes jobs that arrive in the same millisecond; see addJob. */
+  private static final AtomicLong ID_SEQUENCE = new AtomicLong();
 
   /*
    * our storage for {@link JobSpec}s. A map of job id to {@link JobSpec}.
@@ -52,8 +56,18 @@ public class MemoryJobRepository implements JobRepository {
    * @see org.apache.oodt.cas.resource.jobrepo.JobRepository#addJob(org.apache.oodt.cas.resource.structs.JobSpec)
    */
   public String addJob(JobSpec spec) throws JobRepositoryException {
-    // need to generate a JobId for this job
-    String jobId = DateConvert.isoFormat(new Date());
+    // The id used to be the timestamp alone. isoFormat has millisecond
+    // resolution and nothing checked for collisions, so two jobs submitted
+    // in the same millisecond -- two consecutive addJob calls do it every
+    // time -- were given the same id, and jobMap.put silently overwrote the
+    // first. That job was gone, never to be scheduled, and the id its client
+    // was holding reported the second job's status: the caller polled a job
+    // that was not theirs and watched it succeed.
+    //
+    // The counter keeps ids unique while leaving the timestamp as the
+    // prefix, so they still sort chronologically.
+    String jobId = DateConvert.isoFormat(new Date()) + "-"
+        + ID_SEQUENCE.incrementAndGet();
 
     if (spec.getJob() != null) {
       spec.getJob().setId(jobId);

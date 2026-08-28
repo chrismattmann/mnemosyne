@@ -119,14 +119,17 @@ public class NameValueJobInput implements JobInput {
   @Override
   public Map<String, Vector<String>> getMetadata() {
     Map<String, Vector<String>> met = new HashMap<String, Vector<String>>(); 
-    if (props != null && props.keySet() != null && props.keySet().size() > 0){
-       for (Object key: props.values()){
-         String keyName = (String)key;
-         Vector<String> vals = new Vector<String>();
-         vals.add(props.getProperty(keyName));
-         met.put(keyName, vals);
-       }
-     }
+    if (props != null) {
+      // Was props.values(), so the map came back keyed by the values rather
+      // than the names -- and each entry held props.getProperty(someValue),
+      // which is null for anything not coincidentally also a key. A single
+      // pair {"0": ""} produced a map with no entry under "0" at all.
+      for (String keyName : props.stringPropertyNames()) {
+        Vector<String> vals = new Vector<String>();
+        vals.add(props.getProperty(keyName));
+        met.put(keyName, vals);
+      }
+    }
     return met;
   }
   

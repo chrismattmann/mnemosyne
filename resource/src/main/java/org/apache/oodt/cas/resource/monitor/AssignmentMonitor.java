@@ -132,12 +132,32 @@ public class AssignmentMonitor implements Monitor {
         ResourceNode targetResource = null;
         List<ResourceNode> nodes = this.getNodes();
         for (ResourceNode node : nodes) {
-            if (node.getIpAddr() == ipAddr) {
+            if (sameAddress(node.getIpAddr(), ipAddr)) {
                 targetResource = node;
                 break;
             }
         }
         return targetResource;
+    }
+
+    /**
+     * Whether two node addresses name the same node.
+     *
+     * The comparison used to be ==, so the lookup succeeded only when the
+     * caller happened to hold the very URL object the monitor had stored.
+     * Anything that built its URL from a string -- reading a node address off
+     * the wire, out of configuration, or from a CLI argument -- got null for
+     * a node that was registered and healthy.
+     *
+     * Compared as text rather than with URL.equals, which resolves both hosts
+     * through DNS: a blocking network call, inside a loop over every node,
+     * to answer a question about two strings the monitor itself stored.
+     */
+    private static boolean sameAddress(URL stored, URL wanted) {
+        if (stored == null || wanted == null) {
+            return stored == wanted;
+        }
+        return stored.toExternalForm().equals(wanted.toExternalForm());
     }
 
     public void addNode(ResourceNode node) throws MonitorException {
