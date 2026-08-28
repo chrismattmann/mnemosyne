@@ -32,8 +32,9 @@
         <tr>
           <th>ID</th>
           <SortHead field="workflow" :sort="sort" :dir="dir" @sort="onSort">Workflow</SortHead>
+          <SortHead field="product" :sort="sort" :dir="dir" @sort="onSort">Product</SortHead>
           <SortHead field="status" :sort="sort" :dir="dir" @sort="onSort">Status</SortHead>
-          <SortHead field="task" :sort="sort" :dir="dir" @sort="onSort">Current task</SortHead>
+          <SortHead field="task" :sort="sort" :dir="dir" @sort="onSort">Task</SortHead>
           <SortHead field="start" :sort="sort" :dir="dir" @sort="onSort">Started</SortHead>
           <SortHead field="end" :sort="sort" :dir="dir" @sort="onSort">Ended</SortHead>
           <SortHead field="wall" :sort="sort" :dir="dir" @sort="onSort">Wall clock</SortHead>
@@ -50,6 +51,12 @@
               {{ inst.workflowName || inst.workflowId }}
             </a>
             <span v-else>{{ inst.workflowName }}</span>
+          </td>
+          <td>
+            <a v-if="inst.productName" href="#" @click.prevent="$emit('open-product', inst.productName)">
+              {{ inst.productName }}
+            </a>
+            <span v-else>—</span>
           </td>
           <td>
             <span class="pill" :class="pillClass(inst.status)">{{ inst.status }}</span>
@@ -90,7 +97,7 @@ export default {
     status: { type: String, default: 'ALL' },
     loading: { type: Boolean, default: false }
   },
-  emits: ['status', 'page', 'open-workflow', 'open-task', 'open-instance'],
+  emits: ['status', 'page', 'open-workflow', 'open-task', 'open-instance', 'open-product'],
   setup(props) {
     const pageBody = computed(() => (props.payload && props.payload.page) || {})
     const sort = ref('')
@@ -103,6 +110,7 @@ export default {
     })
     const getters = {
       workflow: (row) => row.workflowName || row.workflowId || '',
+      product: (row) => row.productName || '',
       status: (row) => row.status || '',
       task: (row) => row.currentTaskName || row.currentTaskId || '',
       start: (row) => parseStamp(row.startDateTime),

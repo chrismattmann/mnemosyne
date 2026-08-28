@@ -41,32 +41,75 @@
         </tr>
       </tbody>
     </table>
-    <Pager :page="page" :total-pages="totalPages" @page="$emit('page', $event)"/>
+    <p v-if="products.length" class="muted shown">
+      Showing {{ products.length }} of {{ numProducts }} products.
+    </p>
+    <p v-if="hasMore" ref="moreEl" class="more">
+      <button class="ghost" type="button" :disabled="loading" @click="loadMore">
+        {{ loading ? 'Loading…' : 'Load more' }}
+      </button>
+    </p>
   </section>
 </template>
 
 <script>
-import { computed } from 'vue'
-import Pager from './Pager.vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 
 export default {
   name: 'TypeView',
-  components: { Pager },
   props: {
     payload: { type: Object, default: null },
     loading: { type: Boolean, default: false }
   },
-  emits: ['page', 'open', 'back'],
-  setup(props) {
+  emits: ['more', 'open', 'back'],
+  setup(props, { emit }) {
     const catalog = computed(() => (props.payload && props.payload.catalog) || {})
     const type = computed(() => catalog.value.type || {})
+    const page = computed(() => catalog.value.page || 1)
+    const totalPages = computed(() => catalog.value.totalPages || 1)
+    const hasMore = computed(() => page.value < totalPages.value)
+    const moreEl = ref(null)
+    let observer = null
+
+    function loadMore() {
+      if (props.loading || !hasMore.value) {
+        return
+      }
+      emit('more', page.value + 1)
+    }
+
+    function attach() {
+      if (observer) {
+        observer.disconnect()
+        observer = null
+      }
+      if (typeof IntersectionObserver === 'undefined' || !moreEl.value) {
+        return
+      }
+      observer = new IntersectionObserver((entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          loadMore()
+        }
+      })
+      observer.observe(moreEl.value)
+    }
+
+    onMounted(attach)
+    watch([hasMore, moreEl], attach)
+    onUnmounted(() => {
+      if (observer) {
+        observer.disconnect()
+      }
+    })
+
     return {
       name: computed(() => type.value.name || ''),
       description: computed(() => type.value.description || ''),
       numProducts: computed(() => catalog.value.numProducts != null ? catalog.value.numProducts : 0),
       products: computed(() => catalog.value.products || []),
-      page: computed(() => catalog.value.page || 1),
-      totalPages: computed(() => catalog.value.totalPages || 1)
+      hasMore,
+      moreEl,
+      loadMore
     }
   }
 }
@@ -75,5 +118,14 @@ export default {
 <style scoped>
 h2 {
   margin: 0.4rem 0 0.3rem;
+}
+
+.shown {
+  margin-top: 0.8rem;
+  font-size: 0.85rem;
+}
+
+.more {
+  margin: 0.8rem 0 1.4rem;
 }
 </style>

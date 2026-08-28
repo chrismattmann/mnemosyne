@@ -98,6 +98,13 @@ public class TestCatalogAndWorkflowJson extends TestCase {
     assertEquals("PGE EXEC", row.get("status"));
     assertEquals("urn:bt:Flow", row.get("workflowId"));
     assertEquals("Translate", row.get("currentTaskName"));
+    assertFalse(row.containsKey("productName"));
+    Metadata met = new Metadata();
+    met.addMetadata("InputFiles", "parent.tsv");
+    met.addMetadata("Filename", "jobs.tsv.aaaa");
+    inst.setSharedContext(met);
+    row = WorkflowResource.encodeInstance(inst);
+    assertEquals("jobs.tsv.aaaa", row.get("productName"));
   }
 
   public void testEncodeInstanceDetailIncludesMetadata() {

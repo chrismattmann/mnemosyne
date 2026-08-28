@@ -28,6 +28,7 @@
 
       <article class="card">
         <h3>Nodes</h3>
+        <p class="muted crawler-note">A node whose URL is a batch stub is a separate on-demand daemon. “Not running” is expected unless a batch job is in flight.</p>
         <p v-if="!nodes.length" class="empty">No nodes reported.</p>
         <table v-else>
           <thead>
@@ -37,6 +38,7 @@
               <th>Capacity</th>
               <th>Load</th>
               <th>Queues</th>
+              <th>Daemon</th>
             </tr>
           </thead>
           <tbody>
@@ -46,6 +48,15 @@
               <td>{{ node.capacity }}</td>
               <td>{{ node.load || '—' }}</td>
               <td>{{ (node.queues || []).join(', ') || '—' }}</td>
+              <td>
+                <template v-if="stubFor(node)">
+                  <span class="pill" :class="onDemandPill(stubFor(node).status)">
+                    {{ onDemandLabel(stubFor(node).status) }}
+                  </span>
+                  <span class="muted stub-name">{{ stubFor(node).daemon }}</span>
+                </template>
+                <span v-else>—</span>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -99,11 +110,14 @@
 
 <script>
 import { computed } from 'vue'
+import { onDemandLabel, onDemandPill } from '../onDemandStatus.js'
+import { stubForNode } from '../resourceStubs.js'
 
 export default {
   name: 'ResourcesView',
   props: {
     payload: { type: Object, default: null },
+    stubs: { type: Array, default: () => [] },
     loading: { type: Boolean, default: false }
   },
   setup(props) {
@@ -113,7 +127,12 @@ export default {
       error: computed(() => resource.value.error || ''),
       nodes: computed(() => resource.value.nodes || []),
       queues: computed(() => resource.value.queues || []),
-      jobs: computed(() => resource.value.jobs || [])
+      jobs: computed(() => resource.value.jobs || []),
+      onDemandPill,
+      onDemandLabel,
+      stubFor(node) {
+        return stubForNode(node, props.stubs)
+      }
     }
   }
 }
@@ -132,6 +151,11 @@ h3 {
   margin-top: 1rem;
 }
 
+.crawler-note {
+  margin: -0.2rem 0 0.7rem;
+  font-size: 0.85rem;
+}
+
 .mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.8rem;
@@ -139,5 +163,10 @@ h3 {
 
 .break {
   word-break: break-all;
+}
+
+.stub-name {
+  margin-left: 0.4rem;
+  font-size: 0.8rem;
 }
 </style>

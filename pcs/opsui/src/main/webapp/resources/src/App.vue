@@ -40,11 +40,11 @@
     <ConfigView v-else-if="route.view === 'config'" :payload="configPayload" :loading="loading" @back="go({ view: 'status' })"/>
     <CatalogView v-else-if="route.view === 'catalog'" :types="types" :loading="loading" @open="openType" @query="openSearch"/>
     <SearchView v-else-if="route.view === 'search'" :payload="searchPayload" :loading="loading" @query="openSearch" @open="openProduct" @open-type="openType" @back="go({ view: 'catalog' })"/>
-    <TypeView v-else-if="route.view === 'type'" :payload="typePayload" :loading="loading" @page="openTypePage" @open="openProduct" @back="go({ view: 'catalog' })"/>
+    <TypeView v-else-if="route.view === 'type'" :payload="typePayload" :loading="loading" @more="openTypeMore" @open="openProduct" @back="go({ view: 'catalog' })"/>
     <ProductView v-else-if="route.view === 'product'" :payload="productPayload" :pedigree="pedigree" :loading="loading" @open-type="openType" @open-instance="openInstance" @open-workflow="openWorkflow" @open-task="openTask" @open-product="openProduct" @back="go({ view: 'catalog' })"/>
-    <InstancesView v-else-if="route.view === 'instances'" :payload="instancePayload" :status="route.status || 'ALL'" :loading="loading" @status="openInstances" @page="openInstancesPage" @open-workflow="openWorkflow" @open-task="openTask" @open-instance="openInstance"/>
+    <InstancesView v-else-if="route.view === 'instances'" :payload="instancePayload" :status="route.status || 'ALL'" :loading="loading" @status="openInstances" @page="openInstancesPage" @open-workflow="openWorkflow" @open-task="openTask" @open-instance="openInstance" @open-product="openProduct"/>
     <InstanceView v-else-if="route.view === 'instance'" :payload="instanceDetail" :loading="loading" @open-workflow="openWorkflow" @open-task="openTask" @open-instance="openInstance" @open-type="openType" @open-product="openProduct" @back="go({ view: 'instances', status: route.status || 'ALL', page: 1 })"/>
-    <ResourcesView v-else-if="route.view === 'resources'" :payload="resourcePayload" :loading="loading"/>
+    <ResourcesView v-else-if="route.view === 'resources'" :payload="resourcePayload" :stubs="resourceStubs" :loading="loading"/>
     <WorkflowsView v-else-if="route.view === 'workflows'" :workflows="workflows" :loading="loading" @open="openWorkflow"/>
     <WorkflowView v-else-if="route.view === 'workflow'" :payload="workflowPayload" :loading="loading" @open-task="openTask" @back="go({ view: 'workflows' })"/>
     <TaskView v-else-if="route.view === 'task'" :payload="taskPayload" :loading="loading" @open-condition="openCondition" @back="go({ view: 'workflows' })"/>
@@ -55,7 +55,7 @@
 </template>
 
 <script>
-import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import StatusView from './components/StatusView.vue'
 import CatalogView from './components/CatalogView.vue'
 import SearchView from './components/SearchView.vue'
@@ -74,6 +74,7 @@ import {
   getResources, getTask, getTypeProducts, getTypes, getWorkflow, getWorkflows, queryCatalog
 } from './api.js'
 import { catalogSqlError } from './sqlQuery.js'
+import { mergeTypeCatalog } from './catalogPages.js'
 
 export default {
   name: 'App',
@@ -222,6 +223,17 @@ export default {
       go({ view: 'type', name: route.value.name, page })
     }
 
+    function openTypeMore(page) {
+      const catalog = typePayload.value && typePayload.value.catalog
+      const current = catalog && catalog.page ? catalog.page : (route.value.page || 1)
+      const total = catalog && catalog.totalPages ? catalog.totalPages : 1
+      const next = page || current + 1
+      if (next > total || loading.value) {
+        return
+      }
+      go({ view: 'type', name: route.value.name, page: next })
+    }
+
     function openProduct(id) {
       go({ view: 'product', id })
     }
@@ -307,9 +319,27 @@ export default {
             searchPayload.value = await queryCatalog(sql)
           }
         } else if (r.view === 'resources') {
-          resourcePayload.value = await getResources()
+          const [res, healthBody] = await Promise.all([getResources(), getHealth()])
+          resourcePayload.value = res
+          health.value = healthBody.report || healthBody
         } else if (r.view === 'type') {
-          typePayload.value = await getTypeProducts(r.name, r.page || 1)
+          const through = r.page || 1
+          const current = typePayload.value && typePayload.value.catalog
+          const currentName = current && current.type && current.type.name
+          let havePage = 0
+          if (currentName === r.name) {
+            havePage = Number(current.page) || 0
+          } else {
+            typePayload.value = null
+          }
+          for (let p = havePage + 1; p <= through; p++) {
+            const body = await getTypeProducts(r.name, p)
+            typePayload.value = mergeTypeCatalog(typePayload.value, body)
+            const total = (body.catalog && body.catalog.totalPages) || 1
+            if (p >= total) {
+              break
+            }
+          }
         } else if (r.view === 'product') {
           const body = await getProduct(r.id)
           if (body && body.missing) {
@@ -373,10 +403,15 @@ export default {
       }
     })
 
+    const resourceStubs = computed(() => {
+      const status = (health.value && health.value.daemonStatus) || {}
+      return Array.isArray(status.stubs) ? status.stubs : []
+    })
+
     return {
       route, loading, error, health, types, typePayload, productPayload,
       pedigree, instancePayload, instanceDetail, workflows, workflowPayload, taskPayload,
-      conditionPayload, configPayload, searchPayload, resourcePayload, go, openType, openTypePage, openProduct,
+      conditionPayload, configPayload, searchPayload, resourcePayload, resourceStubs, go, openType, openTypePage, openTypeMore, openProduct,
       openProductByPath, openLatestFile, openInstances, openInstancesPage, openInstance, openWorkflow, openTask, openCondition, openConfig, openSearch
     }
   }
