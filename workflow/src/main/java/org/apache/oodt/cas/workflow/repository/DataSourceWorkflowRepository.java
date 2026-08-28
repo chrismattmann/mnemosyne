@@ -1833,10 +1833,26 @@ if (statement != null) {
     WorkflowTask task = new WorkflowTask();
     task.setConditions(conditions);
     task.setTaskConfig(new WorkflowTaskConfiguration());
+    // Built in memory. The last line here used to be
+    // task.setTaskId(this.commitTask(workflow, task)), which threw away the
+    // deterministic id set two lines above and wrote a row instead -- so
+    // every read of a workflow that declares global conditions inserted a
+    // task into workflow_tasks and workflow_task_map and grew that
+    // workflow's task list by one, permanently and without limit.
+    //
+    // Nothing checked whether the synthetic task already existed, so reading
+    // the same workflow twice returned two different task lists: the same
+    // workflow id described different work over time, silently, with the
+    // corruption visible only by counting rows. A monitoring page polling a
+    // workflow definition grew the database until the disk filled.
+    //
+    // This task is a view concern rather than a persistence one -- it exists
+    // to give the global conditions somewhere to hang during evaluation --
+    // and the id it needs is derived from the workflow, so no round trip is
+    // required to obtain one.
     task.setTaskId(workflow.getId() + "-global-conditions-eval");
     task.setTaskName(workflow.getName() + "-global-conditions-eval");
     task.setTaskInstanceClassName(NoOpTask.class.getName());
-    task.setTaskId(this.commitTask(workflow, task));
     return task;
   }
 

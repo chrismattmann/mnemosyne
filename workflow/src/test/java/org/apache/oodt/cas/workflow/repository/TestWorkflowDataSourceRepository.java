@@ -606,4 +606,87 @@ public class TestWorkflowDataSourceRepository {
     assertEquals("1", stored.getTasks().get(1).getTaskId());
   }
 
+
+  /**
+   * Reading a workflow used to write to the database.
+   *
+   * getWorkflowById calls handleGlobalWorkflowConditions for a workflow that
+   * declares global conditions, and that built a synthetic
+   * "-global-conditions-eval" task by round-tripping it through commitTask --
+   * an INSERT into workflow_tasks and workflow_task_map. Nothing checked
+   * whether it already existed, so every read added another one and the
+   * workflow's task list grew by one, permanently and without limit.
+   *
+   * Unbounded, silent, and it changed the definition under its operators: the
+   * same workflow id described different work on the second read than on the
+   * first. For a system whose purpose is a reproducible record of what
+   * produced each data product, a read that rewrites the definition is the
+   * worst shape a defect can take.
+   */
+  @Test
+  public void testReadingAWorkflowLeavesTheRepositoryAsItWas() throws Exception {
+    DataSourceWorkflowRepository repo = new DataSourceWorkflowRepository(ds);
+
+    int tasksBefore = countRows("workflow_tasks");
+    int mapBefore = countRows("workflow_task_map");
+
+    Workflow first = repo.getWorkflowById("1");
+    Workflow second = repo.getWorkflowById("1");
+
+    assertEquals("reading a workflow inserted a task",
+        tasksBefore, countRows("workflow_tasks"));
+    assertEquals("reading a workflow inserted a task mapping",
+        mapBefore, countRows("workflow_task_map"));
+    assertEquals("the task list grew between two reads",
+        first.getTasks().size(), second.getTasks().size());
+  }
+
+  /** The same workflow describes the same work however often it is read. */
+  @Test
+  public void testTwoReadsDescribeTheSameWork() throws Exception {
+    DataSourceWorkflowRepository repo = new DataSourceWorkflowRepository(ds);
+
+    List<String> firstIds = taskIdsOf(repo.getWorkflowById("1"));
+    List<String> secondIds = taskIdsOf(repo.getWorkflowById("1"));
+
+    assertEquals(firstIds, secondIds);
+  }
+
+  /**
+   * The synthetic task still appears, and its id is derived from the
+   * workflow rather than assigned by the database.
+   */
+  @Test
+  public void testTheGlobalConditionsTaskIsStillPresentAndDeterministic()
+      throws Exception {
+    DataSourceWorkflowRepository repo = new DataSourceWorkflowRepository(ds);
+
+    Workflow workflow = repo.getWorkflowById("1");
+
+    assertTrue("the workflow under test declares no global conditions, so "
+        + "this asserts nothing", workflow.getConditions().size() > 0);
+    assertEquals("1-global-conditions-eval",
+        workflow.getTasks().get(0).getTaskId());
+  }
+
+  private static List<String> taskIdsOf(Workflow workflow) {
+    List<String> ids = new Vector<String>();
+    for (WorkflowTask task : workflow.getTasks()) {
+      ids.add(task.getTaskId());
+    }
+    return ids;
+  }
+
+  private int countRows(String table) throws Exception {
+    java.sql.Connection conn = ds.getConnection();
+    try {
+      java.sql.ResultSet rs = conn.createStatement()
+          .executeQuery("SELECT COUNT(*) FROM " + table);
+      assertTrue(rs.next());
+      return rs.getInt(1);
+    } finally {
+      conn.close();
+    }
+  }
+
 }

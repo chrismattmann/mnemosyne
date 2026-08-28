@@ -211,9 +211,21 @@ the License.
         <version>2.2.2</version>
       </dependency>
       <dependency>
-        <groupId>hsqldb</groupId>
+        <!--
+          Was hsqldb:hsqldb:1.8.0.7, released in 2007. That version cannot
+          return a generated key; it answers "This function is not
+          supported". DataSourceWorkflowInstanceRepository therefore had to
+          keep a SELECT MAX(id) fallback, and that fallback hands two racing
+          writers the same id. 2.7 supports generated keys, which lets the
+          fallback go.
+
+          The group id moved to org.hsqldb at 2.0. The deprecated
+          org.hsqldb.jdbcDriver class name is still present in 2.7, so
+          existing configuration keeps working unchanged.
+        -->
+        <groupId>org.hsqldb</groupId>
         <artifactId>hsqldb</artifactId>
-        <version>1.8.0.7</version>
+        <version>2.7.4</version>
       </dependency>
       <dependency>
         <groupId>javax.servlet</groupId>

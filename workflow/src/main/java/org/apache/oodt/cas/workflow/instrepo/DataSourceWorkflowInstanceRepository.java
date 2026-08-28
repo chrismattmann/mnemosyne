@@ -104,7 +104,8 @@ public class DataSourceWorkflowInstanceRepository extends
             // Bound, not concatenated: an apostrophe in any of these closed
             // the literal it sat in and took the statement with it.
             LOG.log(Level.FINE, "sql: Executing: " + startWorkflowSql);
-            insert = conn.prepareStatement(startWorkflowSql);
+            insert = conn.prepareStatement(startWorkflowSql,
+                    Statement.RETURN_GENERATED_KEYS);
             insert.setString(1, wInst.getStatus());
             insert.setString(2, workflowIdField);
             insert.setString(3, taskIdField);
@@ -116,17 +117,27 @@ public class DataSourceWorkflowInstanceRepository extends
             insert.setInt(9, wInst.getTimesBlocked());
             insert.execute();
 
+            // The id comes back from the insert that generated it.
+            //
+            // It used to be read with SELECT MAX(workflow_instance_id), which
+            // is the id of whichever row happens to be highest at that
+            // moment, so two writers racing each other were handed the same
+            // one and each went on to attach its metadata to the other's
+            // instance. The synchronized block around it did nothing about
+            // that: it locked on a String constant, which the JVM interns, so
+            // every repository in the process contended on one lock and none
+            // of them excluded a second process.
             String workflowInstId = "";
-
-            synchronized (workflowInstId) {
-                String getWorkflowInstIdSql = "SELECT MAX(workflow_instance_id) "
-                        + "AS max_id FROM workflow_instances";
-
-                rs = statement.executeQuery(getWorkflowInstIdSql);
-
-                while (rs.next()) {
-                    workflowInstId = String.valueOf(rs.getInt("max_id"));
-                }
+            rs = insert.getGeneratedKeys();
+            if (rs != null && rs.next()) {
+                workflowInstId = String.valueOf(rs.getInt(1));
+            }
+            if (workflowInstId.isEmpty()) {
+                throw new InstanceRepositoryException(
+                    "The database returned no id for the workflow instance it "
+                    + "just stored; the workflow_instances table needs an "
+                    + "identity column, as the shipped workflow.sql now "
+                    + "declares");
             }
 
             conn.commit();
