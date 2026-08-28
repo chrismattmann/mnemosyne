@@ -28,6 +28,7 @@ import org.apache.oodt.cas.filemgr.structs.query.ComplexQuery;
 import org.apache.oodt.cas.filemgr.structs.query.QueryFilter;
 import org.apache.oodt.cas.filemgr.structs.query.filter.FilterAlgor;
 
+import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Stack;
@@ -161,6 +162,40 @@ public class SqlParser {
             sq.addCriterion(parseStatement(toPostFix(whereList)));
         }
         return sq;
+    }
+
+    /**
+     * Map SELECT / FROM / WHERE identifiers onto canonical catalog names so
+     * {@code select filename from employmentjob} is the same query as
+     * {@code SELECT Filename FROM EmploymentJob}. Exact matches win; a unique
+     * case-insensitive match is rewritten; an unknown product type is an error.
+     * Unknown metadata field names are left as typed so custom keys still work.
+     */
+    public static void resolveIdentifiers(ComplexQuery query,
+            Collection<String> productTypeNames, Collection<String> elementNames)
+            throws QueryFormulationException {
+        if (query == null) {
+            return;
+        }
+        if (query.getReducedProductTypeNames() != null) {
+            List<String> resolved = new LinkedList<String>();
+            for (String name : query.getReducedProductTypeNames()) {
+                resolved.add(resolveName(name, productTypeNames, true, "product type"));
+            }
+            query.setReducedProductTypeNames(resolved);
+        }
+        if (query.getReducedMetadata() != null) {
+            List<String> resolved = new LinkedList<String>();
+            for (String name : query.getReducedMetadata()) {
+                resolved.add(resolveName(name, elementNames, false, "metadata field"));
+            }
+            query.setReducedMetadata(resolved);
+        }
+        if (query.getCriteria() != null) {
+            for (QueryCriteria criterion : query.getCriteria()) {
+                resolveCriteria(criterion, elementNames);
+            }
+        }
     }
     
     public static QueryCriteria parseSqlWhereClause(String sqlWhereClause) 
@@ -557,6 +592,65 @@ public class SqlParser {
      * asked for, and ORBIT and ANDES threw. It also read past the end of the
      * string near the last few characters.
      */
+    private static void resolveCriteria(QueryCriteria criteria,
+            Collection<String> elementNames) throws QueryFormulationException {
+        if (criteria == null) {
+            return;
+        }
+        if (criteria instanceof BooleanQueryCriteria) {
+            List<QueryCriteria> terms = ((BooleanQueryCriteria) criteria).getTerms();
+            if (terms != null) {
+                for (QueryCriteria term : terms) {
+                    resolveCriteria(term, elementNames);
+                }
+            }
+            return;
+        }
+        String name = criteria.getElementName();
+        if (name != null && !name.isEmpty()) {
+            criteria.setElementName(resolveName(name, elementNames, false, "metadata field"));
+        }
+    }
+
+    private static String resolveName(String given, Collection<String> canonical,
+            boolean required, String kind) throws QueryFormulationException {
+        if (given == null || canonical == null || canonical.isEmpty()) {
+            if (required && given != null) {
+                throw new QueryFormulationException("Unknown " + kind + " '" + given + "'");
+            }
+            return given;
+        }
+        String exact = null;
+        List<String> folded = new LinkedList<String>();
+        for (String name : canonical) {
+            if (name == null) {
+                continue;
+            }
+            if (name.equals(given)) {
+                exact = name;
+                break;
+            }
+            if (name.equalsIgnoreCase(given) && !folded.contains(name)) {
+                folded.add(name);
+            }
+        }
+        if (exact != null) {
+            return exact;
+        }
+        if (folded.size() == 1) {
+            return folded.get(0);
+        }
+        if (folded.size() > 1) {
+            throw new QueryFormulationException(
+                    "Ambiguous " + kind + " '" + given + "': " + folded);
+        }
+        if (required) {
+            throw new QueryFormulationException(
+                    "Unknown " + kind + " '" + given + "'. Try one of: " + canonical);
+        }
+        return given;
+    }
+
     private static List<String> csvValues(String list) {
         List<String> values = new LinkedList<String>();
         for (String part : list.split(",")) {
