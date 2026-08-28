@@ -32,6 +32,7 @@ import org.apache.oodt.cas.workflow.util.GenericWorkflowObjectFactory;
 import org.junit.Test;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.util.List;
 import java.util.Vector;
 import java.util.logging.Level;
@@ -394,6 +395,103 @@ public class TestWorkflowRepository  {
         assertNotNull(config.getProperties());
         assertNotNull(config.getProperties().get("Person"));
         assertEquals("Chris", (String) config.getProperties().get("Person"));
+    }
+
+
+    /** A complete, minimal policy directory holding exactly one workflow. */
+    private static File soloPolicyDirectory() throws Exception {
+        File dir = File.createTempFile("solo", "policy");
+        assertTrue(dir.delete());
+        assertTrue(dir.mkdirs());
+        dir.deleteOnExit();
+
+        write(new File(dir, "conditions.xml"),
+                "<cas:conditions xmlns:cas=\"http://oodt.jpl.nasa.gov/1.0/cas\">"
+                + "<condition id=\"urn:test:SoloCondition\" name=\"Solo Condition\" "
+                + "class=\"org.apache.oodt.cas.workflow.examples.TrueCondition\"/>"
+                + "</cas:conditions>");
+
+        write(new File(dir, "tasks.xml"),
+                "<cas:tasks xmlns:cas=\"http://oodt.jpl.nasa.gov/1.0/cas\">"
+                + "<task id=\"urn:test:SoloTask\" name=\"Solo Task\" "
+                + "class=\"org.apache.oodt.cas.workflow.examples.HelloWorld\">"
+                + "<conditions><condition id=\"urn:test:SoloCondition\"/></conditions>"
+                + "<configuration><property name=\"Person\" value=\"Solo\"/></configuration>"
+                + "</task></cas:tasks>");
+
+        write(new File(dir, "solo.workflow.xml"),
+                "<cas:workflow xmlns:cas=\"http://oodt.jpl.nasa.gov/1.0/cas\" "
+                + "name=\"soloWorkflow\" id=\"urn:test:SoloWorkflow\">"
+                + "<tasks><task id=\"urn:test:SoloTask\"/></tasks></cas:workflow>");
+
+        write(new File(dir, "events.xml"),
+                "<cas:workflowevents xmlns:cas=\"http://oodt.jpl.nasa.gov/1.0/cas\">"
+                + "<event name=\"solo\"><workflow id=\"urn:test:SoloWorkflow\"/></event>"
+                + "</cas:workflowevents>");
+
+        return dir;
+    }
+
+    private static void write(File f, String contents) throws Exception {
+        FileOutputStream out = new FileOutputStream(f);
+        try {
+            out.write(("<?xml version=\"1.0\" encoding=\"UTF-8\"?>" + contents)
+                    .getBytes("UTF-8"));
+        } finally {
+            out.close();
+        }
+        f.deleteOnExit();
+    }
+
+    /**
+     * The four policy maps were static, so a second repository over a second
+     * seed directory shared the first's policy set: whichever was built
+     * second added its tasks and workflows to the first's, and neither could
+     * be given a policy set of its own. The seed directories are a
+     * constructor argument, which only means something if each repository
+     * keeps what it loaded.
+     */
+    @Test
+    public void testTwoRepositoriesDoNotShareOnePolicySet() throws Exception {
+        // the field repository is already loaded from ./src/main/resources/examples
+        int examplesCount = this.workflowRepository.getWorkflows().size();
+        assertTrue("the fixture repository loaded no workflows", examplesCount > 0);
+        assertNotNull(this.workflowRepository.getWorkflowById("urn:oodt:testWorkflow"));
+
+        List soloUris = new Vector();
+        soloUris.add(soloPolicyDirectory().toURI().toString());
+        XMLWorkflowRepository solo = new XMLWorkflowRepository(soloUris);
+
+        assertEquals("a repository over a one-workflow directory is holding "
+                + "another repository's workflows", 1, solo.getWorkflows().size());
+        assertEquals("urn:test:SoloWorkflow",
+                ((Workflow) solo.getWorkflows().get(0)).getId());
+        assertNull("a repository over a one-workflow directory can see a "
+                + "workflow it never loaded",
+                solo.getWorkflowById("urn:oodt:testWorkflow"));
+
+        // and the first repository was not handed the second's policy either
+        assertEquals(examplesCount, this.workflowRepository.getWorkflows().size());
+        assertNull(this.workflowRepository.getWorkflowById("urn:test:SoloWorkflow"));
+    }
+
+    /**
+     * Every other lookup in this class returns null for an id it does not
+     * hold; this one dereferenced the miss.
+     */
+    @Test
+    public void testConfigurationForAnUnknownTaskIdIsNull() throws Exception {
+        assertNull(this.workflowRepository
+                .getConfigurationByTaskId("urn:oodt:noSuchTaskAnywhere"));
+    }
+
+    /** and a task that does exist still answers with its configuration. */
+    @Test
+    public void testConfigurationForAKnownTaskIdIsStillReturned() throws Exception {
+        Workflow w = (Workflow) this.workflowRepository.getWorkflows().get(0);
+        assertTrue(w.getTasks().size() > 0);
+        String knownId = ((WorkflowTask) w.getTasks().get(0)).getTaskId();
+        assertNotNull(this.workflowRepository.getConfigurationByTaskId(knownId));
     }
 
 }

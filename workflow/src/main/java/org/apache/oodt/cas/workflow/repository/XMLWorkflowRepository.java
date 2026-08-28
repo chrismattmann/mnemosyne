@@ -86,17 +86,25 @@ public class XMLWorkflowRepository implements WorkflowRepository {
     private static Logger LOG = Logger.getLogger(XMLWorkflowRepository.class
             .getName());
 
+    // These four were static. The seed directories are a constructor
+    // argument, so two repositories over two policy directories are two
+    // objects, but they shared one set of maps and therefore one policy set:
+    // whichever was constructed second added its tasks and workflows to the
+    // first's, and neither could be given a policy set of its own. Nothing
+    // clears them either, so the mixture only ever grew. The sibling
+    // PackagedWorkflowRepository uses instance fields.
+
     /* our task map */
-    private static ConcurrentHashMap taskMap = new ConcurrentHashMap();
+    private final ConcurrentHashMap taskMap = new ConcurrentHashMap();
 
     /* our condition map */
-    private static ConcurrentHashMap conditionMap = new ConcurrentHashMap();
+    private final ConcurrentHashMap conditionMap = new ConcurrentHashMap();
 
     /* our workflow map */
-    private static ConcurrentHashMap workflowMap = new ConcurrentHashMap();
+    private final ConcurrentHashMap workflowMap = new ConcurrentHashMap();
 
     /* our event map */
-    private static ConcurrentHashMap eventMap = new ConcurrentHashMap();
+    private final ConcurrentHashMap eventMap = new ConcurrentHashMap();
 
     private static FileFilter workflowXmlFilter = new FileFilter() {
         public boolean accept(File pathname) {
@@ -263,6 +271,11 @@ public class XMLWorkflowRepository implements WorkflowRepository {
     public WorkflowTaskConfiguration getConfigurationByTaskId(String taskId)
             throws RepositoryException {
         WorkflowTask task = (WorkflowTask) taskMap.get(taskId);
+        // An unknown id used to dereference null here, while every
+        // neighbouring lookup in this class returns null for a miss.
+        if (task == null) {
+            return null;
+        }
         return task.getTaskConfig();
     }
     
