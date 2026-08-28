@@ -261,6 +261,16 @@ public final class PGEConfigFileWriter implements PGEConfigFileKeys,
 
         Element matrixElem = document.createElement(MATRIX_TAG_NAME);
         matrixElem.setAttribute(NAME_ATTR, matrix.getName());
+        // Redundant with the tr/td structure, which is what both readers derive
+        // the dimensions from, but PGEDataHandler and other consumers of this
+        // format expect them to be present.
+        int numCols = matrix.getNumCols();
+        if (numCols == 0 && !matrix.getRows().isEmpty()) {
+          // a matrix assembled through getRows() never sets the column count
+          numCols = matrix.getRows().get(0).size();
+        }
+        matrixElem.setAttribute(ROWS_ATTR, String.valueOf(matrix.getRows().size()));
+        matrixElem.setAttribute(COLS_ATTR, String.valueOf(numCols));
 
         int rowNum = 0;
         for (List<Object> objects : matrix.getRows()) {
@@ -294,9 +304,11 @@ public final class PGEConfigFileWriter implements PGEConfigFileKeys,
               colElem.appendChild(document.createTextNode(colValue));
             }
 
+            rowElem.appendChild(colElem);
             colNum++;
           }
 
+          matrixElem.appendChild(rowElem);
           rowNum++;
         }
 

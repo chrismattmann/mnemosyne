@@ -20,7 +20,9 @@ import org.xml.sax.Attributes;
 import org.xml.sax.SAXException;
 import org.xml.sax.helpers.DefaultHandler;
 
+import java.util.List;
 import java.util.Map;
+import java.util.Vector;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 
@@ -64,10 +66,8 @@ public class PGEDataHandler extends DefaultHandler implements PGEDataParseKeys {
 
   private StringBuffer charBuf;
 
-  // needed for parsing matrix
-  private int currentRow = 0;
-
-  private int currentCol = 0;
+  // the matrix row being read, accumulated until its </tr>
+  private List<Object> currentMatrixRow = null;
 
   public PGEDataHandler() {
     vecElement = false;
@@ -95,9 +95,12 @@ public class PGEDataHandler extends DefaultHandler implements PGEDataParseKeys {
         currentVector.setName(attributes.getValue(NAME_ATTR));
       } else if (qName.equals(MATRIX_TAG_NAME)) {
         parseStatus = PARSING_MATRIX;
-        currentMatrix = new PGEMatrix(attributes.getValue(NAME_ATTR), Integer
-            .parseInt(attributes.getValue(ROWS_ATTR)), Integer
-            .parseInt(attributes.getValue(COLS_ATTR)));
+        // The rows and cols attributes are a hint, not the definition: the tr
+        // and td structure is what carries the dimensions, and PGEConfigFileWriter
+        // output has historically had no such attributes at all. Reading them
+        // with an unguarded parseInt made every file written by PCS unparseable.
+        currentMatrix = new PGEMatrix();
+        currentMatrix.setName(attributes.getValue(NAME_ATTR));
       }
     } else if (isParsingScalar()) {
       // shouldn't encountere another tag here
@@ -110,7 +113,9 @@ public class PGEDataHandler extends DefaultHandler implements PGEDataParseKeys {
       }
 
     } else if (isParsingMatrix()) {
-      if (qName.equals(MATRIX_COL_TAG)) {
+      if (qName.equals(MATRIX_ROW_TAG)) {
+        this.currentMatrixRow = new Vector<Object>();
+      } else if (qName.equals(MATRIX_COL_TAG)) {
         matrixElement = true;
         charBuf = new StringBuffer();
       }
@@ -146,16 +151,20 @@ public class PGEDataHandler extends DefaultHandler implements PGEDataParseKeys {
         this.matrices.put(this.currentMatrix.getName(), this.currentMatrix);
 
         parseStatus = UNSET;
-        this.currentCol = 0;
-        this.currentRow = 0;
+        this.currentMatrixRow = null;
       }
     } else if (qName.equals(MATRIX_ROW_TAG)) {
-      this.currentRow++;
-      this.currentCol = 0;
+      if (this.currentMatrixRow != null) {
+        this.currentMatrix.getRows().add(this.currentMatrixRow);
+        if (this.currentMatrixRow.size() > this.currentMatrix.getNumCols()) {
+          this.currentMatrix.setNumCols(this.currentMatrixRow.size());
+        }
+        this.currentMatrixRow = null;
+      }
     } else if (qName.equals(MATRIX_COL_TAG)) {
-      this.currentMatrix.addValue(this.charBuf.toString(), this.currentRow,
-          this.currentCol);
-      this.currentCol++;
+      if (this.currentMatrixRow != null) {
+        this.currentMatrixRow.add(this.charBuf.toString());
+      }
       clearCharBuf();
       this.matrixElement = false;
     }
