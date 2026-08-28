@@ -64,6 +64,10 @@ export function getInstances(status, page) {
   return fetch(`${services()}/workflow/instances?${params}`).then(readJson)
 }
 
+export function getInstance(id) {
+  return fetch(`${services()}/workflow/instances/${encodeURIComponent(id)}`).then(readJson)
+}
+
 export function getWorkflows() {
   return fetch(`${services()}/workflow/definitions`).then(readJson)
 }

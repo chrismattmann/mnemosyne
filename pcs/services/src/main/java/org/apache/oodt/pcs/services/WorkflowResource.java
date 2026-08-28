@@ -35,6 +35,8 @@ import javax.ws.rs.QueryParam;
 
 import net.sf.json.JSONObject;
 
+import org.apache.oodt.cas.metadata.Metadata;
+import org.apache.oodt.cas.workflow.structs.Priority;
 import org.apache.oodt.cas.workflow.structs.Workflow;
 import org.apache.oodt.cas.workflow.structs.WorkflowCondition;
 import org.apache.oodt.cas.workflow.structs.WorkflowInstance;
@@ -137,6 +139,44 @@ public class WorkflowResource extends PCSService {
   }
 
   @GET
+  @Path("instances/{id}")
+  @Produces("application/json")
+  public String instance(@PathParam("id") String id) throws Exception {
+    WorkflowManagerClient client = wm();
+    try {
+      WorkflowInstance inst = client.getWorkflowInstanceById(id);
+      if (inst == null) {
+        throw new ResourceNotFoundException("No workflow instance [" + id + "]");
+      }
+      Metadata met = inst.getSharedContext();
+      if (met == null || met.getAllKeys() == null || met.getAllKeys().isEmpty()) {
+        try {
+          met = client.getWorkflowInstanceMetadata(id);
+        } catch (Exception e) {
+          LOG.fine("No instance metadata for " + id + ": " + e.getLocalizedMessage());
+        }
+      }
+      Map<String, Object> row = encodeInstanceDetail(inst, met);
+      try {
+        row.put("wallClockMinutes", Double.valueOf(client.getWorkflowWallClockMinutes(id)));
+      } catch (Exception e) {
+        LOG.fine("No wall clock for " + id);
+      }
+      try {
+        row.put("currentTaskWallClockMinutes",
+            Double.valueOf(client.getWorkflowCurrentTaskWallClockMinutes(id)));
+      } catch (Exception e) {
+        LOG.fine("No current-task wall clock for " + id);
+      }
+      JSONObject response = new JSONObject();
+      response.put("instance", row);
+      return response.toString();
+    } finally {
+      closeQuietly(client);
+    }
+  }
+
+  @GET
   @Path("tasks/{id}")
   @Produces("application/json")
   public String task(@PathParam("id") String id) throws Exception {
@@ -197,6 +237,23 @@ public class WorkflowResource extends PCSService {
         nullToEmpty(inst.getCurrentTaskStartDateTimeIsoStr()));
     row.put("currentTaskEndDateTime",
         nullToEmpty(inst.getCurrentTaskEndDateTimeIsoStr()));
+    return row;
+  }
+
+  static Map<String, Object> encodeInstanceDetail(WorkflowInstance inst, Metadata met) {
+    Map<String, Object> row = encodeInstance(inst);
+    if (inst != null) {
+      row.put("timesBlocked", Integer.valueOf(inst.getTimesBlocked()));
+      Priority priority = inst.getPriority();
+      if (priority != null) {
+        row.put("priority", nullToEmpty(priority.getName()));
+        row.put("priorityValue", Double.valueOf(priority.getValue()));
+      }
+      if (met == null) {
+        met = inst.getSharedContext();
+      }
+    }
+    row.put("metadata", CatalogResource.encodeMetadata(met));
     return row;
   }
 

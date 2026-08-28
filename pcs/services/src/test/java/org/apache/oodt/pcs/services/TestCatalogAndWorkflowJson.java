@@ -100,6 +100,24 @@ public class TestCatalogAndWorkflowJson extends TestCase {
     assertEquals("Translate", row.get("currentTaskName"));
   }
 
+  public void testEncodeInstanceDetailIncludesMetadata() {
+    WorkflowInstance inst = new WorkflowInstance();
+    inst.setId("inst-2");
+    inst.setStatus("FINISHED");
+    inst.setTimesBlocked(0);
+    Metadata met = new Metadata();
+    met.addMetadata("Filename", "jobs.tsv");
+    met.addMetadata("ProductType", "EmploymentJobAggregatesTsv");
+    inst.setSharedContext(met);
+    Map<String, Object> row = WorkflowResource.encodeInstanceDetail(inst, null);
+    assertEquals("inst-2", row.get("id"));
+    assertEquals(Integer.valueOf(0), row.get("timesBlocked"));
+    Map<?, ?> metadata = (Map<?, ?>) row.get("metadata");
+    assertEquals("jobs.tsv", ((List<?>) metadata.get("Filename")).get(0));
+    assertEquals("EmploymentJobAggregatesTsv",
+        ((List<?>) metadata.get("ProductType")).get(0));
+  }
+
   public void testEncodeWorkflowWithTasks() {
     WorkflowTask task = new WorkflowTask();
     task.setTaskId("t1");
