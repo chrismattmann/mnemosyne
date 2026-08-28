@@ -158,6 +158,18 @@ public class TestAvroRpcCrawlDaemon extends TestCase {
         assertEquals(0.0, fresh.getAverageCrawlTime(), 0.0001);
     }
 
+    public void testControllerAgainstAClosedPortFailsFast() throws Exception {
+        ServerSocket probe = new ServerSocket(0);
+        int closedPort = probe.getLocalPort();
+        probe.close();
+        try {
+            new AvroRpcCrawlDaemonController("http://localhost:" + closedPort);
+            fail("connecting to a closed port should fail");
+        } catch (InstantiationException expected) {
+            assertNotNull(expected.getMessage());
+        }
+    }
+
     /** A crawler that does nothing but let the passes be counted. */
     private static class CountingCrawler extends ProductCrawler {
 
