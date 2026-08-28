@@ -18,6 +18,9 @@ package org.apache.oodt.pcs.input;
 //JDK imports
 import java.util.Iterator;
 
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
 //Junit imports
 import junit.framework.TestCase;
 
@@ -31,6 +34,8 @@ import junit.framework.TestCase;
  * 
  */
 public class PGEConfigFileReaderTest extends TestCase {
+
+  private static final Logger LOG = Logger.getLogger(PGEConfigFileReaderTest.class.getName());
 
   private PGEConfigurationFile configFile = null;
 

@@ -83,26 +83,5 @@ the License.
         </includes>
       </resource>
     </resources>
-    <plugins>
-      <plugin>
-        <artifactId>maven-surefire-plugin</artifactId>
-        <version>2.4</version>
-        <configuration>
-          <forkMode>pertest</forkMode>
-          <useSystemClassLoader>false</useSystemClassLoader>
-          <systemProperties>
-            <property>
-              <name>javax.xml.transform.TransformerFactory</name>
-              <value>com.sun.org.apache.xalan.internal.xsltc.trax.TransformerFactoryImpl</value>
-            </property>
-          </systemProperties>
-          <forkedProcessTimeoutInSeconds>0</forkedProcessTimeoutInSeconds>
-          <redirectTestOutputToFile>true</redirectTestOutputToFile>
-          <includes>
-            <include>**/*Test*.java</include>
-          </includes>
-        </configuration>
-      </plugin>
-    </plugins>
   </build>
 </project>
