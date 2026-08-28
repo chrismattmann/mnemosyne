@@ -26,11 +26,18 @@ import org.apache.oodt.cas.resource.structs.exceptions.JobRepositoryException;
 import org.apache.oodt.cas.resource.structs.exceptions.MonitorException;
 import org.apache.oodt.cas.resource.structs.exceptions.QueueManagerException;
 
+import java.io.Closeable;
 import java.io.Serializable;
 import java.net.URL;
 import java.util.List;
 
-public interface ResourceManagerClient extends Serializable {
+/*
+ * Closeable as well as Serializable: every implementation of this interface
+ * holds a network transport, and without a close() on the interface there was
+ * no way for a caller to release one. FileManagerClient has been Closeable
+ * for the same reason.
+ */
+public interface ResourceManagerClient extends Closeable, Serializable {
 
     boolean isJobComplete(String jobId) throws JobRepositoryException;
 

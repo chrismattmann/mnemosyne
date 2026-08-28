@@ -18,6 +18,7 @@
 package org.apache.oodt.cas.workflow.engine.runner;
 
 //OODT imports
+import java.io.IOException;
 import org.apache.oodt.cas.resource.structs.Job;
 import org.apache.oodt.cas.resource.structs.exceptions.JobExecutionException;
 import org.apache.oodt.cas.resource.structs.exceptions.JobRepositoryException;
@@ -192,6 +193,15 @@ public class ResourceRunner extends AbstractEngineRunnerBase implements CoreMetK
   public void shutdown() {
     this.monitor.shutdownNow();
     this.outstandingJobs.clear();
+    // The runner owns this client for its whole life and never released it.
+    if (this.rClient != null) {
+      try {
+        this.rClient.close();
+      } catch (IOException e) {
+        LOG.log(Level.WARNING, "Unable to close resource manager client: "
+            + e.getMessage());
+      }
+    }
   }
 
   /* (non-Javadoc)

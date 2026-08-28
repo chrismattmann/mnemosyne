@@ -242,4 +242,10 @@ public class MockResourceManagerClient implements ResourceManagerClient {
       this.resMgrUrl = resMgrUrl;
    }
 
+
+   /** Nothing to release: this mock never opens a transport. */
+   @Override
+   public void close() {
+   }
+
 }

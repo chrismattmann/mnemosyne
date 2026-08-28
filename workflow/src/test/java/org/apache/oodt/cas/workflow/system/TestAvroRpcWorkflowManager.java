@@ -30,6 +30,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.net.URL;
+import java.nio.file.Files;
 import java.util.List;
 import java.util.Vector;
 import java.util.logging.Level;
@@ -81,6 +82,11 @@ public class TestAvroRpcWorkflowManager extends TestCase{
     @After
     public void tearDown() throws Exception {
         wmgr.shutdown();
+        if (luceneCatLoc != null) {
+            // Best effort: the index is this test's alone, and a leftover
+            // temp directory is not worth failing a test over.
+            FileUtils.deleteQuietly(new File(luceneCatLoc));
+        }
     }
 
     private void startWorkflow() {
@@ -110,26 +116,20 @@ public class TestAvroRpcWorkflowManager extends TestCase{
             fail(e.getMessage());
         }
 
+        // A fresh index directory per test rather than one fixed /tmp/repo
+        // reused by all of them. The old fixture deleted that directory in
+        // setUp, which raced the previous test's manager: its engine threads
+        // were still writing to the index as the delete walked it, and
+        // deleteDirectory failed with "Unable to delete directory". Only one
+        // test in this class ever ran per JVM, so the race had nowhere to
+        // show until a second was added. Nothing here needs the directory to
+        // be shared, and an unshared one needs no deleting.
         try {
-            luceneCatLoc = File.createTempFile("blah", "txt").getParentFile()
+            luceneCatLoc = Files.createTempDirectory("wmgr-repo").toFile()
                     .getCanonicalPath();
-            luceneCatLoc = !luceneCatLoc.endsWith("/") ? luceneCatLoc + "/"
-                    : luceneCatLoc;
-            luceneCatLoc += "repo";
             LOG.log(Level.INFO, "Lucene instance repository: [" + luceneCatLoc + "]");
         } catch (Exception e) {
             fail(e.getMessage());
-        }
-
-        if (new File(luceneCatLoc).exists()) {
-            // blow away lucene cat
-            LOG.log(Level.INFO, "Removing workflow instance repository: ["
-                    + luceneCatLoc + "]");
-            try {
-                FileUtils.deleteDirectory(new File(luceneCatLoc));
-            } catch (IOException e) {
-                fail(e.getMessage());
-            }
         }
 
         System.setProperty("workflow.engine.instanceRep.factory",
@@ -154,4 +154,57 @@ public class TestAvroRpcWorkflowManager extends TestCase{
         }
 
     }
+
+    /**
+     * The hook was an anonymous Thread registered in the constructor and
+     * never removed, so it outlived the manager it was there to close: every
+     * manager built in a JVM -- which is every test that starts one -- left
+     * one behind holding a strong reference to it, and at exit they all ran
+     * against servers shut down long before.
+     *
+     * The field is private, so this reads it directly; it is our own class,
+     * so no module opens are involved. Before the fix there was no field to
+     * read, because the hook was unreachable from anywhere -- which is the
+     * defect.
+     */
+    @Test
+    public void testShutdownDeregistersItsShutdownHook() throws Exception {
+        java.lang.reflect.Field field =
+                AvroRpcWorkflowManager.class.getDeclaredField("shutdownHook");
+        field.setAccessible(true);
+
+        Thread hook = (Thread) field.get(wmgr);
+        assertNotNull("no shutdown hook was registered", hook);
+
+        assertTrue(wmgr.shutdown());
+
+        assertNull("the manager still points at a hook it has already run",
+                field.get(wmgr));
+        assertFalse("the shutdown hook was left registered with the runtime",
+                Runtime.getRuntime().removeShutdownHook(hook));
+    }
+
+    /** shutting down twice is harmless; tearDown does it after every test. */
+    @Test
+    public void testShuttingDownTwiceIsHarmless() {
+        assertTrue(wmgr.shutdown());
+        assertFalse(wmgr.shutdown());
+    }
+
+    /**
+     * A page's size is written on the way out and was never read back, so
+     * every page crossing the wire arrived carrying the field's initial -1
+     * however large the page actually was. Asserted here over a real RPC
+     * rather than at the factory, because that is where it was observed.
+     */
+    @Test
+    public void testAPagedResultCarriesItsPageSizeOverRpc() throws Exception {
+        org.apache.oodt.cas.workflow.structs.WorkflowInstancePage page =
+                AvroTypeFactory.getWorkflowInstancePage(wmgr.getFirstPage());
+
+        assertNotNull(page);
+        assertTrue("the page size did not survive the RPC: " + page.getPageSize(),
+                page.getPageSize() > 0);
+    }
+
 }

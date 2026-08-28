@@ -19,6 +19,8 @@
 package org.apache.oodt.cas.workflow.engine;
 
 //OODT imports
+import org.apache.oodt.cas.workflow.instrepo.MemoryWorkflowInstanceRepository;
+import EDU.oswego.cs.dl.util.concurrent.PooledExecutor;
 import org.apache.oodt.cas.workflow.structs.Graph;
 import org.apache.oodt.cas.workflow.structs.ParentChildWorkflow;
 import org.apache.oodt.cas.workflow.structs.WorkflowInstance;
@@ -97,4 +99,42 @@ public class TestThreadPoolWorkflowEngine extends TestCase {
             .getCurrentTaskWallClockMinutes(inst));
 
     }
+
+    /**
+     * WorkflowEngine.shutdown() defaults to doing nothing, and this engine --
+     * the one you get when no factory is named, so the one most deployments
+     * run -- did not override it. Its PooledExecutor therefore outlived every
+     * shutdown of the manager that owned it, which is the thread pool
+     * AvroRpcWorkflowManager.shutdown() was supposed to be releasing.
+     *
+     * The pool is private and the class exposes nothing about it, so this
+     * reads the field directly. It is our own class, so no module opens are
+     * involved.
+     */
+    public void testShutdownStopsTheWorkerPool() throws Exception {
+        ThreadPoolWorkflowEngine engine = new ThreadPoolWorkflowEngine(
+                new MemoryWorkflowInstanceRepository(20), 10, 4, 1, 5L, false, null);
+
+        java.lang.reflect.Field poolField =
+                ThreadPoolWorkflowEngine.class.getDeclaredField("pool");
+        poolField.setAccessible(true);
+        PooledExecutor pool = (PooledExecutor) poolField.get(engine);
+        assertNotNull(pool);
+        assertFalse("the pool was already shut down before the test ran",
+                pool.isTerminatedAfterShutdown());
+
+        engine.shutdown();
+
+        assertTrue("shutdown() left the worker pool running",
+                pool.isTerminatedAfterShutdown());
+    }
+
+    /** shutting down twice is harmless: hooks and callers both do it. */
+    public void testShuttingDownTwiceIsHarmless() {
+        ThreadPoolWorkflowEngine engine = new ThreadPoolWorkflowEngine(
+                new MemoryWorkflowInstanceRepository(20), 10, 4, 1, 5L, false, null);
+        engine.shutdown();
+        engine.shutdown();
+    }
+
 }

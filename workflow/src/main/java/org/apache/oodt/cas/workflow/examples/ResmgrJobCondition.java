@@ -18,11 +18,13 @@
 
 package org.apache.oodt.cas.workflow.examples;
 
+import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.Iterator;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 //OODT imports
@@ -95,6 +97,20 @@ public class ResmgrJobCondition implements WorkflowConditionInstance {
 				return true;
 		} catch (MalformedURLException e) {
 			e.printStackTrace();
+		} finally {
+			// A condition is evaluated once per pass over the workflow, and this
+			// built a client per evaluation and dropped it. Each held a socket
+			// until the process exited, so a long-running workflow manager ran
+			// out of file descriptors -- the shape of #144, and why
+			// ResourceManagerClient is Closeable now.
+			if (client != null) {
+				try {
+					client.close();
+				} catch (IOException e) {
+					LOG.log(Level.WARNING, "Unable to close resource manager client: "
+						+ e.getMessage());
+				}
+			}
 		}
 		return false;
 	}

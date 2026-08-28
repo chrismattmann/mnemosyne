@@ -283,6 +283,10 @@ public class AvroTypeFactory {
         WorkflowInstancePage workflowInstancePage = new WorkflowInstancePage();
         workflowInstancePage.setPageNum(avroWorkflowInstancePage.getPageNum());
         workflowInstancePage.setTotalPages(avroWorkflowInstancePage.getTotalPages());
+        // The size is written on the way out and was never read back, so
+        // every page crossing the wire arrived with the field's initial -1
+        // however large the page actually was.
+        workflowInstancePage.setPageSize(avroWorkflowInstancePage.getPageSize());
         if (avroWorkflowInstancePage.getPageWorkflows() != null)
             workflowInstancePage.setPageWorkflows(getWorkflowInstances(avroWorkflowInstancePage.getPageWorkflows()));
         return workflowInstancePage;
