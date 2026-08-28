@@ -252,7 +252,25 @@ public class WorkflowResource extends PCSService {
         nullToEmpty(inst.getCurrentTaskStartDateTimeIsoStr()));
     row.put("currentTaskEndDateTime",
         nullToEmpty(inst.getCurrentTaskEndDateTimeIsoStr()));
+    String productName = firstMetadata(inst.getSharedContext(),
+        "Filename", "ProductName", "CAS.ProductName");
+    if (productName.length() > 0) {
+      row.put("productName", productName);
+    }
     return row;
+  }
+
+  static String firstMetadata(Metadata met, String... keys) {
+    if (met == null || keys == null) {
+      return "";
+    }
+    for (int i = 0; i < keys.length; i++) {
+      String value = met.getMetadata(keys[i]);
+      if (value != null && value.length() > 0) {
+        return value;
+      }
+    }
+    return "";
   }
 
   static Map<String, Object> encodeInstanceDetail(WorkflowInstance inst, Metadata met) {

@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-export const EXAMPLE_CATALOG_SQL = 'SELECT Filename FROM EmploymentJob'
+export const EXAMPLE_CATALOG_SQL = 'SELECT Filename FROM *'
 export const QUERY_RESULT_CAP = 200
 
 function maskQuoted(sql) {
