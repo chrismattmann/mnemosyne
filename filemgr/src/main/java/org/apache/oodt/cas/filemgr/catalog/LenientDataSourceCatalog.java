@@ -422,12 +422,23 @@ public class LenientDataSourceCatalog extends DataSourceCatalog {
 
           valueClauseSql.append("VALUES ");
 
+            // key is a Map.Entry, and appending it appended Entry.toString():
+            // the element_id column ended up holding "Filename=Filename". With
+            // a validation layer that is silent data loss -- ids were stored
+            // as "urn:oodt:Filename=Filename" and populateProductMetadata
+            // looks them up as "urn:oodt:Filename", so nothing matched and
+            // getMetadata came back empty for a product whose metadata had
+            // been accepted without error. removeMetadataValue already used
+            // getKey(), so deletes matched an id that was never written and
+            // the row survived.
+            String elementId = key.getKey();
+
             // now do the value clause
             if (fieldIdStringFlag) {
-                valueClauseSql.append("(").append(quoteIt(product.getProductId())).append(", '").append(key)
+                valueClauseSql.append("(").append(quoteIt(product.getProductId())).append(", '").append(elementId)
                               .append("', '").append(value).append("')");
             } else {
-                valueClauseSql.append("(").append(product.getProductId()).append(", ").append(key).append(", '")
+                valueClauseSql.append("(").append(product.getProductId()).append(", ").append(elementId).append(", '")
                               .append(value).append("')");
             }
 
@@ -762,15 +773,22 @@ public class LenientDataSourceCatalog extends DataSourceCatalog {
      * Overridden method from superclass to allow for null validation layer.
      */
     protected String getSqlQuery(QueryCriteria queryCriteria, ProductType type) throws ValidationLayerException, CatalogException {
+      // Four of the branches below used to build a StringBuilder and throw it
+      // away -- constructed, not assigned, not appended to anything. The
+      // method therefore returned only the fragment "metadata_value = 'x'",
+      // which paginateQuery then executed as a whole statement, so every
+      // criteria-bearing query against a lenient catalog failed. The strict
+      // DataSourceCatalog's equivalent path appends properly, which is what
+      // makes this a slip rather than a design.
       StringBuilder sqlQuery = new StringBuilder();
       if (queryCriteria instanceof BooleanQueryCriteria) {
           BooleanQueryCriteria bqc = (BooleanQueryCriteria) queryCriteria;
           if (bqc.getOperator() == BooleanQueryCriteria.NOT) {
           	  if (!this.productIdString) {
-          	  	new StringBuilder("SELECT DISTINCT product_id FROM " + type.getName() + "_metadata WHERE product_id NOT IN "
+          	  	sqlQuery.append("SELECT DISTINCT product_id FROM " + type.getName() + "_metadata WHERE product_id NOT IN "
                            + "(" + this.getSqlQuery(bqc.getTerms().get(0), type) + ")");
           	  } else {
-               	new StringBuilder("SELECT DISTINCT products.product_id FROM products," + type.getName() + "_metadata"
+               	sqlQuery.append("SELECT DISTINCT products.product_id FROM products," + type.getName() + "_metadata"
                					 + " WHERE products.product_id="+type.getName() + "_metadata.product_id"
           	  			     + " AND products.product_id NOT IN (" + this.getSqlQuery(bqc.getTerms().get(0), type) +
                                   ")");
@@ -793,10 +811,10 @@ public class LenientDataSourceCatalog extends DataSourceCatalog {
             elementIdStr = "'" + elementIdStr + "'";
           }
           if (!this.productIdString) {
-          	new StringBuilder("SELECT DISTINCT product_id FROM " + type.getName() + "_metadata WHERE element_id = " + elementIdStr +
+          	sqlQuery.append("SELECT DISTINCT product_id FROM " + type.getName() + "_metadata WHERE element_id = " + elementIdStr +
                " AND ");
           } else {
-          	new StringBuilder("SELECT DISTINCT products.product_id FROM products," + type.getName() + "_metadata"
+          	sqlQuery.append("SELECT DISTINCT products.product_id FROM products," + type.getName() + "_metadata"
           	         + " WHERE products.product_id="+type.getName() + "_metadata.product_id" 
           			     + " AND element_id = " + elementIdStr + " AND ");
           }

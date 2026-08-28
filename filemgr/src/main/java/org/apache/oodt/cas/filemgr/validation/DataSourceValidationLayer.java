@@ -24,6 +24,7 @@ import org.apache.oodt.cas.filemgr.structs.exceptions.ValidationLayerException;
 import org.apache.oodt.cas.filemgr.util.DbStructFactory;
 
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -77,6 +78,7 @@ public class DataSourceValidationLayer implements ValidationLayer {
     public void addElement(Element element) throws ValidationLayerException {
         Connection conn = null;
         Statement statement = null;
+        PreparedStatement insert = null;
         ResultSet rs = null;
 
         try {
@@ -84,15 +86,22 @@ public class DataSourceValidationLayer implements ValidationLayer {
             conn.setAutoCommit(false);
             statement = conn.createStatement();
 
-            String addMetaElemSql = "INSERT INTO elements (element_name, dc_element, element_description) VALUES ('"
-                    + element.getElementName()
-                    + ", '"
-                    + element.getDCElement()
-                    + "', '" + element.getDescription() + "')";
+            // Bound, not concatenated. The quote that should have closed the
+            // element name was missing -- the literal opened, took the name,
+            // and then took ", '" instead of "', '" -- so the statement could
+            // not parse and addElement threw for every input this class has
+            // ever been given. Parameters remove the whole question, along
+            // with the apostrophe and injection cases behind it.
+            String addMetaElemSql = "INSERT INTO elements (element_name, dc_element, "
+                    + "element_description) VALUES (?, ?, ?)";
 
             LOG.log(Level.FINE, "addMetadataElement: Executing: "
                     + addMetaElemSql);
-            statement.execute(addMetaElemSql);
+            insert = conn.prepareStatement(addMetaElemSql);
+            insert.setString(1, element.getElementName());
+            insert.setString(2, element.getDCElement());
+            insert.setString(3, element.getDescription());
+            insert.execute();
 
             String elementId = "";
 
@@ -136,6 +145,14 @@ public class DataSourceValidationLayer implements ValidationLayer {
             if (statement != null) {
                 try {
                     statement.close();
+                } catch (SQLException ignore) {
+                }
+
+            }
+
+            if (insert != null) {
+                try {
+                    insert.close();
                 } catch (SQLException ignore) {
                 }
 
@@ -795,11 +812,17 @@ public class DataSourceValidationLayer implements ValidationLayer {
             conn = dataSource.getConnection();
             statement = conn.createStatement();
 
-            String elementSql = "SELECT * from elements WHERE element_name = "
-                    + elementName;
+            // The value used to be concatenated in with no quotes at all, so
+            // this threw for every name that was not accidentally numeric --
+            // on the path the catalog takes to resolve a criterion's element
+            // name for every query against a DataSourceValidationLayer.
+            String elementSql = "SELECT * from elements WHERE element_name = ?";
 
             LOG.log(Level.FINE, "getElementByName: Executing: " + elementSql);
-            rs = statement.executeQuery(elementSql);
+            PreparedStatement lookup = conn.prepareStatement(elementSql);
+            statement = lookup;
+            lookup.setString(1, elementName);
+            rs = lookup.executeQuery();
 
             while (rs.next()) {
                 element = DbStructFactory.getElement(rs);
