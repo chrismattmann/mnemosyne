@@ -145,9 +145,14 @@ public class Base64 {
 		if (data == null) {
 		  return null;
 		}
-		if (offset < 0 || offset >= data.length) {
+		// encode guards with "offset > data.length" and this guarded with
+		// ">=", so a zero-length encoding -- which is what encoding an empty
+		// payload legitimately produces -- could not be decoded back:
+		// decode(encode(new byte[0])) threw IndexOutOfBoundsException. The
+		// two agree now.
+		if (offset < 0 || offset > data.length) {
 		  throw new IndexOutOfBoundsException("Can't decode at index " + offset + " which is beyond array bounds 0.."
-											  + (data.length - 1));
+											  + data.length);
 		}
 		if (length < 0) {
 		  throw new IllegalArgumentException("Can't decode a negative amount of data");
@@ -161,39 +166,60 @@ public class Base64 {
 		while (tail >= offset && data[tail] == '=') {
 		  --tail;
 		}
-		byte dest[] = new byte[tail + offset + 1 - length/4];
+		// tail - offset, not tail + offset. tail is an absolute index and
+		// offset was being added to it rather than subtracted, so the decoded
+		// length came out right only when offset was 0 -- which is what
+		// decode(byte[]) passes, and why nobody noticed. At any other offset
+		// the result was too long by 2*offset: garbage at best, and with the
+		// scratch buffer above, an ArrayIndexOutOfBoundsException.
+		//
+		// tail - offset + 1 is the encoded length without its padding, and
+		// subtracting length/4 turns four 6-bit groups into three bytes.
+		byte dest[] = new byte[tail - offset + 1 - length/4];
 
 		// First, convert from base-64 ascii to 6 bit bytes.
+		//
+		// Into a scratch buffer. This used to write the translation back
+		// into the caller's array, so decoding destroyed the encoded buffer
+		// it was handed -- and decoding the same buffer twice returned two
+		// different answers. Nothing in "public static byte[] decode(byte[])"
+		// suggests the argument is consumed, and the method returns a fresh
+		// array, which makes it look pure. Any caller keeping the encoded
+		// form to log it, to retry a failed send, or simply because it
+		// belongs to someone else, had silently lost it.
+		byte[] sixBit = new byte[length];
 		for (int i = offset; i < offset+length; i++) {
-			if      (data[i] == '=') {
-			  data[i] = 0;
-			} else if (data[i] == '/') {
-			  data[i] = 63;
-			} else if (data[i] == '+') {
-			  data[i] = 62;
-			} else if (data[i] >= '0' && data[i] <= '9') {
-			  data[i] = (byte) (data[i] - ('0' - 52));
-			} else if (data[i] >= 'a'  &&  data[i] <= 'z') {
-			  data[i] = (byte) (data[i] - ('a' - 26));
-			} else if (data[i] >= 'A'  &&  data[i] <= 'Z') {
-			  data[i] = (byte) (data[i] - 'A');
+			byte b = data[i];
+			if      (b == '=') {
+			  b = 0;
+			} else if (b == '/') {
+			  b = 63;
+			} else if (b == '+') {
+			  b = 62;
+			} else if (b >= '0' && b <= '9') {
+			  b = (byte) (b - ('0' - 52));
+			} else if (b >= 'a'  &&  b <= 'z') {
+			  b = (byte) (b - ('a' - 26));
+			} else if (b >= 'A'  &&  b <= 'Z') {
+			  b = (byte) (b - 'A');
 			}
+			sixBit[i - offset] = b;
 		}
 
 		// Map those from 4 6-bit byte groups onto 3 8-bit byte groups.
 		int i, j;
-		for (i = 0 + offset, j = 0; j < dest.length - 2; i += 4, j += 3) {
-			dest[j]   = (byte) (((data[i] << 2) & 255) | ((data[i+1] >>> 4) & 003));
-			dest[j+1] = (byte) (((data[i+1] << 4) & 255) | ((data[i+2] >>> 2) & 017));
-			dest[j+2] = (byte) (((data[i+2] << 6) & 255) | (data[i+3] & 077));
+		for (i = 0, j = 0; j < dest.length - 2; i += 4, j += 3) {
+			dest[j]   = (byte) (((sixBit[i] << 2) & 255) | ((sixBit[i+1] >>> 4) & 003));
+			dest[j+1] = (byte) (((sixBit[i+1] << 4) & 255) | ((sixBit[i+2] >>> 2) & 017));
+			dest[j+2] = (byte) (((sixBit[i+2] << 6) & 255) | (sixBit[i+3] & 077));
 		}
 
 		// And get the leftover ...
 		if (j < dest.length) {
-		  dest[j] = (byte) (((data[i] << 2) & 255) | ((data[i + 1] >>> 4) & 003));
+		  dest[j] = (byte) (((sixBit[i] << 2) & 255) | ((sixBit[i + 1] >>> 4) & 003));
 		}
 		if (++j < dest.length) {
-		  dest[j] = (byte) (((data[i + 1] << 4) & 255) | ((data[i + 2] >>> 2) & 017));
+		  dest[j] = (byte) (((sixBit[i + 1] << 4) & 255) | ((sixBit[i + 2] >>> 2) & 017));
 		}
 
 		// That's it.

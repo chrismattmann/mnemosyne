@@ -567,19 +567,36 @@ public class XML {
 		String          charRef;
         
 		result = new StringBuffer(source.length());
-		for (i = 0; i < source.length(); ++i) {
-			ch = source.charAt(i);
+		// Iterated by code point rather than by char. A char is a UTF-16 code
+		// unit, not a character, and this loop treated the two as the same
+		// thing: every character outside the Basic Multilingual Plane was
+		// emitted as two references, one per surrogate half. Surrogate code
+		// points are not legal XML characters in their own right, so U+10000
+		// escaped to "&#55296;&#56320;" and no parser would read the document
+		// back -- any emoji, any historic script, any astral-plane character
+		// in a metadata value.
+		for (i = 0; i < source.length(); i += Character.charCount(source.codePointAt(i))) {
+			int codePoint = source.codePointAt(i);
 			// If the character is not printable, print as character
 			// reference.  Non printables are below ASCII space but not tab or
 			// line terminator, ASCII delete, or above a certain Unicode
 			// threshold.
-			if ((ch < ' ' && ch != '\t' && ch != '\n' && ch != '\r') || ch > LAST_PRINTABLE || ch == 0xF7) {
-			  result.append("&#").append(Integer.toString(ch)).append(';');
+			//
+			// \r is escaped rather than passed through. XML line-end
+			// normalisation folds a literal carriage return to \n before the
+			// application ever sees it, so text with CRLF endings lost its
+			// CRs on a round trip; &#13; is what later Xerces versions emit.
+			if (codePoint == '\r') {
+			  result.append("&#13;");
+			} else if ((codePoint < ' ' && codePoint != '\t' && codePoint != '\n')
+					|| codePoint > LAST_PRINTABLE || codePoint == 0xF7) {
+			  result.append("&#").append(Integer.toString(codePoint)).append(';');
 			} else {
 				// If there is a suitable entity reference for this
 				// character, print it. The list of available entity
 				// references is almost but not identical between XML and
 				// HTML.
+				ch = (char) codePoint;
 				charRef = getEntityRef(ch);
 				if (charRef == null) {
 				  result.append(ch);
