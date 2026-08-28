@@ -155,6 +155,16 @@ public class TestLuceneCatalog extends TestCase {
      * @see junit.framework.TestCase#tearDown()
      */
     protected void tearDown() throws Exception {
+        // Closed, not just dropped. Every test in this class builds a catalog
+        // over the same directory, and the catalog now holds its index writer
+        // -- and so Lucene's write lock -- for as long as it is open, so an
+        // abandoned one keeps the next test out of its own index. Dropping
+        // the reference was enough only while nothing was held.
+        if (myCat != null) {
+            myCat.close();
+            myCat = null;
+        }
+
         // now remove the temporary directory used
 
         if (tmpDirPath != null) {
@@ -167,10 +177,6 @@ public class TestLuceneCatalog extends TestCase {
                 }
 
                 tmpDir.delete();
-            }
-
-            if (myCat != null) {
-                myCat = null;
             }
         }
 

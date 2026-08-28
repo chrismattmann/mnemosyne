@@ -133,6 +133,10 @@ public class AvroFileManagerServer implements AvroFileManager, FileManagerServer
     @Override
     public boolean shutdown() {
         this.server.close();
+        // The catalog was left holding whatever it had open -- file handles
+        // in LuceneCatalog's case, and now its index writer, whose lock the
+        // next process to open that directory would find held.
+        this.fileManager.close();
         return true;
     }
 
