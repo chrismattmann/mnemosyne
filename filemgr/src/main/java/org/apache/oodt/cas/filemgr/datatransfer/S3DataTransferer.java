@@ -29,7 +29,10 @@ import java.net.URL;
 import org.apache.oodt.cas.filemgr.structs.Product;
 import org.apache.oodt.cas.filemgr.structs.Reference;
 import org.apache.oodt.cas.filemgr.structs.exceptions.DataTransferException;
-import org.apache.tika.io.IOUtils;
+// commons-io's IOUtils, not Tika's. Tika 3 trimmed org.apache.tika.io.IOUtils
+// down and copy(InputStream, OutputStream) went with it -- it was always a
+// re-export of this one, and stream copying was never Tika's job.
+import org.apache.commons.io.IOUtils;
 
 import com.amazonaws.AmazonClientException;
 import com.amazonaws.services.s3.AmazonS3;

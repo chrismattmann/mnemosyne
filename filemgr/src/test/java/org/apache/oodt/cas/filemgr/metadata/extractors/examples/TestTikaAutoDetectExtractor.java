@@ -51,7 +51,11 @@ public class TestTikaAutoDetectExtractor {
 
         assertNotNull(outputMetadata);
         assertTrue(outputMetadata.getAllKeys().size() > 0);
-        assertTrue(outputMetadata.containsKey("X-Parsed-By"));
-        assertFalse(outputMetadata.getMetadata("X-Parsed-By").equals("org.apache.tika.parser.EmptyParser"));
+        // "X-TIKA:Parsed-By", not "X-Parsed-By". Tika renamed its own
+        // metadata keys into the X-TIKA namespace at 2.0, so this is the name
+        // the extractor now writes into product metadata.
+        assertTrue(outputMetadata.containsKey("X-TIKA:Parsed-By"));
+        assertFalse(outputMetadata.getMetadata("X-TIKA:Parsed-By")
+                .equals("org.apache.tika.parser.EmptyParser"));
     }
 }
