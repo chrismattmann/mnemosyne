@@ -34,6 +34,7 @@ import org.apache.oodt.cas.filemgr.structs.query.ComplexQuery;
 import org.apache.oodt.cas.filemgr.structs.query.QueryResult;
 import org.apache.oodt.cas.filemgr.system.FileManagerClient;
 import org.apache.oodt.cas.filemgr.util.RpcCommunicationFactory;
+import org.apache.oodt.cas.filemgr.util.CatalogNames;
 import org.apache.oodt.cas.filemgr.util.SqlParser;
 
 import java.io.IOException;
@@ -248,6 +249,10 @@ public final class QueryTool {
         complexQuery.setSortByMetKey(sortBy);
         complexQuery.setToStringResultFormat(outputFormat);
         try(FileManagerClient fmClient = RpcCommunicationFactory.createClient(new URL(filemgrUrl))){
+            // Resolved inside the client's scope, since the catalog is what
+            // says how its own names are spelled. Without it this tool
+            // required exact casing while the web service did not.
+            CatalogNames.resolve(complexQuery, fmClient);
             List<QueryResult> results = fmClient.complexQuery(complexQuery);
             if (results == null || results.isEmpty()) {
                 return "";

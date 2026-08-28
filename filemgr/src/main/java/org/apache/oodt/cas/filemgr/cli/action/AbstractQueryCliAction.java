@@ -52,11 +52,26 @@ public abstract class AbstractQueryCliAction extends FileManagerCliAction {
       delimiter = "\n";
    }
 
+   /**
+    * Maps the query's identifiers onto the catalog's own spelling.
+    *
+    * Nothing to do by default: an action that builds its query
+    * programmatically already knows what the fields are called. Overridden
+    * where the query came from text a person typed.
+    *
+    * @param client a connected File Manager client
+    * @param query  the query to rewrite in place
+    */
+   protected void resolveIdentifiers(FileManagerClient client, ComplexQuery query)
+         throws Exception {
+   }
+
    @Override
    public void execute(ActionMessagePrinter printer)
          throws CmdLineActionException {
       try (FileManagerClient client = getClient()) {
          ComplexQuery complexQuery = getQuery();
+         resolveIdentifiers(client, complexQuery);
          complexQuery.setSortByMetKey(sortBy);
          complexQuery.setToStringResultFormat(outputFormat);
 

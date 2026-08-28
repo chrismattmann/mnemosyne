@@ -42,6 +42,7 @@ import org.apache.oodt.cas.filemgr.structs.Reference;
 import org.apache.oodt.cas.filemgr.structs.exceptions.QueryFormulationException;
 import org.apache.oodt.cas.filemgr.structs.query.ComplexQuery;
 import org.apache.oodt.cas.filemgr.structs.query.QueryResult;
+import org.apache.oodt.cas.filemgr.util.CatalogNames;
 import org.apache.oodt.cas.filemgr.util.SqlParser;
 import org.apache.oodt.cas.metadata.Metadata;
 import org.apache.oodt.pcs.util.FileManagerUtils;
@@ -183,6 +184,10 @@ public class CatalogResource extends PCSService {
         return queryJson(body);
       }
       ComplexQuery cq = SqlParser.parseSqlQuery(trimmed);
+      // Shared with the CLI and QueryTool, which parse the same SQL and need
+      // the same mapping; CatalogNames is the one place that knows how a
+      // catalog spells its own names.
+      CatalogNames.resolve(cq, fm.getFmgrClient());
       List<QueryResult> found = fm.getFmgrClient().complexQuery(cq);
       List<Map<String, Object>> results = new ArrayList<Map<String, Object>>();
       int limit = found == null ? 0 : Math.min(found.size(), MAX_QUERY_RESULTS);

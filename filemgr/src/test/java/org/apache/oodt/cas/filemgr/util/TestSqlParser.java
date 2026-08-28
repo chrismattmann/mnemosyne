@@ -227,4 +227,118 @@ public class TestSqlParser {
         assertNull(parsed.getReducedMetadata());
         assertNull(parsed.getReducedProductTypeNames());
     }
+
+    @Test
+    public void testIdentifiersAreResolvedCaseInsensitively() throws Exception {
+        ComplexQuery parsed = SqlParser.parseSqlQuery(
+                "select filename from employmentjob where filename == 'x'");
+        SqlParser.resolveIdentifiers(parsed,
+                java.util.Arrays.asList("EmploymentJob", "EmploymentJobTranslated"),
+                java.util.Arrays.asList("Filename", "FileLocation"));
+        assertEquals(java.util.Arrays.asList("Filename"), parsed.getReducedMetadata());
+        assertEquals(java.util.Arrays.asList("EmploymentJob"), parsed.getReducedProductTypeNames());
+        assertEquals("Filename", parsed.getCriteria().get(0).getElementName());
+    }
+
+    @Test
+    public void testUnknownProductTypeIsAFormulationError() throws Exception {
+        ComplexQuery parsed = SqlParser.parseSqlQuery("SELECT Filename FROM nope");
+        try {
+            SqlParser.resolveIdentifiers(parsed,
+                    java.util.Arrays.asList("EmploymentJob"),
+                    java.util.Arrays.asList("Filename"));
+            fail("expected QueryFormulationException");
+        } catch (QueryFormulationException e) {
+            assertTrue(e.getMessage(), e.getMessage().contains("nope"));
+        }
+    }
+
+    /**
+     * Enumerating every element of every product type costs one call per
+     * product type. A query whose field names are already spelled the way the
+     * catalog spells them should not pay for any of it.
+     */
+    @Test
+    public void testAWellSpelledQueryDoesNotFetchTheElementNames() throws Exception {
+        final int[] fetches = new int[1];
+        java.util.function.Supplier<java.util.Collection<String>> expensive =
+            new java.util.function.Supplier<java.util.Collection<String>>() {
+                @Override
+                public java.util.Collection<String> get() {
+                    fetches[0]++;
+                    return java.util.Arrays.asList("Custom");
+                }
+            };
+
+        ComplexQuery parsed = SqlParser.parseSqlQuery(
+                "SELECT Filename FROM EmploymentJob WHERE Filename == 'x'");
+        SqlParser.resolveIdentifiers(parsed,
+                java.util.Arrays.asList("EmploymentJob"),
+                java.util.Arrays.asList("Filename", "FileLocation"), expensive);
+
+        assertEquals("the element names were fetched for a query that did not "
+                + "need them", 0, fetches[0]);
+    }
+
+    /** A miscased name still resolves against the cheap list, with no fetch. */
+    @Test
+    public void testAMiscasedKnownFieldDoesNotFetchEither() throws Exception {
+        final int[] fetches = new int[1];
+        java.util.function.Supplier<java.util.Collection<String>> expensive =
+            new java.util.function.Supplier<java.util.Collection<String>>() {
+                @Override
+                public java.util.Collection<String> get() {
+                    fetches[0]++;
+                    return java.util.Arrays.asList("Custom");
+                }
+            };
+
+        ComplexQuery parsed = SqlParser.parseSqlQuery(
+                "select filename from employmentjob where filename == 'x'");
+        SqlParser.resolveIdentifiers(parsed,
+                java.util.Arrays.asList("EmploymentJob"),
+                java.util.Arrays.asList("Filename", "FileLocation"), expensive);
+
+        assertEquals(0, fetches[0]);
+        assertEquals(java.util.Arrays.asList("Filename"), parsed.getReducedMetadata());
+        assertEquals("Filename", parsed.getCriteria().get(0).getElementName());
+    }
+
+    /** A field the cheap list does not hold is worth the round trip. */
+    @Test
+    public void testAnUnknownFieldFetchesOnceAndResolves() throws Exception {
+        final int[] fetches = new int[1];
+        java.util.function.Supplier<java.util.Collection<String>> expensive =
+            new java.util.function.Supplier<java.util.Collection<String>>() {
+                @Override
+                public java.util.Collection<String> get() {
+                    fetches[0]++;
+                    return java.util.Arrays.asList("CustomField");
+                }
+            };
+
+        ComplexQuery parsed = SqlParser.parseSqlQuery(
+                "select customfield from employmentjob where customfield == 'x'");
+        SqlParser.resolveIdentifiers(parsed,
+                java.util.Arrays.asList("EmploymentJob"),
+                java.util.Arrays.asList("Filename"), expensive);
+
+        assertEquals("the element names should be fetched at most once per query",
+                1, fetches[0]);
+        assertEquals(java.util.Arrays.asList("CustomField"), parsed.getReducedMetadata());
+        assertEquals("CustomField", parsed.getCriteria().get(0).getElementName());
+    }
+
+    /** A field nothing knows about is left exactly as typed. */
+    @Test
+    public void testAFieldNobodyKnowsIsLeftAsTyped() throws Exception {
+        ComplexQuery parsed = SqlParser.parseSqlQuery(
+                "select mystery from employmentjob");
+        SqlParser.resolveIdentifiers(parsed,
+                java.util.Arrays.asList("EmploymentJob"),
+                java.util.Arrays.asList("Filename"), null);
+
+        assertEquals(java.util.Arrays.asList("mystery"), parsed.getReducedMetadata());
+    }
+
 }

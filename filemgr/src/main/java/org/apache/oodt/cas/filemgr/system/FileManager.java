@@ -500,9 +500,14 @@ public class FileManager {
             } else {
                 productTypes = new Vector<ProductType>();
                 for (String productTypeName : complexQuery
-                        .getReducedProductTypeNames())
-                    productTypes.add(this.repositoryManager
-                            .getProductTypeByName(productTypeName));
+                        .getReducedProductTypeNames()) {
+                    ProductType productType = getProductTypeByName(productTypeName);
+                    if (productType == null) {
+                        throw new CatalogException("Unknown product type: "
+                                + productTypeName);
+                    }
+                    productTypes.add(productType);
+                }
             }
 
             // get Metadata
@@ -555,6 +560,21 @@ public class FileManager {
             throws RepositoryManagerException {
 
         ProductType pt = repositoryManager.getProductTypeByName(productTypeName);
+        if (pt != null || productTypeName == null) {
+            return pt;
+        }
+        try {
+            for (ProductType candidate : repositoryManager.getProductTypes()) {
+                if (candidate != null && candidate.getName() != null
+                        && candidate.getName().equalsIgnoreCase(productTypeName)) {
+                    return candidate;
+                }
+            }
+        } catch (Exception e) {
+            LOG.log(Level.WARNING,
+                    "Case-insensitive product type lookup failed for ["
+                            + productTypeName + "]: " + e.getMessage());
+        }
         return pt;
     }
     public ProductType getProductTypeById(String productTypeId)

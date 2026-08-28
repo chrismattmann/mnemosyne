@@ -24,6 +24,8 @@ import org.apache.oodt.cas.filemgr.structs.exceptions.CatalogException;
 import org.apache.oodt.cas.filemgr.structs.exceptions.QueryFormulationException;
 import org.apache.oodt.cas.filemgr.structs.query.ComplexQuery;
 import org.apache.oodt.cas.filemgr.util.SqlParser;
+import org.apache.oodt.cas.filemgr.util.CatalogNames;
+import org.apache.oodt.cas.filemgr.system.FileManagerClient;
 
 /**
  * A {@link CmdLineAction} which queries the FileManager by parsing an SQL like
@@ -44,6 +46,19 @@ public class SqlQueryCliAction extends AbstractQueryCliAction {
       Validate.notNull(query, "Must specify query");
 
       return SqlParser.parseSqlQuery(query);
+   }
+
+   /**
+    * This query came from text a person typed, so the identifiers in it are
+    * spelled however they spelled them. Without this, "select filename from
+    * employmentjob" worked through the web service and failed here -- the
+    * keywords have been case-insensitive for both since #196, and only the
+    * identifiers differed.
+    */
+   @Override
+   protected void resolveIdentifiers(FileManagerClient client, ComplexQuery query)
+         throws QueryFormulationException {
+      CatalogNames.resolve(query, client);
    }
 
    public void setQuery(String query) {
