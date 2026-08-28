@@ -15,6 +15,8 @@
  * limitations under the License.
  */
 
+import { concatBytes, decodePeek, PEEK_BYTES } from './productPeek.js'
+
 const services = () => `${window.location.origin}/pcs/services`
 
 async function readJson(response) {
@@ -100,6 +102,44 @@ export function queryCatalog(sql) {
 
 export function getResources() {
   return fetch(`${services()}/resource/overview`).then(readJson)
+}
+
+export async function peekProduct(id, maxBytes) {
+  const n = maxBytes || PEEK_BYTES
+  const response = await fetch(productDataUrl(id), {
+    headers: { Range: 'bytes=0-' + (n - 1) }
+  })
+  if (!response.ok) {
+    const text = await response.text()
+    throw new Error(text || response.statusText || 'Peek failed')
+  }
+  const mime = response.headers.get('content-type') || ''
+  let bytes
+  if (response.body && typeof response.body.getReader === 'function') {
+    const reader = response.body.getReader()
+    const chunks = []
+    let got = 0
+    while (got < n) {
+      const step = await reader.read()
+      if (step.done) {
+        break
+      }
+      chunks.push(step.value)
+      got += step.value.length
+    }
+    try {
+      await reader.cancel()
+    } catch (e) {
+      // already closed
+    }
+    bytes = concatBytes(chunks, n)
+  } else {
+    const buf = new Uint8Array(await response.arrayBuffer())
+    bytes = buf.subarray(0, n)
+  }
+  const decoded = decodePeek(bytes)
+  decoded.mime = mime
+  return decoded
 }
 
 export function productDataUrl(id, refIndex) {

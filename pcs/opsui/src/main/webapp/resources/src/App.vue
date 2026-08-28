@@ -38,11 +38,11 @@
 
     <StatusView v-if="route.view === 'status'" :report="health" :loading="loading" @open-product="openLatestFile" @open-instances="openInstances" @open-config="openConfig"/>
     <ConfigView v-else-if="route.view === 'config'" :payload="configPayload" :loading="loading" @back="go({ view: 'status' })"/>
-    <CatalogView v-else-if="route.view === 'catalog'" :types="types" :loading="loading" @open="openType" @query="openSearch"/>
+    <CatalogView v-else-if="route.view === 'catalog'" :types="types" :loading="loading" @open="openType" @query="openSearch" @find="openProduct"/>
     <SearchView v-else-if="route.view === 'search'" :payload="searchPayload" :loading="loading" @query="openSearch" @open="openProduct" @open-type="openType" @back="go({ view: 'catalog' })"/>
     <TypeView v-else-if="route.view === 'type'" :payload="typePayload" :loading="loading" @more="openTypeMore" @open="openProduct" @back="go({ view: 'catalog' })"/>
     <ProductView v-else-if="route.view === 'product'" :payload="productPayload" :pedigree="pedigree" :loading="loading" @open-type="openType" @open-instance="openInstance" @open-workflow="openWorkflow" @open-task="openTask" @open-product="openProduct" @back="go({ view: 'catalog' })"/>
-    <InstancesView v-else-if="route.view === 'instances'" :payload="instancePayload" :status="route.status || 'ALL'" :loading="loading" @status="openInstances" @page="openInstancesPage" @open-workflow="openWorkflow" @open-task="openTask" @open-instance="openInstance" @open-product="openProduct"/>
+    <InstancesView v-else-if="route.view === 'instances'" :payload="instancePayload" :workflows="workflows" :status="route.status || 'ALL'" :loading="loading" @status="openInstances" @page="openInstancesPage" @open-workflow="openWorkflow" @open-task="openTask" @open-instance="openInstance" @open-product="openProduct"/>
     <InstanceView v-else-if="route.view === 'instance'" :payload="instanceDetail" :loading="loading" @open-workflow="openWorkflow" @open-task="openTask" @open-instance="openInstance" @open-type="openType" @open-product="openProduct" @back="go({ view: 'instances', status: route.status || 'ALL', page: 1 })"/>
     <ResourcesView v-else-if="route.view === 'resources'" :payload="resourcePayload" :stubs="resourceStubs" :loading="loading"/>
     <WorkflowsView v-else-if="route.view === 'workflows'" :workflows="workflows" :loading="loading" @open="openWorkflow"/>
@@ -356,7 +356,12 @@ export default {
             }
           }
         } else if (r.view === 'instances') {
-          instancePayload.value = await getInstances(r.status || 'ALL', r.page || 1)
+          const [page, defs] = await Promise.all([
+            getInstances(r.status || 'ALL', r.page || 1),
+            getWorkflows()
+          ])
+          instancePayload.value = page
+          workflows.value = defs.workflows || []
         } else if (r.view === 'instance') {
           instanceDetail.value = await getInstance(r.id)
         } else if (r.view === 'workflows') {

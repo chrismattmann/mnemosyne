@@ -24,6 +24,12 @@
       <button type="submit">Query</button>
     </form>
     <p class="muted cap-note">A query returns at most {{ queryCap }} products.</p>
+    <form class="query find" @submit.prevent="find">
+      <input v-model="needle" type="text"
+        placeholder="Product name or id"/>
+      <button type="submit">Open</button>
+    </form>
+    <p class="muted cap-note">Open a cataloged file without writing SQL.</p>
     <p v-if="queryError" class="banner">{{ queryError }}</p>
     <p v-if="loading && !types.length" class="empty">Loading types…</p>
     <p v-else-if="!types.length" class="empty">No product types yet.</p>
@@ -74,9 +80,10 @@ export default {
     types: { type: Array, default: () => [] },
     loading: { type: Boolean, default: false }
   },
-  emits: ['open', 'query'],
+  emits: ['open', 'query', 'find'],
   setup(props, { emit }) {
     const sql = ref('')
+    const needle = ref('')
     const queryError = ref('')
     const sort = ref('')
     const dir = ref('asc')
@@ -112,8 +119,15 @@ export default {
         emit('query', sql.value)
       }
     }
+    function find() {
+      const name = String(needle.value || '').trim()
+      queryError.value = name ? '' : 'Enter a product name or id'
+      if (name) {
+        emit('find', name)
+      }
+    }
     return {
-      sql, queryError, exampleSql: EXAMPLE_CATALOG_SQL, queryCap: QUERY_RESULT_CAP, sort, dir, onSort, submit,
+      sql, needle, queryError, exampleSql: EXAMPLE_CATALOG_SQL, queryCap: QUERY_RESULT_CAP, sort, dir, onSort, submit, find,
       showEmpty, populated, empty, visibleRows
     }
   }
