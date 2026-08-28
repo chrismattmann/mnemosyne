@@ -39,6 +39,10 @@ import org.apache.oodt.cas.filemgr.structs.Product;
 import org.apache.oodt.cas.filemgr.structs.ProductPage;
 import org.apache.oodt.cas.filemgr.structs.ProductType;
 import org.apache.oodt.cas.filemgr.structs.Reference;
+import org.apache.oodt.cas.filemgr.structs.exceptions.QueryFormulationException;
+import org.apache.oodt.cas.filemgr.structs.query.ComplexQuery;
+import org.apache.oodt.cas.filemgr.structs.query.QueryResult;
+import org.apache.oodt.cas.filemgr.util.SqlParser;
 import org.apache.oodt.cas.metadata.Metadata;
 import org.apache.oodt.pcs.util.FileManagerUtils;
 
@@ -52,6 +56,7 @@ public class CatalogResource extends PCSService {
 
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = Logger.getLogger(CatalogResource.class.getName());
+  private static final int MAX_QUERY_RESULTS = 200;
 
   private FileManagerUtils fm() throws MalformedURLException {
     return new FileManagerUtils(PCSService.conf.getFmUrl());
@@ -156,6 +161,63 @@ public class CatalogResource extends PCSService {
     } finally {
       fm.close();
     }
+  }
+
+  @GET
+  @Path("query")
+  @Produces("application/json")
+  public String query(@QueryParam("sql") String sql) throws MalformedURLException, IOException {
+    Map<String, Object> body = new LinkedHashMap<String, Object>();
+    String trimmed = sql == null ? "" : sql.trim();
+    body.put("sql", trimmed);
+    if (trimmed.length() == 0) {
+      body.put("error", "Enter a SQL query, for example: " + SqlParser.EXAMPLE_QUERY);
+      body.put("results", Collections.emptyList());
+      return queryJson(body);
+    }
+    FileManagerUtils fm = fm();
+    try {
+      if (fm.getFmgrClient() == null) {
+        body.put("error", "File Manager is not reachable");
+        body.put("results", Collections.emptyList());
+        return queryJson(body);
+      }
+      ComplexQuery cq = SqlParser.parseSqlQuery(trimmed);
+      List<QueryResult> found = fm.getFmgrClient().complexQuery(cq);
+      List<Map<String, Object>> results = new ArrayList<Map<String, Object>>();
+      int limit = found == null ? 0 : Math.min(found.size(), MAX_QUERY_RESULTS);
+      for (int i = 0; i < limit; i++) {
+        QueryResult qr = found.get(i);
+        if (qr == null || qr.getProduct() == null) {
+          continue;
+        }
+        Map<String, Object> row = encodeProduct(qr.getProduct(), fm);
+        if (qr.getMetadata() != null) {
+          row.put("metadata", encodeMetadata(qr.getMetadata()));
+        }
+        results.add(row);
+      }
+      body.put("results", results);
+      body.put("truncated", Boolean.valueOf(found != null && found.size() > MAX_QUERY_RESULTS));
+      return queryJson(body);
+    } catch (QueryFormulationException e) {
+      body.put("error", e.getMessage() == null ? "Could not parse SQL query" : e.getMessage());
+      body.put("results", Collections.emptyList());
+      return queryJson(body);
+    } catch (Exception e) {
+      LOG.warning("Catalog query failed: " + e.getLocalizedMessage());
+      body.put("error", e.getMessage() == null ? "Query failed" : e.getMessage());
+      body.put("results", Collections.emptyList());
+      return queryJson(body);
+    } finally {
+      fm.close();
+    }
+  }
+
+  private static String queryJson(Map<String, Object> body) {
+    JSONObject response = new JSONObject();
+    response.put("query", body);
+    return response.toString();
   }
 
   static Map<String, Object> encodeType(ProductType type) {

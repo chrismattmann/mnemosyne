@@ -17,7 +17,7 @@
 <template>
   <div v-if="tasks.length" class="graph" role="img" :aria-label="label">
     <template v-for="(task, i) in tasks" :key="task.id || i">
-      <button class="bubble" type="button" @click="$emit('open-task', task.id)">
+      <button class="bubble" type="button" :class="bubbleClass(task)" @click="$emit('open-task', task.id)">
         <span class="idx">{{ i + 1 }}</span>
         <span class="name">{{ task.name || task.id }}</span>
       </button>
@@ -36,13 +36,25 @@ export default {
   name: 'WorkflowGraph',
   props: {
     tasks: { type: Array, default: () => [] },
-    name: { type: String, default: '' }
+    name: { type: String, default: '' },
+    currentTaskId: { type: String, default: '' },
+    status: { type: String, default: '' }
   },
   emits: ['open-task'],
   computed: {
     label() {
       const names = (this.tasks || []).map((t) => t.name || t.id).join(' then ')
       return (this.name ? this.name + ': ' : '') + names
+    },
+    finished() {
+      const value = String(this.status || '').toUpperCase()
+      return value === 'FINISHED' || value === 'SUCCESS' || value === 'EXECUTIONCOMPLETE'
+    }
+  },
+  methods: {
+    bubbleClass(task) {
+      const current = this.currentTaskId && task && task.id === this.currentTaskId
+      return { current, done: this.finished }
     }
   }
 }
@@ -76,6 +88,23 @@ export default {
 .bubble:hover {
   background: #e4d6c4;
   border-color: var(--copper);
+}
+
+.bubble.current {
+  border-style: solid;
+  border-color: var(--copper);
+  background: #f4e6d4;
+}
+
+.bubble.done {
+  border-style: solid;
+  border-color: #7c8f4a;
+  background: #e8f0d8;
+}
+
+.bubble.done.current {
+  border-color: var(--copper);
+  background: #e8f0d8;
 }
 
 .idx {

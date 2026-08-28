@@ -55,18 +55,14 @@
 
       <article class="card">
         <h3>Metadata</h3>
-        <p v-if="!metKeys.length" class="empty">No metadata.</p>
-        <table v-else>
-          <thead>
-            <tr><th>Key</th><th>Value</th></tr>
-          </thead>
-          <tbody>
-            <tr v-for="key in metKeys" :key="key">
-              <td>{{ key }}</td>
-              <td>{{ formatMet(metadata[key]) }}</td>
-            </tr>
-          </tbody>
-        </table>
+        <MetadataTable
+          :metadata="metadata"
+          empty="No metadata."
+          @open-instance="$emit('open-instance', $event)"
+          @open-workflow="$emit('open-workflow', $event)"
+          @open-task="$emit('open-task', $event)"
+          @open-type="$emit('open-type', $event)"
+          @open-product="$emit('open-product', $event)"/>
       </article>
 
       <div class="split">
@@ -87,32 +83,25 @@
 <script>
 import { computed } from 'vue'
 import LineageTree from './LineageTree.vue'
+import MetadataTable from './MetadataTable.vue'
 import { productDataUrl } from '../api.js'
 
 export default {
   name: 'ProductView',
-  components: { LineageTree },
+  components: { LineageTree, MetadataTable },
   props: {
     payload: { type: Object, default: null },
     pedigree: { type: Object, default: null },
     loading: { type: Boolean, default: false }
   },
-  emits: ['open-type', 'back'],
+  emits: ['open-type', 'back', 'open-instance', 'open-workflow', 'open-task', 'open-product'],
   setup(props, { emit }) {
     const product = computed(() => props.payload || {})
     const typeName = computed(() => (product.value.type && product.value.type.name) || '')
     const refs = computed(() => product.value.references || [])
     const metadata = computed(() => product.value.metadata || {})
-    const metKeys = computed(() => Object.keys(metadata.value).sort())
     const tree = computed(() => (props.pedigree && props.pedigree.pedigree) || {})
     const downloadHref = computed(() => product.value.id ? productDataUrl(product.value.id) : '#')
-
-    function formatMet(value) {
-      if (Array.isArray(value)) {
-        return value.join(', ')
-      }
-      return value == null ? '' : String(value)
-    }
 
     function refHref(index) {
       return productDataUrl(product.value.id, index)
@@ -127,10 +116,10 @@ export default {
     }
 
     return {
-      product, typeName, refs, metadata, metKeys,
+      product, typeName, refs, metadata,
       upstream: computed(() => tree.value.upstream),
       downstream: computed(() => tree.value.downstream),
-      downloadHref, formatMet, refHref, backToType
+      downloadHref, refHref, backToType
     }
   }
 }

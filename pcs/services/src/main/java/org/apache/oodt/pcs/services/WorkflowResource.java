@@ -157,6 +157,21 @@ public class WorkflowResource extends PCSService {
         }
       }
       Map<String, Object> row = encodeInstanceDetail(inst, met);
+      if ((!row.containsKey("tasks") || ((List) row.get("tasks")).isEmpty())
+          && inst.getWorkflow() != null && inst.getWorkflow().getId() != null
+          && inst.getWorkflow().getId().length() > 0) {
+        try {
+          Workflow def = client.getWorkflowById(inst.getWorkflow().getId());
+          if (def != null) {
+            Map<String, Object> encoded = encodeWorkflow(def, true);
+            if (encoded.get("tasks") != null) {
+              row.put("tasks", encoded.get("tasks"));
+            }
+          }
+        } catch (Exception e) {
+          LOG.fine("No workflow definition tasks for " + id + ": " + e.getLocalizedMessage());
+        }
+      }
       try {
         row.put("wallClockMinutes", Double.valueOf(client.getWorkflowWallClockMinutes(id)));
       } catch (Exception e) {
@@ -254,6 +269,14 @@ public class WorkflowResource extends PCSService {
       }
     }
     row.put("metadata", CatalogResource.encodeMetadata(met));
+    if (inst != null && inst.getWorkflow() != null && inst.getWorkflow().getTasks() != null) {
+      List<Map<String, Object>> tasks = new ArrayList<Map<String, Object>>();
+      List<WorkflowTask> list = inst.getWorkflow().getTasks();
+      for (int i = 0; i < list.size(); i++) {
+        tasks.add(encodeTask(list.get(i)));
+      }
+      row.put("tasks", tasks);
+    }
     return row;
   }
 

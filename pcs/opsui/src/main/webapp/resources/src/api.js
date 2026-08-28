@@ -88,6 +88,16 @@ export function getConfig(component) {
   return fetch(`${services()}/config/${encodeURIComponent(component)}`).then(readJson)
 }
 
+export function queryCatalog(sql) {
+  const params = new URLSearchParams()
+  params.set('sql', sql || '')
+  return fetch(`${services()}/catalog/query?${params}`).then(readJson)
+}
+
+export function getResources() {
+  return fetch(`${services()}/resource/overview`).then(readJson)
+}
+
 export function productDataUrl(id, refIndex) {
   const params = new URLSearchParams()
   params.set('productID', id)
