@@ -65,7 +65,9 @@ import static com.google.common.base.Preconditions.checkNotNull;
 public class CsvConfigFileWriter extends DynamicConfigFileWriter {
 
    private static final int HEADER_INDEX = 0;
-   private static final int DELIM_INDEX = 0;
+   // Was also 0, so customArgs[DELIM_INDEX] read the header string and the
+   // delimiter was never the comma this class is named for.
+   private static final int DELIM_INDEX = 1;
 
    private static final String DEFAULT_DELIM = ",";
 
@@ -91,23 +93,33 @@ public class CsvConfigFileWriter extends DynamicConfigFileWriter {
    @VisibleForTesting
    protected List<List<String>> generateRows(List<String> header,
          Metadata meatadata) {
+      // Rebuilt. What was here could not produce a single row for any
+      // input, four ways over in eleven lines:
+      //
+      //   - rows.get(index) indexed into a list created empty on the line
+      //     above and never added to, so the first column with a value threw
+      //     IndexOutOfBoundsException;
+      //   - values.size() dereferenced the null Metadata.getAllMetadata
+      //     returns for an absent key, rather than an empty list;
+      //   - index was never incremented, so even had the get succeeded the
+      //     loop would never have advanced past the first row;
+      //   - the "if (row == null)" branch that would have created the row is
+      //     unreachable, since List.get either throws or returns non-null.
+      //
+      // Each row is built as the loop goes, and the loop ends at the first
+      // column that has run out of values.
       List<List<String>> rows = Lists.newArrayList();
-      int index = 0;
-      TOP: while (true) {
+      for (int index = 0; ; index++) {
+         List<String> row = Lists.newArrayList();
          for (String columnName : header) {
             List<String> values = meatadata.getAllMetadata(columnName);
-            if (values.size() <= index) {
-               break TOP;
-            }
-            List<String> row = rows.get(index);
-            if (row == null) {
-               row = Lists.newArrayList();
+            if (values == null || values.size() <= index) {
+               return rows;
             }
             row.add(values.get(index));
-            rows.set(index, row);
          }
+         rows.add(row);
       }
-      return rows;
    }
 
    @VisibleForTesting

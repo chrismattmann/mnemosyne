@@ -111,10 +111,20 @@ public class CuratorUtils {
      * @return Newly created CuratorFramework instance.
      */
     public static CuratorFramework newCuratorFrameworkClient(String connectString, Logger logger) {
+        // All four of these used to read ZK_CONNECTION_TIMEOUT; only the
+        // defaults differed. So ZK_SESSION_TIMEOUT, ZK_RETRY_INITIAL_WAIT and
+        // ZK_RETRY_MAX_RETRIES were dead properties -- setting them did
+        // nothing -- and setting ZK_CONNECTION_TIMEOUT silently changed three
+        // other things: a connection timeout of 15000ms also asked for 15000
+        // retries and a fifteen second initial backoff, which Curator then
+        // clamped to 29 retries.
+        //
+        // Invisible until somebody tuned anything, because the four
+        // hard-coded defaults are each individually correct.
         int connectionTimeoutMs = Integer.parseInt(System.getProperty(Constants.Properties.ZK_CONNECTION_TIMEOUT, "15000"));
-        int sessionTimeoutMs = Integer.parseInt(System.getProperty(Constants.Properties.ZK_CONNECTION_TIMEOUT, "60000"));
-        int retryInitialWaitMs = Integer.parseInt(System.getProperty(Constants.Properties.ZK_CONNECTION_TIMEOUT, "1000"));
-        int maxRetryCount = Integer.parseInt(System.getProperty(Constants.Properties.ZK_CONNECTION_TIMEOUT, "3"));
+        int sessionTimeoutMs = Integer.parseInt(System.getProperty(Constants.Properties.ZK_SESSION_TIMEOUT, "60000"));
+        int retryInitialWaitMs = Integer.parseInt(System.getProperty(Constants.Properties.ZK_RETRY_INITIAL_WAIT, "1000"));
+        int maxRetryCount = Integer.parseInt(System.getProperty(Constants.Properties.ZK_RETRY_MAX_RETRIES, "3"));
 
         CuratorFrameworkFactory.Builder builder = CuratorFrameworkFactory.builder()
                 .namespace(NAMESPACE)
