@@ -21,6 +21,7 @@ import org.apache.avro.AvroRemoteException;
 import org.apache.oodt.cas.filemgr.structs.avrotypes.OodtError;
 import org.apache.avro.ipc.NettyTransceiver;
 import org.apache.oodt.commons.rpc.AvroTransceivers;
+import org.apache.oodt.commons.rpc.RequestTimeout;
 import org.apache.avro.ipc.Transceiver;
 import org.apache.avro.ipc.specific.SpecificRequestor;
 import org.jboss.netty.channel.ChannelFactory;
@@ -802,7 +803,12 @@ public class AvroFileManagerClient implements FileManagerClient {
         Transceiver transceiver = new NettyTransceiver(inetSocketAddress, CHANNEL_FACTORY, 40000L);
         AvroFileManager clientProxy = (AvroFileManager) SpecificRequestor.getClient(
             AvroFileManager.class, transceiver);
-        return new SharedConnection(transceiver, clientProxy);
+        // 40000L above is the *connect* timeout and the only bound Avro
+        // offers. Past the handshake a request that never gets a response
+        // parked the caller in CallFuture.get() with no deadline and no
+        // recovery; RequestTimeout puts an end on the wait.
+        return new SharedConnection(transceiver,
+            RequestTimeout.bound(AvroFileManager.class, clientProxy));
     }
 
     private static synchronized SharedConnection getSharedConnection(URL url) throws IOException {

@@ -20,6 +20,7 @@ package org.apache.oodt.cas.crawl.daemon;
 //Avro imports
 import org.apache.avro.ipc.NettyTransceiver;
 import org.apache.oodt.commons.rpc.AvroTransceivers;
+import org.apache.oodt.commons.rpc.RequestTimeout;
 import org.apache.avro.ipc.Transceiver;
 import org.apache.avro.ipc.specific.SpecificRequestor;
 import org.jboss.netty.channel.ChannelFactory;
@@ -92,8 +93,12 @@ public class AvroRpcCrawlDaemonController implements Closeable {
                 new InetSocketAddress(url.getHost(), url.getPort()),
                 CHANNEL_FACTORY, Long.valueOf(CONNECT_TIMEOUT_MILLIS));
             this.transceiver = created;
-            this.proxy = SpecificRequestor.getClient(AvroCrawlDaemon.class,
-                this.transceiver);
+            // Bounded: OPSUI polls this every eight seconds, so a crawler
+            // that stops responding mid-request used to take a thread
+            // with it on every poll.
+            this.proxy = RequestTimeout.bound(AvroCrawlDaemon.class,
+                SpecificRequestor.getClient(AvroCrawlDaemon.class,
+                    this.transceiver));
         } catch (MalformedURLException e) {
             closeQuietly(created);
             throw new InstantiationException(e.getMessage());

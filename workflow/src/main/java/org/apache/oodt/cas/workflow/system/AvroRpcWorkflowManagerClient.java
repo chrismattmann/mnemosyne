@@ -22,6 +22,7 @@ import org.apache.avro.ipc.HttpTransceiver;
 import org.apache.avro.ipc.NettyTransceiver;
 import org.apache.avro.ipc.Transceiver;
 import org.apache.avro.ipc.specific.SpecificRequestor;
+import org.apache.oodt.commons.rpc.RequestTimeout;
 import org.jboss.netty.channel.ChannelFactory;
 import org.jboss.netty.channel.socket.nio.NioClientSocketChannelFactory;
 import org.jboss.netty.channel.socket.nio.NioWorkerPool;
@@ -78,7 +79,12 @@ public class AvroRpcWorkflowManagerClient implements WorkflowManagerClient {
         workflowManagerUrl = url;
         try {
             client = new HttpTransceiver(url);
-            proxy = SpecificRequestor.getClient(org.apache.oodt.cas.workflow.struct.avrotypes.WorkflowManager.class, client);
+            // Bounded: the transceiver is given no request timeout, so a
+            // lost response parked the caller forever.
+            proxy = RequestTimeout.bound(
+                org.apache.oodt.cas.workflow.struct.avrotypes.WorkflowManager.class,
+                SpecificRequestor.getClient(
+                    org.apache.oodt.cas.workflow.struct.avrotypes.WorkflowManager.class, client));
         } catch (IOException e) {
             logger.error("Error occurred when creating client for: {}", url, e);
         }
@@ -271,7 +277,12 @@ public class AvroRpcWorkflowManagerClient implements WorkflowManagerClient {
         try {
             client = new NettyTransceiver(
                 new InetSocketAddress(workflowManagerUrl.getHost(), workflowManagerUrl.getPort()), CHANNEL_FACTORY);
-            proxy = SpecificRequestor.getClient(org.apache.oodt.cas.workflow.struct.avrotypes.WorkflowManager.class, client);
+            // Bounded: the transceiver is given no request timeout, so a
+            // lost response parked the caller forever.
+            proxy = RequestTimeout.bound(
+                org.apache.oodt.cas.workflow.struct.avrotypes.WorkflowManager.class,
+                SpecificRequestor.getClient(
+                    org.apache.oodt.cas.workflow.struct.avrotypes.WorkflowManager.class, client));
         } catch (IOException e) {
             logger.error("Error occurred when setting workflow manager url: {}", workflowManagerUrl, e);
         }
