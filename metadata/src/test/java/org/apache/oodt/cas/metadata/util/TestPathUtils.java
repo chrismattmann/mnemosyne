@@ -118,4 +118,110 @@ public class TestPathUtils extends TestCase {
         return var;
     }
    
+
+    /**
+     * finalPath.append(var) on a null appended the four characters n-u-l-l.
+     * These strings decide where products are archived, so a missing key
+     * filed the product into a directory literally called "null" and the
+     * catalog recorded that as its location -- surfacing much later as a
+     * directory nobody can explain, by which time the metadata that would
+     * have named the missing key is gone. It is exactly what put
+     * bigtranslate's products under .../null/translated.json when InputFiles
+     * stopped being supplied.
+     */
+    public void testAnUnresolvedNameDoesNotBecomeTheLiteralNull() {
+        Metadata m = new Metadata();
+        m.addMetadata("Present", "here");
+
+        String resolved = PathUtils.replaceEnvVariables("/data/[Absent]/f.dat", m);
+
+        assertFalse("an unresolved key became the text 'null': " + resolved,
+                resolved.contains("null"));
+        assertEquals("/data/[Absent]/f.dat", resolved);
+    }
+
+    /** The token names the key that was missing, which "null" never did. */
+    public void testTheUnresolvedTokenNamesTheMissingKey() {
+        String resolved = PathUtils.replaceEnvVariables(
+                "/archive/[InputFiles]/out.json", new Metadata());
+
+        assertTrue("the missing key is not identifiable from: " + resolved,
+                resolved.contains("InputFiles"));
+    }
+
+    /** Resolvable names around an unresolvable one still resolve. */
+    public void testTheResolvableNamesAroundItStillResolve() {
+        Metadata m = new Metadata();
+        m.addMetadata("Type", "L1B");
+        m.addMetadata("Day", "042");
+
+        assertEquals("/data/L1B/[Missing]/042/f.dat", PathUtils
+                .replaceEnvVariables("/data/[Type]/[Missing]/[Day]/f.dat", m));
+    }
+
+    /**
+     * readEnvVarName scanned for the closing bracket with no length guard, so
+     * an unterminated variable walked off the end of the string and reported
+     * StringIndexOutOfBoundsException -- which tells the caller nothing about
+     * what was wrong with their input.
+     */
+    public void testAnUnclosedBracketIsReportedAsSuch() {
+        Metadata m = new Metadata();
+        m.addMetadata("Present", "here");
+
+        try {
+            PathUtils.replaceEnvVariables("[Present", m);
+            fail("an unterminated variable was accepted");
+        } catch (StringIndexOutOfBoundsException e) {
+            fail("an unterminated variable still reads past the end of the string");
+        } catch (IllegalArgumentException expected) {
+            assertTrue("the message does not describe the problem: "
+                    + expected.getMessage(),
+                    expected.getMessage().contains("Unterminated variable"));
+        }
+    }
+
+    /** A bracket as the last character read past the end on its first read. */
+    public void testATrailingBracketIsReportedAsSuch() {
+        try {
+            PathUtils.replaceEnvVariables("/data/[", new Metadata());
+            fail("a trailing '[' was accepted");
+        } catch (StringIndexOutOfBoundsException e) {
+            fail("a trailing '[' still reads past the end of the string");
+        } catch (IllegalArgumentException expected) {
+            // the documented outcome
+        }
+    }
+
+    /** "[]" consumed its own closing bracket and then ran off the end. */
+    public void testAnEmptyVariableIsNotAnIndexOutOfBounds() {
+        try {
+            String resolved = PathUtils.replaceEnvVariables("/data/[]/f.dat",
+                    new Metadata());
+            assertEquals("/data/[]/f.dat", resolved);
+        } catch (StringIndexOutOfBoundsException e) {
+            fail("an empty variable still reads past the end of the string");
+        }
+    }
+
+    /**
+     * recursivelyReplaceEnvVariables loops while the string still holds
+     * brackets. That terminated only because every bracket was consumed --
+     * an unresolvable name became "null". Now that the token is left in
+     * place, the loop has to stop when a pass changes nothing.
+     */
+    public void testRecursiveReplacementTerminatesOnAnUnresolvableName() {
+        assertEquals("/data/[Absent]/f.dat", PathUtils
+                .recursivelyReplaceEnvVariables("/data/[Absent]/f.dat"));
+    }
+
+    /** and a resolvable one is still resolved. */
+    public void testAResolvableNameIsStillReplaced() {
+        Metadata m = new Metadata();
+        m.addMetadata("Present", "here");
+
+        assertEquals("/data/here/f.dat",
+                PathUtils.replaceEnvVariables("/data/[Present]/f.dat", m));
+    }
+
 }

@@ -35,6 +35,8 @@ import java.util.GregorianCalendar;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 
 /**
@@ -48,6 +50,8 @@ import java.util.regex.Pattern;
  * </p>.
  */
 public final class PathUtils {
+
+    private static final Logger LOG = Logger.getLogger(PathUtils.class.getName());
 
     public static String DELIMITER = ",";
 
@@ -79,7 +83,31 @@ public final class PathUtils {
                 } else {
                     var = EnvUtilities.getEnv(data.getFieldName());
                 }
-                finalPath.append(var);
+
+                if (var == null) {
+                    // finalPath.append(var) appended the four characters
+                    // n-u-l-l. These strings decide where products are
+                    // archived, so a missing metadata key filed the product
+                    // into a directory literally called "null" and the
+                    // catalog recorded that as its location -- surfacing much
+                    // later as a directory nobody can explain, by which time
+                    // the metadata that would have named the missing key is
+                    // gone.
+                    //
+                    // The token is left as it was written instead. That keeps
+                    // the failure visible and still readable: "[InputFiles]"
+                    // in a path says which key was missing, where "null" says
+                    // only that something was. Left rather than thrown
+                    // because this has 62 call sites, most of them resolving
+                    // configuration rather than paths, and an unchecked throw
+                    // would be a much broader change than the defect.
+                    LOG.log(Level.WARNING, "No value for [" + data.getFieldName()
+                            + "] in the supplied metadata or the environment; "
+                            + "leaving it unresolved in: [" + origPath + "]");
+                    finalPath.append('[').append(data.getFieldName()).append(']');
+                } else {
+                    finalPath.append(var);
+                }
                 i = data.getEndIdx();
             } else {
                 finalPath.append(origPath.charAt(i));
@@ -90,10 +118,20 @@ public final class PathUtils {
     }
     
     public static String recursivelyReplaceEnvVariables(String origPath) {
+        // Loops while the string still holds brackets, which was fine only
+        // while every bracket was guaranteed to be consumed -- and it was,
+        // because an unresolvable name became "null" and a malformed one
+        // threw. Now that an unresolved token is left as it was written, that
+        // condition would never stop being true. Stop when a pass changes
+        // nothing: there is nothing left that this can resolve.
         while (origPath != null && origPath.contains("[") && origPath.contains("]")) {
-            origPath = replaceEnvVariables(origPath);
+            String replaced = replaceEnvVariables(origPath);
+            if (replaced.equals(origPath)) {
+                break;
+            }
+            origPath = replaced;
         }
-        
+
         return origPath;
     }
 
@@ -354,19 +392,22 @@ public final class PathUtils {
     }
 
     private static VarData readEnvVarName(String origPathStr, int startIdx) {
-        StringBuilder varName = new StringBuilder();
-        int idx = startIdx + 1;
-
-        do {
-            varName.append(origPathStr.charAt(idx));
-            idx++;
-        } while (origPathStr.charAt(idx) != ']');
+        // The scan had no length guard, so an unterminated variable walked
+        // off the end: "[Present" threw StringIndexOutOfBounds, which tells
+        // the caller nothing about what was wrong with their input. A
+        // trailing "[" threw on the first read, and "[]" consumed its own
+        // closing bracket and then ran off the end too.
+        int closing = origPathStr.indexOf(']', startIdx + 1);
+        if (closing < 0) {
+            throw new IllegalArgumentException("Unterminated variable: no ']' "
+                    + "closes the '[' at index " + startIdx + " of: ["
+                    + origPathStr + "]");
+        }
 
         VarData data = new PathUtils().new VarData();
-        data.setFieldName(varName.toString());
-        data.setEndIdx(idx);
+        data.setFieldName(origPathStr.substring(startIdx + 1, closing));
+        data.setEndIdx(closing);
         return data;
-
     }
 
     class VarData {
