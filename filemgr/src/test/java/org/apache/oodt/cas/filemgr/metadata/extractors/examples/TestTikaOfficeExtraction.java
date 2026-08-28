@@ -58,7 +58,12 @@ public class TestTikaOfficeExtraction extends TestCase {
         assertNotNull(met);
         assertTrue("no metadata came back from the document", met.getAllKeys().size() > 0);
 
-        String parsedBy = String.valueOf(met.getMetadata("X-Parsed-By"));
+        // Renamed into the X-TIKA namespace at Tika 2.0. It read
+        // "X-Parsed-By" and got null, so String.valueOf gave "null", which
+        // does not contain "EmptyParser" -- the assertion below passed
+        // without ever seeing what parsed the document.
+        String parsedBy = String.valueOf(met.getMetadata("X-TIKA:Parsed-By"));
+        assertFalse("no parser was recorded", "null".equals(parsedBy));
         assertFalse("Tika fell back to the empty parser, so the document was never read: "
                         + parsedBy,
                 parsedBy.contains("EmptyParser"));

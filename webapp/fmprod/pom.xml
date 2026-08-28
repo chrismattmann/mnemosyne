@@ -66,6 +66,17 @@
       <artifactId>cxf-rt-rs-extension-providers</artifactId>
     </dependency>
     <dependency>
+      <!--
+        WebClient, which RestAPITest uses, lives here rather than in
+        cxf-rt-frontend-jaxrs. It was never declared and arrived through
+        tika-parsers 1.13's transitive tree, so the test compiled by accident
+        of an unrelated dependency; replacing that artifact took it away.
+      -->
+      <groupId>org.apache.cxf</groupId>
+      <artifactId>cxf-rt-rs-client</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
       <groupId>org.apache.cxf</groupId>
       <artifactId>cxf-rt-transports-local</artifactId>
       <scope>test</scope>
