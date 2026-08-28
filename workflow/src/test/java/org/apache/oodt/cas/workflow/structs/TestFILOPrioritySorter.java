@@ -58,13 +58,21 @@ public class TestFILOPrioritySorter extends TestCase {
     candidates.add(proc);    
     sorter.sort(candidates);
     
+    // getProcessor advances the start date by five seconds each call, so
+    // these were created oldest-first: 2.0, then 7.0, then 9.0.
+    //
+    // This used to assert 2.0, 7.0, 9.0 -- oldest first, which is a FIFO
+    // ordering. The class is named for first-in-last-out and its javadoc
+    // says "the first ones to get processed are the most recently created
+    // instances", so the assertion was written to match the code rather than
+    // the contract, and it is what kept the defect in place.
     assertNotNull(candidates);
     assertEquals(3, candidates.size());
-    assertEquals(2.0, candidates.get(0).getWorkflowInstance().getPriority()
+    assertEquals(9.0, candidates.get(0).getWorkflowInstance().getPriority()
         .getValue());
     assertEquals(7.0, candidates.get(1).getWorkflowInstance().getPriority()
         .getValue());
-    assertEquals(9.0, candidates.get(2).getWorkflowInstance().getPriority()
+    assertEquals(2.0, candidates.get(2).getWorkflowInstance().getPriority()
         .getValue());
   }
 

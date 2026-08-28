@@ -90,9 +90,17 @@ public class TestTaskQuerier extends TestCase {
     assertEquals(2, runnables.size());
     assertNotNull(runnables.get(0));
     assertNotNull(runnables.get(0).getWorkflowInstance().getPriority());
-    assertEquals(2.1, runnables.get(0).getWorkflowInstance().getPriority()
+    // MockProcessorQueue creates 10.0, then 2.0, then 7.0, five seconds
+    // apart, so 7.0 is the most recently created of the two runnable ones --
+    // 10.0 is Success/done and not runnable. FILOPrioritySorter puts the
+    // newest first, so 7.0 leads.
+    //
+    // This used to assert 2.1 then 7.1, which is oldest-first: it was
+    // asserting the FIFO ordering the sorter actually had rather than the
+    // one its name and javadoc describe.
+    assertEquals(7.1, runnables.get(0).getWorkflowInstance().getPriority()
         .getValue()); // extra .1 since it's a task
-    assertEquals(7.1, runnables.get(1).getWorkflowInstance().getPriority()
+    assertEquals(2.1, runnables.get(1).getWorkflowInstance().getPriority()
         .getValue()); // extra .1 since it's a task
     try{
       querierThread.join();

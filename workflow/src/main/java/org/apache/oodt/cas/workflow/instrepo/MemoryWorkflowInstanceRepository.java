@@ -164,8 +164,16 @@ public class MemoryWorkflowInstanceRepository extends
      */
     protected List paginateWorkflows(int pageNum, String status)
             throws InstanceRepositoryException {
-        // first sort insts by startDateTime
-        List allInsts = Arrays.asList(this.workflowInstMap.keySet().toArray());
+        // values(), not keySet(). The map is keyed by instance id, so this
+        // built a list of Strings and the comparator below cast each one to
+        // WorkflowInstance: paging over this repository always threw
+        // ClassCastException. AbstractPaginatibleInstanceRepository.getFirstPage
+        // catches it and hands the caller null, so nothing was logged at a
+        // level anyone watches and a page simply came back empty --
+        // indistinguishable from "no instances match". Any UI or CLI paging
+        // over this repository showed an empty list for a repository that was
+        // not empty, and getLastPage then dereferenced that null.
+        List allInsts = Arrays.asList(this.workflowInstMap.values().toArray());
         Collections.sort(allInsts, new Comparator() {
 
             public int compare(Object o1, Object o2) {
