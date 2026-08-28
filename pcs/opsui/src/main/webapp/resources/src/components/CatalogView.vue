@@ -18,6 +18,11 @@
   <section>
     <h2>File catalog</h2>
     <p class="muted">Product types in File Manager.</p>
+    <form class="query" @submit.prevent="$emit('query', sql)">
+      <input v-model="sql" type="text" spellcheck="false"
+        placeholder="SELECT Filename FROM EmploymentJob"/>
+      <button type="submit">Query</button>
+    </form>
     <p v-if="loading && !types.length" class="empty">Loading types…</p>
     <p v-else-if="!types.length" class="empty">No product types yet.</p>
     <table v-else>
@@ -53,8 +58,9 @@ export default {
     types: { type: Array, default: () => [] },
     loading: { type: Boolean, default: false }
   },
-  emits: ['open'],
+  emits: ['open', 'query'],
   setup(props) {
+    const sql = ref('')
     const sort = ref('')
     const dir = ref('asc')
     const rows = computed(() => {
@@ -71,7 +77,7 @@ export default {
       sort.value = next.field
       dir.value = next.dir
     }
-    return { sort, dir, rows, onSort }
+    return { sql, sort, dir, rows, onSort }
   }
 }
 </script>
@@ -79,5 +85,17 @@ export default {
 <style scoped>
 h2 {
   margin: 1.4rem 0 0.3rem;
+}
+
+.query {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0.8rem 0 1rem;
+}
+
+.query input {
+  flex: 1;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
 }
 </style>

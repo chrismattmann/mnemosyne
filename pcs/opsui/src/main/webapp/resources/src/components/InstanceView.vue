@@ -21,6 +21,7 @@
     <p class="muted mono">{{ inst.id }}</p>
     <p v-if="loading && !inst.id" class="empty">Loading instance…</p>
     <article v-else class="card">
+      <h3>Run</h3>
       <table>
         <tbody>
           <tr><th>ID</th><td class="mono">{{ inst.id }}</td></tr>
@@ -55,51 +56,54 @@
       </table>
     </article>
 
+    <article v-if="tasks.length" class="card">
+      <h3>Description</h3>
+      <WorkflowGraph
+        :tasks="tasks"
+        :name="inst.workflowName"
+        :current-task-id="inst.currentTaskId"
+        :status="inst.status"
+        @open-task="$emit('open-task', $event)"/>
+    </article>
+
     <article class="card">
       <h3>Instance metadata</h3>
-      <p v-if="!metKeys.length" class="empty">No metadata on this instance.</p>
-      <table v-else>
-        <thead>
-          <tr><th>Key</th><th>Value</th></tr>
-        </thead>
-        <tbody>
-          <tr v-for="key in metKeys" :key="key">
-            <td class="mono">{{ key }}</td>
-            <td class="break">{{ formatMet(metadata[key]) }}</td>
-          </tr>
-        </tbody>
-      </table>
+      <MetadataTable
+        :metadata="metadata"
+        empty="No metadata on this instance."
+        @open-instance="$emit('open-instance', $event)"
+        @open-workflow="$emit('open-workflow', $event)"
+        @open-task="$emit('open-task', $event)"
+        @open-type="$emit('open-type', $event)"
+        @open-product="$emit('open-product', $event)"/>
     </article>
   </section>
 </template>
 
 <script>
 import { computed } from 'vue'
+import MetadataTable from './MetadataTable.vue'
+import WorkflowGraph from './WorkflowGraph.vue'
 import { formatWallClock, wallClockMs } from '../sort.js'
 
 export default {
   name: 'InstanceView',
+  components: { MetadataTable, WorkflowGraph },
   props: {
     payload: { type: Object, default: null },
     loading: { type: Boolean, default: false }
   },
-  emits: ['back', 'open-workflow', 'open-task'],
+  emits: ['back', 'open-workflow', 'open-task', 'open-instance', 'open-type', 'open-product'],
   setup(props) {
     const inst = computed(() => (props.payload && props.payload.instance) || {})
     const metadata = computed(() => inst.value.metadata || {})
     return {
       inst,
       metadata,
+      tasks: computed(() => inst.value.tasks || []),
       title: computed(() => inst.value.workflowName || 'Workflow instance'),
-      metKeys: computed(() => Object.keys(metadata.value).sort()),
       wallMs: computed(() => wallClockMs(inst.value.startDateTime, inst.value.endDateTime, Date.now())),
       formatWallClock,
-      formatMet(value) {
-        if (Array.isArray(value)) {
-          return value.join(', ')
-        }
-        return value == null ? '' : String(value)
-      },
       pillClass(status) {
         const value = String(status || '').toUpperCase()
         if (value === 'FINISHED' || value === 'SUCCESS' || value === 'EXECUTIONCOMPLETE') {

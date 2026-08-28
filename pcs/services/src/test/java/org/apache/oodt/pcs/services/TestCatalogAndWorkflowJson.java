@@ -118,6 +118,44 @@ public class TestCatalogAndWorkflowJson extends TestCase {
         ((List<?>) metadata.get("ProductType")).get(0));
   }
 
+  public void testEncodeInstanceDetailIncludesTasks() {
+    WorkflowTask task = new WorkflowTask();
+    task.setTaskId("urn:bt:Translate");
+    task.setTaskName("Translate");
+    Workflow workflow = new Workflow();
+    workflow.setId("urn:bt:Flow");
+    workflow.setName("BigTranslateWorkflow");
+    workflow.setTasks(Arrays.asList(task));
+    WorkflowInstance inst = new WorkflowInstance();
+    inst.setId("inst-3");
+    inst.setWorkflow(workflow);
+    inst.setCurrentTaskId(task.getTaskId());
+    Map<String, Object> row = WorkflowResource.encodeInstanceDetail(inst, new Metadata());
+    assertTrue(row.get("tasks") instanceof List);
+    assertEquals("urn:bt:Translate", ((Map<?, ?>) ((List<?>) row.get("tasks")).get(0)).get("id"));
+  }
+
+  public void testEncodeResourceNodeAndJob() {
+    try {
+      java.net.URL url = new java.net.URL("http://localhost:2001");
+      org.apache.oodt.cas.resource.structs.ResourceNode node =
+          new org.apache.oodt.cas.resource.structs.ResourceNode("localhost", url, 8);
+      Map<String, Object> nodeRow = ResourceResource.encodeNode(node, "0/8", Arrays.asList("quick"));
+      assertEquals("localhost", nodeRow.get("id"));
+      assertEquals("0/8", nodeRow.get("load"));
+      org.apache.oodt.cas.resource.structs.Job job = new org.apache.oodt.cas.resource.structs.Job();
+      job.setId("job-1");
+      job.setName("Hello");
+      job.setQueueName("quick");
+      job.setLoadValue(Integer.valueOf(1));
+      Map<String, Object> jobRow = ResourceResource.encodeJob(job, "localhost");
+      assertEquals("Hello", jobRow.get("name"));
+      assertEquals("localhost", jobRow.get("node"));
+    } catch (java.net.MalformedURLException e) {
+      fail(e.getMessage());
+    }
+  }
+
   public void testEncodeWorkflowWithTasks() {
     WorkflowTask task = new WorkflowTask();
     task.setTaskId("t1");

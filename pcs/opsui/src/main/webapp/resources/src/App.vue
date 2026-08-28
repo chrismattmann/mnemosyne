@@ -29,19 +29,22 @@
       </div>
       <nav>
         <button :class="{ active: route.view === 'status' || route.view === 'config' }" @click="go({ view: 'status' })">Status</button>
-        <button :class="{ active: route.view === 'catalog' || route.view === 'type' || route.view === 'product' }" @click="go({ view: 'catalog' })">Catalog</button>
+        <button :class="{ active: route.view === 'catalog' || route.view === 'type' || route.view === 'product' || route.view === 'search' }" @click="go({ view: 'catalog' })">Catalog</button>
         <button :class="{ active: route.view === 'instances' || route.view === 'instance' }" @click="go({ view: 'instances' })">Instances</button>
         <button :class="{ active: route.view === 'workflows' || route.view === 'workflow' || route.view === 'task' || route.view === 'condition' }" @click="go({ view: 'workflows' })">Workflows</button>
+        <button :class="{ active: route.view === 'resources' }" @click="go({ view: 'resources' })">Resources</button>
       </nav>
     </header>
 
     <StatusView v-if="route.view === 'status'" :report="health" :loading="loading" @open-product="openProductByPath" @open-instances="openInstances" @open-config="openConfig"/>
     <ConfigView v-else-if="route.view === 'config'" :payload="configPayload" :loading="loading" @back="go({ view: 'status' })"/>
-    <CatalogView v-else-if="route.view === 'catalog'" :types="types" :loading="loading" @open="openType"/>
+    <CatalogView v-else-if="route.view === 'catalog'" :types="types" :loading="loading" @open="openType" @query="openSearch"/>
+    <SearchView v-else-if="route.view === 'search'" :payload="searchPayload" :loading="loading" @query="openSearch" @open="openProduct" @open-type="openType" @back="go({ view: 'catalog' })"/>
     <TypeView v-else-if="route.view === 'type'" :payload="typePayload" :loading="loading" @page="openTypePage" @open="openProduct" @back="go({ view: 'catalog' })"/>
-    <ProductView v-else-if="route.view === 'product'" :payload="productPayload" :pedigree="pedigree" :loading="loading" @open-type="openType" @back="go({ view: 'catalog' })"/>
+    <ProductView v-else-if="route.view === 'product'" :payload="productPayload" :pedigree="pedigree" :loading="loading" @open-type="openType" @open-instance="openInstance" @open-workflow="openWorkflow" @open-task="openTask" @open-product="openProduct" @back="go({ view: 'catalog' })"/>
     <InstancesView v-else-if="route.view === 'instances'" :payload="instancePayload" :status="route.status || 'ALL'" :loading="loading" @status="openInstances" @page="openInstancesPage" @open-workflow="openWorkflow" @open-task="openTask" @open-instance="openInstance"/>
-    <InstanceView v-else-if="route.view === 'instance'" :payload="instanceDetail" :loading="loading" @open-workflow="openWorkflow" @open-task="openTask" @back="go({ view: 'instances', status: route.status || 'ALL', page: 1 })"/>
+    <InstanceView v-else-if="route.view === 'instance'" :payload="instanceDetail" :loading="loading" @open-workflow="openWorkflow" @open-task="openTask" @open-instance="openInstance" @open-type="openType" @open-product="openProduct" @back="go({ view: 'instances', status: route.status || 'ALL', page: 1 })"/>
+    <ResourcesView v-else-if="route.view === 'resources'" :payload="resourcePayload" :loading="loading"/>
     <WorkflowsView v-else-if="route.view === 'workflows'" :workflows="workflows" :loading="loading" @open="openWorkflow"/>
     <WorkflowView v-else-if="route.view === 'workflow'" :payload="workflowPayload" :loading="loading" @open-task="openTask" @back="go({ view: 'workflows' })"/>
     <TaskView v-else-if="route.view === 'task'" :payload="taskPayload" :loading="loading" @open-condition="openCondition" @back="go({ view: 'workflows' })"/>
@@ -55,10 +58,12 @@
 import { onMounted, onUnmounted, ref, watch } from 'vue'
 import StatusView from './components/StatusView.vue'
 import CatalogView from './components/CatalogView.vue'
+import SearchView from './components/SearchView.vue'
 import TypeView from './components/TypeView.vue'
 import ProductView from './components/ProductView.vue'
 import InstancesView from './components/InstancesView.vue'
 import InstanceView from './components/InstanceView.vue'
+import ResourcesView from './components/ResourcesView.vue'
 import WorkflowsView from './components/WorkflowsView.vue'
 import WorkflowView from './components/WorkflowView.vue'
 import TaskView from './components/TaskView.vue'
@@ -66,14 +71,14 @@ import ConditionView from './components/ConditionView.vue'
 import ConfigView from './components/ConfigView.vue'
 import {
   getCondition, getConfig, getHealth, getInstance, getInstances, getPedigree, getProduct,
-  getTask, getTypeProducts, getTypes, getWorkflow, getWorkflows
+  getResources, getTask, getTypeProducts, getTypes, getWorkflow, getWorkflows, queryCatalog
 } from './api.js'
 
 export default {
   name: 'App',
   components: {
-    StatusView, CatalogView, TypeView, ProductView, InstancesView, InstanceView,
-    WorkflowsView, WorkflowView, TaskView, ConditionView, ConfigView
+    StatusView, CatalogView, SearchView, TypeView, ProductView, InstancesView, InstanceView,
+    ResourcesView, WorkflowsView, WorkflowView, TaskView, ConditionView, ConfigView
   },
   setup() {
     const route = ref(parseHash())
@@ -91,6 +96,8 @@ export default {
     const taskPayload = ref(null)
     const conditionPayload = ref(null)
     const configPayload = ref(null)
+    const searchPayload = ref(null)
+    const resourcePayload = ref(null)
     let timer = null
 
     function parseHash() {
@@ -111,6 +118,12 @@ export default {
       }
       if (head === 'catalog') {
         return { view: 'catalog' }
+      }
+      if (head === 'search') {
+        return { view: 'search', sql: parts.slice(1).join('/') }
+      }
+      if (head === 'resources') {
+        return { view: 'resources' }
       }
       if (head === 'product' && parts[1]) {
         return { view: 'product', id: parts[1] }
@@ -149,6 +162,12 @@ export default {
       }
       if (next.view === 'catalog') {
         return 'catalog'
+      }
+      if (next.view === 'search') {
+        return 'search/' + encodeURIComponent(next.sql || '')
+      }
+      if (next.view === 'resources') {
+        return 'resources'
       }
       if (next.view === 'type') {
         const page = next.page && next.page !== 1 ? '/' + next.page : ''
@@ -248,6 +267,15 @@ export default {
       go({ view: 'config', id })
     }
 
+    function openSearch(sql) {
+      const trimmed = String(sql || '').trim()
+      if (!trimmed) {
+        go({ view: 'catalog' })
+        return
+      }
+      go({ view: 'search', sql: trimmed })
+    }
+
     async function load() {
       loading.value = true
       try {
@@ -258,6 +286,10 @@ export default {
         } else if (r.view === 'catalog') {
           const body = await getTypes()
           types.value = body.types || []
+        } else if (r.view === 'search') {
+          searchPayload.value = await queryCatalog(r.sql || '')
+        } else if (r.view === 'resources') {
+          resourcePayload.value = await getResources()
         } else if (r.view === 'type') {
           typePayload.value = await getTypeProducts(r.name, r.page || 1)
         } else if (r.view === 'product') {
@@ -306,7 +338,7 @@ export default {
       writeHash()
       load()
       timer = setInterval(() => {
-        if (route.value.view === 'status' || route.value.view === 'instances' || route.value.view === 'instance') {
+        if (route.value.view === 'status' || route.value.view === 'instances' || route.value.view === 'instance' || route.value.view === 'resources') {
           load()
         }
       }, 8000)
@@ -321,8 +353,8 @@ export default {
     return {
       route, loading, error, health, types, typePayload, productPayload,
       pedigree, instancePayload, instanceDetail, workflows, workflowPayload, taskPayload,
-      conditionPayload, configPayload, go, openType, openTypePage, openProduct,
-      openProductByPath, openInstances, openInstancesPage, openInstance, openWorkflow, openTask, openCondition, openConfig
+      conditionPayload, configPayload, searchPayload, resourcePayload, go, openType, openTypePage, openProduct,
+      openProductByPath, openInstances, openInstancesPage, openInstance, openWorkflow, openTask, openCondition, openConfig, openSearch
     }
   }
 }
