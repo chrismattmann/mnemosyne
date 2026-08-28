@@ -171,7 +171,7 @@ public class CatalogResource extends PCSService {
     String trimmed = sql == null ? "" : sql.trim();
     body.put("sql", trimmed);
     if (trimmed.length() == 0) {
-      body.put("error", "Enter a SQL query, for example: SELECT Filename FROM EmploymentJob");
+      body.put("error", "Enter a SQL query, for example: " + SqlParser.EXAMPLE_QUERY);
       body.put("results", Collections.emptyList());
       return queryJson(body);
     }

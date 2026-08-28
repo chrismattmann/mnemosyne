@@ -28,7 +28,6 @@ import org.apache.oodt.cas.filemgr.structs.query.ComplexQuery;
 import org.apache.oodt.cas.filemgr.structs.query.QueryFilter;
 import org.apache.oodt.cas.filemgr.structs.query.filter.FilterAlgor;
 
-import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Stack;
@@ -80,9 +79,13 @@ public class SqlParser {
     private SqlParser() {
     }
     
+    public static final String EXAMPLE_QUERY = "SELECT Filename FROM EmploymentJob";
+
     public static ComplexQuery parseSqlQueryMethod(String sqlStringQueryMethod)
             throws QueryFormulationException {
-        if (!Pattern.matches("((?:SQL)|(?:sql))\\s*(.*)\\s*\\{\\s*SELECT.*FROM.*(?:WHERE.*){0,1}\\}", sqlStringQueryMethod)) {
+        if (!Pattern.compile(
+                "(?i)SQL\\s*(.*)\\s*\\{\\s*SELECT\\b.*\\bFROM\\b.*(?:\\bWHERE\\b.*){0,1}\\}")
+                .matcher(sqlStringQueryMethod).matches()) {
             throw new QueryFormulationException("Malformed SQL method");
         }
         
@@ -108,23 +111,54 @@ public class SqlParser {
     
     public static ComplexQuery parseSqlQuery(String sqlStringQuery)
             throws QueryFormulationException {
-        String[] splitSqlStatement = sqlStringQuery
-                .split("((?:SELECT)|(?:FROM)|(?:WHERE))");
-        String[] selectValues = (splitSqlStatement[1].trim() + ",").split(",");
-        String[] fromValues = (splitSqlStatement[2].trim() + ",").split(",");
+        if (sqlStringQuery == null || sqlStringQuery.trim().isEmpty()) {
+            throw new QueryFormulationException(
+                    "Enter a SQL query, for example: " + EXAMPLE_QUERY);
+        }
+        String sql = sqlStringQuery.trim();
+        int selectAt = indexOfClauseKeyword(sql, "SELECT", 0);
+        if (selectAt < 0 || !sql.substring(0, selectAt).trim().isEmpty()) {
+            throw new QueryFormulationException(
+                    "Query must start with SELECT, for example: " + EXAMPLE_QUERY);
+        }
+        int selectEnd = selectAt + "SELECT".length();
+        int fromAt = indexOfClauseKeyword(sql, "FROM", selectEnd);
+        if (fromAt < 0) {
+            throw new QueryFormulationException(
+                    "Query needs a FROM clause, for example: " + EXAMPLE_QUERY);
+        }
+        int fromEnd = fromAt + "FROM".length();
+        int whereAt = indexOfClauseKeyword(sql, "WHERE", fromEnd);
+
+        String selectList = sql.substring(selectEnd, fromAt).trim();
+        String fromList = sql.substring(fromEnd,
+                whereAt >= 0 ? whereAt : sql.length()).trim();
+        if (selectList.isEmpty()) {
+            throw new QueryFormulationException(
+                    "SELECT list is empty, for example: " + EXAMPLE_QUERY);
+        }
+        if (fromList.isEmpty()) {
+            throw new QueryFormulationException(
+                    "FROM clause is empty, for example: " + EXAMPLE_QUERY);
+        }
+
         ComplexQuery sq = new ComplexQuery();
-        List<String> selectValuesList = Arrays.asList(selectValues);
-        if (!selectValuesList.contains("*")) {
-            sq.setReducedMetadata(Arrays.asList(selectValues));
+        List<String> selectValues = csvValues(selectList);
+        if (!selectValues.contains("*")) {
+            sq.setReducedMetadata(selectValues);
         }
-        List<String> fromValuesList = Arrays.asList(fromValues);
-        if (!fromValuesList.contains("*")) {
-            sq.setReducedProductTypeNames(fromValuesList);
+        List<String> fromValues = csvValues(fromList);
+        if (!fromValues.contains("*")) {
+            sq.setReducedProductTypeNames(fromValues);
         }
-        
-        if (splitSqlStatement.length > 3) {
-            sq.addCriterion(parseStatement(toPostFix(splitSqlStatement[3]
-                .trim())));
+        if (whereAt >= 0) {
+            String whereList = sql.substring(whereAt + "WHERE".length()).trim();
+            if (whereList.isEmpty()) {
+                throw new QueryFormulationException(
+                        "WHERE clause is empty, for example: " + EXAMPLE_QUERY
+                                + " WHERE Filename == 'job-1001.json'");
+            }
+            sq.addCriterion(parseStatement(toPostFix(whereList)));
         }
         return sq;
     }
@@ -232,7 +266,8 @@ public class SqlParser {
     }
     
     private static String stripOutSqlDefinition(String sqlStringQueryMethod) {
-        return sqlStringQueryMethod.trim().replaceAll("((?:SQL)|(?:sql))\\s*(.*)\\s*\\{", "").replaceAll("}$", "").trim();
+        return sqlStringQueryMethod.trim().replaceAll("(?i)SQL\\s*(.*)\\s*\\{", "")
+                .replaceAll("}$", "").trim();
     }
     
     private static List<Expression> getSqlStatementArgs(String sqlStringQueryMethod) throws QueryFormulationException {
@@ -522,6 +557,52 @@ public class SqlParser {
      * asked for, and ORBIT and ANDES threw. It also read past the end of the
      * string near the last few characters.
      */
+    private static List<String> csvValues(String list) {
+        List<String> values = new LinkedList<String>();
+        for (String part : list.split(",")) {
+            String value = part.trim();
+            if (!value.isEmpty()) {
+                values.add(value);
+            }
+        }
+        return values;
+    }
+
+    /**
+     * First SELECT, FROM, or WHERE at or after {@code fromIndex}, ignoring
+     * text inside single quotes. Case-insensitive; a match cannot sit inside a
+     * larger name.
+     */
+    private static int indexOfClauseKeyword(String sql, String keyword, int fromIndex) {
+        int lastStart = sql.length() - keyword.length();
+        boolean inQuote = false;
+        for (int i = 0; i < sql.length(); i++) {
+            char c = sql.charAt(i);
+            if (c == '\'') {
+                inQuote = !inQuote;
+                continue;
+            }
+            if (inQuote || i < fromIndex || i > lastStart) {
+                continue;
+            }
+            if (keywordRegionAt(sql, i, keyword)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private static boolean keywordRegionAt(String sql, int i, String keyword) {
+        if (i > 0 && isNameChar(sql.charAt(i - 1))) {
+            return false;
+        }
+        if (!sql.regionMatches(true, i, keyword, 0, keyword.length())) {
+            return false;
+        }
+        int after = i + keyword.length();
+        return after >= sql.length() || !isNameChar(sql.charAt(after));
+    }
+
     private static boolean operatorAt(String statement, int i, String operator) {
         if (!statement.startsWith(operator, i)) {
             return false;

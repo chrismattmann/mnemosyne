@@ -18,11 +18,12 @@
   <section>
     <h2>File catalog</h2>
     <p class="muted">Product types in File Manager.</p>
-    <form class="query" @submit.prevent="$emit('query', sql)">
+    <form class="query" @submit.prevent="submit">
       <input v-model="sql" type="text" spellcheck="false"
-        placeholder="SELECT Filename FROM EmploymentJob"/>
+        :placeholder="exampleSql"/>
       <button type="submit">Query</button>
     </form>
+    <p v-if="queryError" class="banner">{{ queryError }}</p>
     <p v-if="loading && !types.length" class="empty">Loading types…</p>
     <p v-else-if="!types.length" class="empty">No product types yet.</p>
     <table v-else>
@@ -50,6 +51,7 @@
 import { computed, ref } from 'vue'
 import SortHead from './SortHead.vue'
 import { sortRows, toggleSort } from '../sort.js'
+import { EXAMPLE_CATALOG_SQL, catalogSqlError } from '../sqlQuery.js'
 
 export default {
   name: 'CatalogView',
@@ -59,8 +61,9 @@ export default {
     loading: { type: Boolean, default: false }
   },
   emits: ['open', 'query'],
-  setup(props) {
+  setup(props, { emit }) {
     const sql = ref('')
+    const queryError = ref('')
     const sort = ref('')
     const dir = ref('asc')
     const rows = computed(() => {
@@ -77,7 +80,14 @@ export default {
       sort.value = next.field
       dir.value = next.dir
     }
-    return { sql, sort, dir, rows, onSort }
+    function submit() {
+      const err = catalogSqlError(sql.value)
+      queryError.value = err || ''
+      if (!err) {
+        emit('query', sql.value)
+      }
+    }
+    return { sql, queryError, exampleSql: EXAMPLE_CATALOG_SQL, sort, dir, rows, onSort, submit }
   }
 }
 </script>

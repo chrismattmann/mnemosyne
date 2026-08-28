@@ -73,6 +73,7 @@ import {
   getCondition, getConfig, getHealth, getInstance, getInstances, getPedigree, getProduct,
   getResources, getTask, getTypeProducts, getTypes, getWorkflow, getWorkflows, queryCatalog
 } from './api.js'
+import { catalogSqlError } from './sqlQuery.js'
 
 export default {
   name: 'App',
@@ -287,7 +288,13 @@ export default {
           const body = await getTypes()
           types.value = body.types || []
         } else if (r.view === 'search') {
-          searchPayload.value = await queryCatalog(r.sql || '')
+          const sql = r.sql || ''
+          const sqlError = catalogSqlError(sql)
+          if (sqlError) {
+            searchPayload.value = { query: { sql, error: sqlError, results: [] } }
+          } else {
+            searchPayload.value = await queryCatalog(sql)
+          }
         } else if (r.view === 'resources') {
           resourcePayload.value = await getResources()
         } else if (r.view === 'type') {

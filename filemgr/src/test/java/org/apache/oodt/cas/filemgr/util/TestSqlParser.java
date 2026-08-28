@@ -23,6 +23,8 @@ import org.apache.oodt.cas.filemgr.structs.BooleanQueryCriteria;
 import org.apache.oodt.cas.filemgr.structs.QueryCriteria;
 import org.apache.oodt.cas.filemgr.structs.RangeQueryCriteria;
 import org.apache.oodt.cas.filemgr.structs.TermQueryCriteria;
+import org.apache.oodt.cas.filemgr.structs.exceptions.QueryFormulationException;
+import org.apache.oodt.cas.filemgr.structs.query.ComplexQuery;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -30,6 +32,7 @@ import org.junit.runners.JUnit4;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -164,5 +167,64 @@ public class TestSqlParser {
         QueryCriteria parsed = SqlParser.parseSqlWhereClause("Filename == 'x'");
         assertTrue(parsed instanceof TermQueryCriteria);
         assertEquals("Filename", ((TermQueryCriteria) parsed).getElementName());
+    }
+
+    @Test
+    public void testSelectFromIsCaseInsensitive() throws Exception {
+        ComplexQuery upper = SqlParser.parseSqlQuery("SELECT Filename FROM EmploymentJob");
+        ComplexQuery lower = SqlParser.parseSqlQuery("SELECT Filename from EmploymentJob");
+        ComplexQuery mixed = SqlParser.parseSqlQuery("select Filename From EmploymentJob");
+
+        assertEquals(upper.getReducedMetadata(), lower.getReducedMetadata());
+        assertEquals(upper.getReducedProductTypeNames(), lower.getReducedProductTypeNames());
+        assertEquals(java.util.Arrays.asList("Filename"), mixed.getReducedMetadata());
+        assertEquals(java.util.Arrays.asList("EmploymentJob"), mixed.getReducedProductTypeNames());
+    }
+
+    @Test
+    public void testQuotedFromDoesNotCountAsTheFromClause() throws Exception {
+        ComplexQuery parsed = SqlParser.parseSqlQuery(
+                "SELECT Filename FROM EmploymentJob WHERE Filename == 'from here'");
+        assertEquals(java.util.Arrays.asList("EmploymentJob"), parsed.getReducedProductTypeNames());
+        assertEquals(1, parsed.getCriteria().size());
+    }
+
+    @Test
+    public void testMissingFromIsAFormulationError() {
+        try {
+            SqlParser.parseSqlQuery("SELECT Filename");
+            fail("expected QueryFormulationException");
+        } catch (QueryFormulationException e) {
+            assertTrue(e.getMessage(), e.getMessage().contains("FROM"));
+            assertTrue("should not leak an index error: " + e.getMessage(),
+                    !e.getMessage().contains("Index"));
+        }
+    }
+
+    @Test
+    public void testMissingSelectIsAFormulationError() {
+        try {
+            SqlParser.parseSqlQuery("Filename FROM EmploymentJob");
+            fail("expected QueryFormulationException");
+        } catch (QueryFormulationException e) {
+            assertTrue(e.getMessage(), e.getMessage().contains("SELECT"));
+        }
+    }
+
+    @Test
+    public void testEmptyWhereIsAFormulationError() {
+        try {
+            SqlParser.parseSqlQuery("SELECT Filename FROM EmploymentJob WHERE");
+            fail("expected QueryFormulationException");
+        } catch (QueryFormulationException e) {
+            assertTrue(e.getMessage(), e.getMessage().contains("WHERE"));
+        }
+    }
+
+    @Test
+    public void testStarSelectFromStar() throws Exception {
+        ComplexQuery parsed = SqlParser.parseSqlQuery("SELECT * FROM *");
+        assertNull(parsed.getReducedMetadata());
+        assertNull(parsed.getReducedProductTypeNames());
     }
 }

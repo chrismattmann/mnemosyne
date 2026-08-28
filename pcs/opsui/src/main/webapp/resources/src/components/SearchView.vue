@@ -18,12 +18,12 @@
   <section>
     <p><a href="#" @click.prevent="$emit('back')">← Catalog</a></p>
     <h2>Catalog query</h2>
-    <form class="query" @submit.prevent="$emit('query', sql)">
+    <form class="query" @submit.prevent="submit">
       <input v-model="sql" type="text" spellcheck="false"
-        placeholder="SELECT Filename FROM EmploymentJob"/>
+        :placeholder="exampleSql"/>
       <button type="submit">Query</button>
     </form>
-    <p v-if="error" class="banner">{{ error }}</p>
+    <p v-if="queryError || error" class="banner">{{ queryError || error }}</p>
     <p v-else-if="loading && !results.length" class="empty">Running query…</p>
     <p v-else-if="!results.length" class="empty">No products matched.</p>
     <table v-else>
@@ -58,6 +58,7 @@
 
 <script>
 import { computed, ref, watch } from 'vue'
+import { EXAMPLE_CATALOG_SQL, catalogSqlError } from '../sqlQuery.js'
 
 export default {
   name: 'SearchView',
@@ -66,19 +67,31 @@ export default {
     loading: { type: Boolean, default: false }
   },
   emits: ['query', 'open', 'open-type', 'back'],
-  setup(props) {
+  setup(props, { emit }) {
     const query = computed(() => (props.payload && props.payload.query) || {})
     const sql = ref(query.value.sql || '')
+    const queryError = ref('')
     watch(query, (next) => {
       if (next.sql) {
         sql.value = next.sql
       }
+      queryError.value = ''
     })
+    function submit() {
+      const err = catalogSqlError(sql.value)
+      queryError.value = err || ''
+      if (!err) {
+        emit('query', sql.value)
+      }
+    }
     return {
       sql,
+      queryError,
+      exampleSql: EXAMPLE_CATALOG_SQL,
       results: computed(() => query.value.results || []),
       error: computed(() => query.value.error || ''),
       truncated: computed(() => Boolean(query.value.truncated)),
+      submit,
       typeName(product) {
         return (product && product.type && product.type.name) || ''
       }
