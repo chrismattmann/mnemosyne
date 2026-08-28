@@ -76,6 +76,11 @@ public class ConfigUtils {
         }
 
         logger.debug("Project name {}", project);
-        return project == null ? Constants.DEFAULT_PROJECT : project;
+        // Blank as well as null: a start script interpolating an unset
+        // variable yields -Dorg.apache.oodt.config.project= , and an empty
+        // name built the path /projects//components/<component>, which
+        // Zookeeper rejected deep inside itself with "empty node name
+        // specified @10" rather than here at the config boundary.
+        return project == null || project.trim().isEmpty() ? Constants.DEFAULT_PROJECT : project;
     }
 }
