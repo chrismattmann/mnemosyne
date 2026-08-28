@@ -202,6 +202,14 @@ public class AvroTypeFactory {
     }
 
     public static AvroWorkflowInstance getAvroWorkflowInstance(WorkflowInstance workflowInstance){
+        // Guarded at the serialisation boundary. A null here used to be a
+        // NullPointerException on the next line, and an unchecked exception
+        // escaping a protocol method has no declared error to be marshalled
+        // into -- so one unreadable instance in a page failed the whole call
+        // and the client read it as the manager being gone.
+        if (workflowInstance == null) {
+            return null;
+        }
         AvroWorkflowInstance avroWorkflowInstance = new AvroWorkflowInstance();
         if (workflowInstance.getWorkflow() != null)
             avroWorkflowInstance.setWorkflow(getAvroWorkflow(workflowInstance.getWorkflow()));
@@ -306,6 +314,11 @@ public class AvroTypeFactory {
         List<AvroWorkflowInstance> avroWorkflowInstances = new ArrayList<AvroWorkflowInstance>();
         if (workflowInstances != null && workflowInstances.size() > 0)
             for (WorkflowInstance awi : workflowInstances){
+                // Skipped rather than carried through as a null, which Avro
+                // cannot write against the declared record schema anyway.
+                if (awi == null) {
+                    continue;
+                }
                 avroWorkflowInstances.add(AvroTypeFactory.getAvroWorkflowInstance(awi));
             }
         return avroWorkflowInstances;
@@ -315,6 +328,9 @@ public class AvroTypeFactory {
         List<WorkflowInstance> workflowInstances = new ArrayList<WorkflowInstance>();
         if (avroWorkflowInstances != null && avroWorkflowInstances.size() > 0)
             for (AvroWorkflowInstance wi : avroWorkflowInstances){
+                if (wi == null) {
+                    continue;
+                }
                 workflowInstances.add(AvroTypeFactory.getWorkflowInstance(wi));
             }
         return workflowInstances;

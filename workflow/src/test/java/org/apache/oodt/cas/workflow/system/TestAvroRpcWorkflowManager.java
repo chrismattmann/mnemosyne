@@ -199,10 +199,29 @@ public class TestAvroRpcWorkflowManager extends TestCase{
      */
     @Test
     public void testAPagedResultCarriesItsPageSizeOverRpc() throws Exception {
-        org.apache.oodt.cas.workflow.structs.WorkflowInstancePage page =
-                AvroTypeFactory.getWorkflowInstancePage(wmgr.getFirstPage());
+        // Waits for the engine to have started something. setUp fires the
+        // event and returns; asking straight away raced it two ways. An empty
+        // repository answers with blankPage(), whose page size is 0, so the
+        // assertion below failed on its own timing -- and while instances
+        // were being written, an id could be listed by the paging query and
+        // not yet readable, which is the null that used to come back through
+        // the factory as a NullPointerException.
+        org.apache.oodt.cas.workflow.structs.WorkflowInstancePage page = null;
+        long deadline = System.currentTimeMillis() + 30000L;
+        do {
+            page = AvroTypeFactory.getWorkflowInstancePage(wmgr.getFirstPage());
+            if (page != null && page.getPageWorkflows() != null
+                    && !page.getPageWorkflows().isEmpty()) {
+                break;
+            }
+            Thread.sleep(100L);
+        } while (System.currentTimeMillis() < deadline);
 
         assertNotNull(page);
+        assertNotNull("no instance was started within 30s",
+                page.getPageWorkflows());
+        assertFalse("no instance was started within 30s",
+                page.getPageWorkflows().isEmpty());
         assertTrue("the page size did not survive the RPC: " + page.getPageSize(),
                 page.getPageSize() > 0);
     }
