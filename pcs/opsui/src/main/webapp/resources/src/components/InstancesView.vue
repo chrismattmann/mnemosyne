@@ -41,7 +41,10 @@
       </thead>
       <tbody>
         <tr v-for="inst in rows" :key="inst.id">
-          <td class="mono">{{ inst.id }}</td>
+          <td class="mono">
+            <a v-if="inst.id" href="#" @click.prevent="$emit('open-instance', inst.id)">{{ inst.id }}</a>
+            <span v-else>—</span>
+          </td>
           <td>
             <a v-if="inst.workflowId" href="#" @click.prevent="$emit('open-workflow', inst.workflowId)">
               {{ inst.workflowName || inst.workflowId }}
@@ -87,7 +90,7 @@ export default {
     status: { type: String, default: 'ALL' },
     loading: { type: Boolean, default: false }
   },
-  emits: ['status', 'page', 'open-workflow', 'open-task'],
+  emits: ['status', 'page', 'open-workflow', 'open-task', 'open-instance'],
   setup(props) {
     const pageBody = computed(() => (props.payload && props.payload.page) || {})
     const sort = ref('')

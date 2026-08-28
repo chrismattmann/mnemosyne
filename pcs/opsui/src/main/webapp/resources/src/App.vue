@@ -30,7 +30,7 @@
       <nav>
         <button :class="{ active: route.view === 'status' || route.view === 'config' }" @click="go({ view: 'status' })">Status</button>
         <button :class="{ active: route.view === 'catalog' || route.view === 'type' || route.view === 'product' }" @click="go({ view: 'catalog' })">Catalog</button>
-        <button :class="{ active: route.view === 'instances' }" @click="go({ view: 'instances' })">Instances</button>
+        <button :class="{ active: route.view === 'instances' || route.view === 'instance' }" @click="go({ view: 'instances' })">Instances</button>
         <button :class="{ active: route.view === 'workflows' || route.view === 'workflow' || route.view === 'task' || route.view === 'condition' }" @click="go({ view: 'workflows' })">Workflows</button>
       </nav>
     </header>
@@ -40,7 +40,8 @@
     <CatalogView v-else-if="route.view === 'catalog'" :types="types" :loading="loading" @open="openType"/>
     <TypeView v-else-if="route.view === 'type'" :payload="typePayload" :loading="loading" @page="openTypePage" @open="openProduct" @back="go({ view: 'catalog' })"/>
     <ProductView v-else-if="route.view === 'product'" :payload="productPayload" :pedigree="pedigree" :loading="loading" @open-type="openType" @back="go({ view: 'catalog' })"/>
-    <InstancesView v-else-if="route.view === 'instances'" :payload="instancePayload" :status="route.status || 'ALL'" :loading="loading" @status="openInstances" @page="openInstancesPage" @open-workflow="openWorkflow" @open-task="openTask"/>
+    <InstancesView v-else-if="route.view === 'instances'" :payload="instancePayload" :status="route.status || 'ALL'" :loading="loading" @status="openInstances" @page="openInstancesPage" @open-workflow="openWorkflow" @open-task="openTask" @open-instance="openInstance"/>
+    <InstanceView v-else-if="route.view === 'instance'" :payload="instanceDetail" :loading="loading" @open-workflow="openWorkflow" @open-task="openTask" @back="go({ view: 'instances', status: route.status || 'ALL', page: 1 })"/>
     <WorkflowsView v-else-if="route.view === 'workflows'" :workflows="workflows" :loading="loading" @open="openWorkflow"/>
     <WorkflowView v-else-if="route.view === 'workflow'" :payload="workflowPayload" :loading="loading" @open-task="openTask" @back="go({ view: 'workflows' })"/>
     <TaskView v-else-if="route.view === 'task'" :payload="taskPayload" :loading="loading" @open-condition="openCondition" @back="go({ view: 'workflows' })"/>
@@ -57,20 +58,21 @@ import CatalogView from './components/CatalogView.vue'
 import TypeView from './components/TypeView.vue'
 import ProductView from './components/ProductView.vue'
 import InstancesView from './components/InstancesView.vue'
+import InstanceView from './components/InstanceView.vue'
 import WorkflowsView from './components/WorkflowsView.vue'
 import WorkflowView from './components/WorkflowView.vue'
 import TaskView from './components/TaskView.vue'
 import ConditionView from './components/ConditionView.vue'
 import ConfigView from './components/ConfigView.vue'
 import {
-  getCondition, getConfig, getHealth, getInstances, getPedigree, getProduct,
+  getCondition, getConfig, getHealth, getInstance, getInstances, getPedigree, getProduct,
   getTask, getTypeProducts, getTypes, getWorkflow, getWorkflows
 } from './api.js'
 
 export default {
   name: 'App',
   components: {
-    StatusView, CatalogView, TypeView, ProductView, InstancesView,
+    StatusView, CatalogView, TypeView, ProductView, InstancesView, InstanceView,
     WorkflowsView, WorkflowView, TaskView, ConditionView, ConfigView
   },
   setup() {
@@ -83,6 +85,7 @@ export default {
     const productPayload = ref(null)
     const pedigree = ref(null)
     const instancePayload = ref(null)
+    const instanceDetail = ref(null)
     const workflows = ref([])
     const workflowPayload = ref(null)
     const taskPayload = ref(null)
@@ -111,6 +114,9 @@ export default {
       }
       if (head === 'product' && parts[1]) {
         return { view: 'product', id: parts[1] }
+      }
+      if (head === 'instance' && parts[1]) {
+        return { view: 'instance', id: parts[1] }
       }
       if (head === 'instances') {
         return {
@@ -150,6 +156,9 @@ export default {
       }
       if (next.view === 'product') {
         return 'product/' + encodeURIComponent(next.id)
+      }
+      if (next.view === 'instance') {
+        return 'instance/' + encodeURIComponent(next.id)
       }
       if (next.view === 'instances') {
         const status = next.status || 'ALL'
@@ -219,6 +228,10 @@ export default {
       })
     }
 
+    function openInstance(id) {
+      go({ view: 'instance', id })
+    }
+
     function openWorkflow(id) {
       go({ view: 'workflow', id })
     }
@@ -259,6 +272,8 @@ export default {
           }
         } else if (r.view === 'instances') {
           instancePayload.value = await getInstances(r.status || 'ALL', r.page || 1)
+        } else if (r.view === 'instance') {
+          instanceDetail.value = await getInstance(r.id)
         } else if (r.view === 'workflows') {
           const body = await getWorkflows()
           workflows.value = body.workflows || []
@@ -291,7 +306,7 @@ export default {
       writeHash()
       load()
       timer = setInterval(() => {
-        if (route.value.view === 'status' || route.value.view === 'instances') {
+        if (route.value.view === 'status' || route.value.view === 'instances' || route.value.view === 'instance') {
           load()
         }
       }, 8000)
@@ -305,9 +320,9 @@ export default {
 
     return {
       route, loading, error, health, types, typePayload, productPayload,
-      pedigree, instancePayload, workflows, workflowPayload, taskPayload,
+      pedigree, instancePayload, instanceDetail, workflows, workflowPayload, taskPayload,
       conditionPayload, configPayload, go, openType, openTypePage, openProduct,
-      openProductByPath, openInstances, openInstancesPage, openWorkflow, openTask, openCondition, openConfig
+      openProductByPath, openInstances, openInstancesPage, openInstance, openWorkflow, openTask, openCondition, openConfig
     }
   }
 }
