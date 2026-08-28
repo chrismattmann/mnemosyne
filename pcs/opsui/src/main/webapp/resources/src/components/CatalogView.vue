@@ -23,27 +23,40 @@
         :placeholder="exampleSql"/>
       <button type="submit">Query</button>
     </form>
+    <p class="muted cap-note">A query returns at most {{ queryCap }} products.</p>
     <p v-if="queryError" class="banner">{{ queryError }}</p>
     <p v-if="loading && !types.length" class="empty">Loading types…</p>
     <p v-else-if="!types.length" class="empty">No product types yet.</p>
-    <table v-else>
-      <thead>
-        <tr>
-          <SortHead field="name" :sort="sort" :dir="dir" @sort="onSort">Type</SortHead>
-          <th>Description</th>
-          <SortHead field="numProducts" :sort="sort" :dir="dir" @sort="onSort">Products</SortHead>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="type in rows" :key="type.id || type.name">
-          <td>
-            <a href="#" @click.prevent="$emit('open', type.name)">{{ type.name }}</a>
-          </td>
-          <td>{{ type.description }}</td>
-          <td>{{ type.numProducts }}</td>
-        </tr>
-      </tbody>
-    </table>
+    <template v-else>
+      <p v-if="populated.length" class="muted">
+        {{ populated.length }} type{{ populated.length === 1 ? '' : 's' }} with products.
+        <span v-if="empty.length"> {{ empty.length }} empty type{{ empty.length === 1 ? '' : 's' }} hidden by default.</span>
+      </p>
+      <p v-else class="muted">None of these types have products yet.</p>
+      <table v-if="visibleRows.length">
+        <thead>
+          <tr>
+            <SortHead field="name" :sort="sort" :dir="dir" @sort="onSort">Type</SortHead>
+            <th>Description</th>
+            <SortHead field="numProducts" :sort="sort" :dir="dir" @sort="onSort">Products</SortHead>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="type in visibleRows" :key="type.id || type.name" :class="{ emptyRow: !(Number(type.numProducts) > 0) }">
+            <td>
+              <a href="#" @click.prevent="$emit('open', type.name)">{{ type.name }}</a>
+            </td>
+            <td>{{ type.description }}</td>
+            <td>{{ type.numProducts }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <p v-if="empty.length && populated.length" class="toggle-wrap">
+        <button class="ghost" type="button" @click="showEmpty = !showEmpty">
+          {{ showEmpty ? 'Hide empty types' : 'Show empty types (' + empty.length + ')' }}
+        </button>
+      </p>
+    </template>
   </section>
 </template>
 
@@ -51,7 +64,8 @@
 import { computed, ref } from 'vue'
 import SortHead from './SortHead.vue'
 import { sortRows, toggleSort } from '../sort.js'
-import { EXAMPLE_CATALOG_SQL, catalogSqlError } from '../sqlQuery.js'
+import { EXAMPLE_CATALOG_SQL, QUERY_RESULT_CAP, catalogSqlError } from '../sqlQuery.js'
+import { partitionTypes } from '../catalogGroups.js'
 
 export default {
   name: 'CatalogView',
@@ -66,14 +80,25 @@ export default {
     const queryError = ref('')
     const sort = ref('')
     const dir = ref('asc')
-    const rows = computed(() => {
+    const showEmpty = ref(false)
+    const groups = computed(() => partitionTypes(props.types))
+    const populated = computed(() => groups.value.populated)
+    const empty = computed(() => groups.value.empty)
+    function sorted(list) {
       if (!sort.value) {
-        return props.types
+        return list
       }
       const getter = sort.value === 'numProducts'
         ? (row) => Number(row.numProducts) || 0
         : (row) => row.name || ''
-      return sortRows(props.types, getter, dir.value)
+      return sortRows(list, getter, dir.value)
+    }
+    const visibleRows = computed(() => {
+      const main = populated.value.length ? populated.value : empty.value
+      const rows = showEmpty.value && populated.value.length
+        ? populated.value.concat(empty.value)
+        : main
+      return sorted(rows)
     })
     function onSort(field) {
       const next = toggleSort(field, sort.value, dir.value)
@@ -87,7 +112,10 @@ export default {
         emit('query', sql.value)
       }
     }
-    return { sql, queryError, exampleSql: EXAMPLE_CATALOG_SQL, sort, dir, rows, onSort, submit }
+    return {
+      sql, queryError, exampleSql: EXAMPLE_CATALOG_SQL, queryCap: QUERY_RESULT_CAP, sort, dir, onSort, submit,
+      showEmpty, populated, empty, visibleRows
+    }
   }
 }
 </script>
@@ -107,5 +135,18 @@ h2 {
   flex: 1;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.85rem;
+}
+
+.cap-note {
+  margin: -0.5rem 0 1rem;
+  font-size: 0.85rem;
+}
+
+.toggle-wrap {
+  margin-top: 0.8rem;
+}
+
+.emptyRow td {
+  color: var(--muted);
 }
 </style>

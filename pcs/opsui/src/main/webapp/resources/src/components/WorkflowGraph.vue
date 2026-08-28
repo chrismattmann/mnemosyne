@@ -32,6 +32,8 @@
 </template>
 
 <script>
+import { taskBubbleState } from '../workflowGraph.js'
+
 export default {
   name: 'WorkflowGraph',
   props: {
@@ -45,16 +47,11 @@ export default {
     label() {
       const names = (this.tasks || []).map((t) => t.name || t.id).join(' then ')
       return (this.name ? this.name + ': ' : '') + names
-    },
-    finished() {
-      const value = String(this.status || '').toUpperCase()
-      return value === 'FINISHED' || value === 'SUCCESS' || value === 'EXECUTIONCOMPLETE'
     }
   },
   methods: {
     bubbleClass(task) {
-      const current = this.currentTaskId && task && task.id === this.currentTaskId
-      return { current, done: this.finished }
+      return taskBubbleState(task, this.tasks, this.currentTaskId, this.status)
     }
   }
 }
@@ -105,6 +102,12 @@ export default {
 .bubble.done.current {
   border-color: var(--copper);
   background: #e8f0d8;
+}
+
+.bubble.failed {
+  border-style: solid;
+  border-color: var(--down);
+  background: #f8dfe6;
 }
 
 .idx {

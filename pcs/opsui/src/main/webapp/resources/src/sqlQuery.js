@@ -16,6 +16,7 @@
  */
 
 export const EXAMPLE_CATALOG_SQL = 'SELECT Filename FROM EmploymentJob'
+export const QUERY_RESULT_CAP = 200
 
 function maskQuoted(sql) {
   let out = ''

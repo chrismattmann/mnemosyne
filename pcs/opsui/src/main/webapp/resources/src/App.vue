@@ -36,7 +36,7 @@
       </nav>
     </header>
 
-    <StatusView v-if="route.view === 'status'" :report="health" :loading="loading" @open-product="openProductByPath" @open-instances="openInstances" @open-config="openConfig"/>
+    <StatusView v-if="route.view === 'status'" :report="health" :loading="loading" @open-product="openLatestFile" @open-instances="openInstances" @open-config="openConfig"/>
     <ConfigView v-else-if="route.view === 'config'" :payload="configPayload" :loading="loading" @back="go({ view: 'status' })"/>
     <CatalogView v-else-if="route.view === 'catalog'" :types="types" :loading="loading" @open="openType" @query="openSearch"/>
     <SearchView v-else-if="route.view === 'search'" :payload="searchPayload" :loading="loading" @query="openSearch" @open="openProduct" @open-type="openType" @back="go({ view: 'catalog' })"/>
@@ -236,6 +236,17 @@ export default {
       }
     }
 
+    function openLatestFile(id) {
+      if (!id) {
+        return
+      }
+      if (String(id).indexOf('/') >= 0) {
+        openProductByPath(id)
+      } else {
+        openProduct(id)
+      }
+    }
+
     function openInstances(status) {
       go({ view: 'instances', status: status || 'ALL', page: 1 })
     }
@@ -301,13 +312,18 @@ export default {
           typePayload.value = await getTypeProducts(r.name, r.page || 1)
         } else if (r.view === 'product') {
           const body = await getProduct(r.id)
-          productPayload.value = body.product || body
-          pedigree.value = null
-          const name = (body.product && body.product.name) || r.id
-          try {
-            pedigree.value = await getPedigree(name)
-          } catch (e) {
-            pedigree.value = { error: e.message }
+          if (body && body.missing) {
+            productPayload.value = body
+            pedigree.value = null
+          } else {
+            productPayload.value = body.product || body
+            pedigree.value = null
+            const name = (body.product && body.product.name) || r.id
+            try {
+              pedigree.value = await getPedigree(name)
+            } catch (e) {
+              pedigree.value = { error: e.message }
+            }
           }
         } else if (r.view === 'instances') {
           instancePayload.value = await getInstances(r.status || 'ALL', r.page || 1)
@@ -361,7 +377,7 @@ export default {
       route, loading, error, health, types, typePayload, productPayload,
       pedigree, instancePayload, instanceDetail, workflows, workflowPayload, taskPayload,
       conditionPayload, configPayload, searchPayload, resourcePayload, go, openType, openTypePage, openProduct,
-      openProductByPath, openInstances, openInstancesPage, openInstance, openWorkflow, openTask, openCondition, openConfig, openSearch
+      openProductByPath, openLatestFile, openInstances, openInstancesPage, openInstance, openWorkflow, openTask, openCondition, openConfig, openSearch
     }
   }
 }

@@ -23,10 +23,14 @@
         :placeholder="exampleSql"/>
       <button type="submit">Query</button>
     </form>
+    <p class="muted cap-note">A query returns at most {{ queryCap }} products.</p>
     <p v-if="queryError || error" class="banner">{{ queryError || error }}</p>
     <p v-else-if="loading && !results.length" class="empty">Running query…</p>
     <p v-else-if="!results.length" class="empty">No products matched.</p>
-    <table v-else>
+    <p v-if="truncated" class="notice cap">
+      Showing the first {{ limit }} of more than {{ limit }} matches. Add a WHERE clause to narrow the query.
+    </p>
+    <table v-if="results.length">
       <thead>
         <tr>
           <th>Name</th>
@@ -52,13 +56,12 @@
         </tr>
       </tbody>
     </table>
-    <p v-if="truncated" class="muted">Showing the first {{ results.length }} matches.</p>
   </section>
 </template>
 
 <script>
 import { computed, ref, watch } from 'vue'
-import { EXAMPLE_CATALOG_SQL, catalogSqlError } from '../sqlQuery.js'
+import { EXAMPLE_CATALOG_SQL, QUERY_RESULT_CAP, catalogSqlError } from '../sqlQuery.js'
 
 export default {
   name: 'SearchView',
@@ -84,13 +87,16 @@ export default {
         emit('query', sql.value)
       }
     }
+    const results = computed(() => query.value.results || [])
     return {
       sql,
       queryError,
       exampleSql: EXAMPLE_CATALOG_SQL,
-      results: computed(() => query.value.results || []),
+      queryCap: QUERY_RESULT_CAP,
+      results,
       error: computed(() => query.value.error || ''),
       truncated: computed(() => Boolean(query.value.truncated)),
+      limit: computed(() => Number(query.value.limit) || QUERY_RESULT_CAP),
       submit,
       typeName(product) {
         return (product && product.type && product.type.name) || ''
@@ -117,7 +123,12 @@ h2 {
   font-size: 0.85rem;
 }
 
-.muted {
-  margin-top: 0.8rem;
+.cap-note {
+  margin: -0.5rem 0 1rem;
+  font-size: 0.85rem;
+}
+
+.cap {
+  margin: 0 0 0.8rem;
 }
 </style>

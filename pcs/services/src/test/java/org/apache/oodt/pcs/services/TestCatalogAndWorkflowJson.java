@@ -194,4 +194,18 @@ public class TestCatalogAndWorkflowJson extends TestCase {
     assertEquals("Filename", ((List<?>) row.get("requiredMetFields")).get(0));
     assertEquals("urn:bt:Ready", ((Map<?, ?>) ((List<?>) row.get("preConditions")).get(0)).get("id"));
   }
+
+  public void testPedigreeSkipsUnknownPlaceholders() {
+    assertFalse(PedigreeResource.isCataloged(null));
+    Product missing = new Product();
+    assertFalse(PedigreeResource.isCataloged(missing));
+    Product invented = Product.getDefaultFlatProduct("job-1.json", "UNKNOWN");
+    assertFalse(PedigreeResource.isCataloged(invented));
+    ProductType type = new ProductType();
+    type.setName("EmploymentJobAggregatesTsvSplit");
+    Product split = new Product();
+    split.setProductName("jobs.tsv.aaaa");
+    split.setProductType(type);
+    assertTrue(PedigreeResource.isCataloged(split));
+  }
 }

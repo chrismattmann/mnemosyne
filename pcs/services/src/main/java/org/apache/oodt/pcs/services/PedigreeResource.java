@@ -20,7 +20,7 @@ package org.apache.oodt.pcs.services;
 //JDK imports
 import java.net.MalformedURLException;
 import java.util.Arrays;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Vector;
@@ -35,6 +35,8 @@ import javax.ws.rs.Produces;
 import net.sf.json.JSONObject;
 
 //OODT imports
+import org.apache.oodt.cas.filemgr.structs.Product;
+import org.apache.oodt.pcs.metadata.PCSConfigMetadata;
 import org.apache.oodt.pcs.pedigree.Pedigree;
 import org.apache.oodt.pcs.pedigree.PedigreeTree;
 import org.apache.oodt.pcs.pedigree.PedigreeTreeNode;
@@ -69,10 +71,9 @@ public class PedigreeResource extends PCSService {
   @Path("report/{filename}")
   @Produces("text/plain")
   public String generatePedigree(@PathParam("filename") String filename) {
-    PedigreeTree upstreamTree = this.trace.doPedigree(this.fm
-        .safeGetProductByName(filename), true);
-    PedigreeTree downstreamTree = this.trace.doPedigree(this.fm
-        .safeGetProductByName(filename), false);
+    Product product = productOrMissing(filename);
+    PedigreeTree upstreamTree = this.trace.doPedigree(product, true);
+    PedigreeTree downstreamTree = this.trace.doPedigree(product, false);
     return this.encodePedigreeAsJson(upstreamTree, downstreamTree);
   }
 
@@ -80,8 +81,7 @@ public class PedigreeResource extends PCSService {
   @Path("report/{filename}/upstream")
   @Produces("text/plain")
   public String generateUpstreamPedigree(@PathParam("filename") String filename) {
-    PedigreeTree upstreamTree = this.trace.doPedigree(this.fm
-        .safeGetProductByName(filename), true);
+    PedigreeTree upstreamTree = this.trace.doPedigree(productOrMissing(filename), true);
     return this.encodePedigreeAsJson(upstreamTree, null);
   }
 
@@ -90,13 +90,21 @@ public class PedigreeResource extends PCSService {
   @Produces("text/plain")
   public String generateDownstreamPedigree(
       @PathParam("filename") String filename) {
-    PedigreeTree downstreamTree = this.trace.doPedigree(this.fm
-        .safeGetProductByName(filename), false);
+    PedigreeTree downstreamTree = this.trace.doPedigree(
+        productOrMissing(filename), false);
     return this.encodePedigreeAsJson(null, downstreamTree);
   }
 
+  private Product productOrMissing(String filename) {
+    Product product = this.fm.safeGetProductByName(filename);
+    if (!isCataloged(product)) {
+      throw new ResourceNotFoundException("No product named [" + filename + "]");
+    }
+    return product;
+  }
+
   private String encodePedigreeAsJson(PedigreeTree up, PedigreeTree down) {
-    Map<String, Object> output = new ConcurrentHashMap<String, Object>();
+    Map<String, Object> output = new LinkedHashMap<String, Object>();
     if (up != null) {
       output.put("upstream", this.encodePedigreeTreeAsJson(up.getRoot()));
     }
@@ -109,17 +117,42 @@ public class PedigreeResource extends PCSService {
   }
 
   private Object encodePedigreeTreeAsJson(PedigreeTreeNode node) {
-    if (node.getNumChildren() > 0) {
-      Map<String, Object> map = new ConcurrentHashMap<String, Object>();
-      List<Object> list = new Vector<Object>();
-      for (int i = 0; i < node.getNumChildren(); i++) {
-        list.add(this
-            .encodePedigreeTreeAsJson(node.getChildAt(i)));
-      }
-      map.put(node.getNodeProduct().getProductName(), list);
-      return map;
-    } else {
-      return node.getNodeProduct().getProductName();
+    if (node == null || !isCataloged(node.getNodeProduct())) {
+      return "";
     }
+    List<Object> list = new Vector<Object>();
+    for (int i = 0; i < node.getNumChildren(); i++) {
+      Object child = this.encodePedigreeTreeAsJson(node.getChildAt(i));
+      if (child != null && !"".equals(child)) {
+        list.add(child);
+      }
+    }
+    String name = node.getNodeProduct().getProductName();
+    if (list.isEmpty()) {
+      return name;
+    }
+    Map<String, Object> map = new LinkedHashMap<String, Object>();
+    map.put(name, list);
+    return map;
+  }
+
+  /**
+   * Pedigree can invent UNKNOWN placeholders for InputFiles that were
+   * never ingested. Those must not show up as children of a TSV.
+   */
+  static boolean isCataloged(Product product) {
+    if (product == null || product.getProductName() == null
+        || product.getProductName().length() == 0) {
+      return false;
+    }
+    if (product.getProductType() != null) {
+      String typeName = product.getProductType().getName();
+      String typeId = product.getProductType().getProductTypeId();
+      if (PCSConfigMetadata.UNKNOWN.equals(typeName)
+          || PCSConfigMetadata.UNKNOWN.equals(typeId)) {
+        return false;
+      }
+    }
+    return true;
   }
 }

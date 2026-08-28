@@ -58,6 +58,7 @@
 
         <article class="card">
           <h3>Crawlers</h3>
+          <p class="muted crawler-note">Crawlers start on demand. They are not a standing daemon, so “not running” is expected unless a crawl is in flight.</p>
           <p v-if="!crawlers.length" class="empty">No crawlers configured.</p>
           <table v-else>
             <thead>
@@ -67,8 +68,8 @@
               <tr v-for="crawler in crawlers" :key="crawler.crawlerName || crawler.crawler">
                 <td>{{ crawler.crawlerName || crawler.crawler }}</td>
                 <td>
-                  <span class="pill" :class="up(crawler.status) ? 'up' : (crawler.status ? 'down' : 'neutral')">
-                    {{ crawler.status || '—' }}
+                  <span class="pill" :class="onDemandPill(crawler.status)">
+                    {{ onDemandLabel(crawler.status) }}
                   </span>
                 </td>
                 <td>{{ crawlCount(crawler) }}</td>
@@ -81,15 +82,15 @@
 
       <article class="card">
         <h3>Latest files</h3>
-        <p v-if="!files.length" class="empty">Nothing ingested yet.</p>
+        <p v-if="!files.length" class="empty">{{ filesEmpty }}</p>
         <table v-else>
           <thead>
-            <tr><th>Path</th><th>Received</th></tr>
+            <tr><th>Name</th><th>Received</th></tr>
           </thead>
           <tbody>
             <tr v-for="file in files" :key="file.id || file.filepath">
               <td>
-                <a href="#" @click.prevent="$emit('open-product', file.id || file.name || file.filepath)">{{ file.name || file.filepath }}</a>
+                <a href="#" @click.prevent="$emit('open-product', file.id || file.name)">{{ file.name || file.filepath }}</a>
               </td>
               <td>{{ file.receivedTime }}</td>
             </tr>
@@ -99,6 +100,7 @@
 
       <article v-if="stubs.length" class="card">
         <h3>Batch stubs</h3>
+        <p class="muted crawler-note">Batch stubs are separate daemons from the Resource Manager. They start on demand, so “not running” is expected unless a batch job is in flight.</p>
         <table>
           <thead>
             <tr><th>Daemon</th><th>URL</th><th>Status</th></tr>
@@ -106,9 +108,9 @@
           <tbody>
             <tr v-for="stub in stubs" :key="stub.url">
               <td>{{ stub.daemon }}</td>
-              <td>{{ stub.url }}</td>
+              <td class="url">{{ stub.url }}</td>
               <td>
-                <span class="pill" :class="up(stub.status) ? 'up' : 'down'">{{ stub.status }}</span>
+                <span class="pill" :class="onDemandPill(stub.status)">{{ onDemandLabel(stub.status) }}</span>
               </td>
             </tr>
           </tbody>
@@ -122,6 +124,7 @@
 import { computed, ref } from 'vue'
 import SortHead from './SortHead.vue'
 import { sortRows, toggleSort } from '../sort.js'
+import { onDemandLabel, onDemandPill } from '../onDemandStatus.js'
 
 export default {
   name: 'StatusView',
@@ -211,9 +214,17 @@ export default {
       return latest.files || []
     })
 
+    const filesEmpty = computed(() => {
+      const fm = ((props.report && props.report.daemonStatus) || {}).fm || {}
+      if (up(fm.status)) {
+        return 'No recent ingestions in File Manager.'
+      }
+      return 'Nothing ingested yet.'
+    })
+
     return {
-      up, crawlCount, avgTime, generated, daemons, stubs, jobs, sortedJobs,
-      jobSort, jobDir, sortJobs, crawlers, files
+      up, onDemandPill, onDemandLabel, crawlCount, avgTime, generated, daemons, stubs, jobs, sortedJobs,
+      jobSort, jobDir, sortJobs, crawlers, files, filesEmpty
     }
   }
 }
@@ -253,6 +264,11 @@ h2, h3 {
 .url {
   word-break: break-all;
   font-size: 0.82rem;
+}
+
+.crawler-note {
+  margin: -0.2rem 0 0.7rem;
+  font-size: 0.85rem;
 }
 
 .daemon h3 {

@@ -39,7 +39,7 @@
             <td><span class="pill" :class="pillClass(inst.status)">{{ inst.status || '—' }}</span></td>
           </tr>
           <tr>
-            <th>Current task</th>
+            <th>{{ finished ? 'Last task' : 'Current task' }}</th>
             <td>
               <a v-if="inst.currentTaskId" href="#" @click.prevent="$emit('open-task', inst.currentTaskId)">
                 {{ inst.currentTaskName || inst.currentTaskId }}
@@ -85,6 +85,7 @@ import { computed } from 'vue'
 import MetadataTable from './MetadataTable.vue'
 import WorkflowGraph from './WorkflowGraph.vue'
 import { formatWallClock, wallClockMs } from '../sort.js'
+import { instanceFinished } from '../workflowGraph.js'
 
 export default {
   name: 'InstanceView',
@@ -102,6 +103,7 @@ export default {
       metadata,
       tasks: computed(() => inst.value.tasks || []),
       title: computed(() => inst.value.workflowName || 'Workflow instance'),
+      finished: computed(() => instanceFinished(inst.value.status)),
       wallMs: computed(() => wallClockMs(inst.value.startDateTime, inst.value.endDateTime, Date.now())),
       formatWallClock,
       pillClass(status) {

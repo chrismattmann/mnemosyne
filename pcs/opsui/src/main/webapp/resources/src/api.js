@@ -49,8 +49,12 @@ export function getTypeProducts(name, page) {
     .then(readJson)
 }
 
-export function getProduct(id) {
-  return fetch(`${services()}/catalog/products/${encodeURIComponent(id)}`).then(readJson)
+export async function getProduct(id) {
+  const response = await fetch(`${services()}/catalog/products/${encodeURIComponent(id)}`)
+  if (response.status === 404) {
+    return { missing: true, id }
+  }
+  return readJson(response)
 }
 
 export function getPedigree(filename) {

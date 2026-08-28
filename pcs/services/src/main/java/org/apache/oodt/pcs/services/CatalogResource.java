@@ -198,6 +198,7 @@ public class CatalogResource extends PCSService {
         results.add(row);
       }
       body.put("results", results);
+      body.put("limit", Integer.valueOf(MAX_QUERY_RESULTS));
       body.put("truncated", Boolean.valueOf(found != null && found.size() > MAX_QUERY_RESULTS));
       return queryJson(body);
     } catch (QueryFormulationException e) {
