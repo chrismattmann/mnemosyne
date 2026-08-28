@@ -24,6 +24,7 @@ import org.apache.oodt.cas.workflow.structs.WorkflowCondition;
 
 import org.junit.After;
 import org.junit.Before;
+import org.apache.oodt.cas.workflow.structs.WorkflowTaskConfiguration;
 import org.junit.Test;
 
 import java.io.File;
@@ -182,6 +183,35 @@ public class TestPackagedWorkflowRepository {
   @After
   public void tearDown() throws Exception {
     repo = null;
+  }
+
+
+  /**
+   * This went straight into convertToTaskConfiguration, which called
+   * getAllKeys() on the null it was handed. A task id the repository does
+   * not hold reaches that path, and so does a task that declares no
+   * <configuration> block -- both put a null Metadata into the converter.
+   * An absent configuration is an empty configuration, not a failure, which
+   * is what every other lookup in this class already assumes.
+   */
+  @Test
+  public void testConfigurationForAnUnknownTaskIdIsEmpty() throws Exception {
+    WorkflowTaskConfiguration config = this.repo
+        .getConfigurationByTaskId("urn:npp:noSuchTaskAnywhere");
+
+    assertNotNull(config);
+    assertNotNull(config.getProperties());
+    assertEquals(0, config.getProperties().size());
+  }
+
+  /** a task that does declare one still answers with it. */
+  @Test
+  public void testConfigurationForAKnownTaskIdIsStillReturned() throws Exception {
+    WorkflowTaskConfiguration config = this.repo
+        .getConfigurationByTaskId("urn:npp:Orbits");
+
+    assertNotNull(config);
+    assertEquals("MoaOrbits", config.getProperty("PGETask/Name"));
   }
 
 }

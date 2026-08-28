@@ -1411,6 +1411,8 @@ public class DataSourceWorkflowRepository implements WorkflowRepository {
     Connection conn = null;
     Statement statement = null;
     PreparedStatement insert = null;
+    PreparedStatement eventInsert = null;
+    PreparedStatement taskInsert = null;
     ResultSet rs = null;
     String workflowId = null;
 
@@ -1429,20 +1431,44 @@ public class DataSourceWorkflowRepository implements WorkflowRepository {
       insert.setString(2, workflow.getName());
       insert.execute();
 
-      sql = "SELECT MAX(workflow_id) AS max_id FROM workflows";
-      rs = statement.executeQuery(sql);
+      // workflow_id is a supplied primary key, not a generated one, so the
+      // row that was just written is the caller's id. This read it back as
+      // SELECT MAX(workflow_id) and returned that instead, which is the
+      // caller's id only while ids happen to arrive in ascending order.
+      // Define a workflow with an id below one already stored and the
+      // returned identifier named a different workflow -- one the caller
+      // then went on to read, update or run.
+      workflowId = workflow.getId();
 
-      while (rs.next()) {
-        workflowId = String.valueOf(rs.getInt("max_id"));
+      // event to workflow map. Bound rather than concatenated: workflowId is
+      // now the caller's string rather than an int read back from the
+      // database, so it can carry anything a workflow id can carry.
+      sql = "INSERT INTO event_workflow_map (workflow_id, event_name) VALUES (?, ?)";
+      LOG.log(Level.FINE, "commitWorkflowToDB: Executing: " + sql);
+      eventInsert = conn.prepareStatement(sql);
+      eventInsert.setString(1, workflowId);
+      eventInsert.setString(2, "workflow-" + workflowId);
+      eventInsert.execute();
+
+      // The tasks were validated above and then never written, so a workflow
+      // defined through this method came back with no tasks and could not be
+      // run. workflow_task_map is what getWorkflowById and getTasksBy* read
+      // to find them.
+      sql = "INSERT INTO workflow_task_map (workflow_id, workflow_task_id, task_order) "
+          + "VALUES (?, ?, ?)";
+      LOG.log(Level.FINE, "commitWorkflowToDB: Executing: " + sql);
+      taskInsert = conn.prepareStatement(sql);
+      int position = 1;
+      for (WorkflowTask task : (List<WorkflowTask>) workflow.getTasks()) {
+        taskInsert.setString(1, workflowId);
+        taskInsert.setString(2, task.getTaskId());
+        // An unset order is -1, which would sort ahead of everything; fall
+        // back to the order the caller listed them in.
+        taskInsert.setInt(3, task.getOrder() >= 0 ? task.getOrder() : position);
+        taskInsert.execute();
+        position++;
       }
 
-      workflow.setId(workflowId);
-
-      // event to workflow map
-      sql = "INSERT INTO event_workflow_map (workflow_id, event_name) VALUES ("
-          + workflowId + ",'workflow-" + workflowId + "')";
-      LOG.log(Level.FINE, "commitWorkflowToDB: Executing: " + sql);
-      statement.execute(sql);
       conn.commit();
 
     } catch (Exception e) {
@@ -1473,6 +1499,22 @@ public class DataSourceWorkflowRepository implements WorkflowRepository {
             if (insert != null) {
         try {
           insert.close();
+        } catch (SQLException ignore) {
+        }
+
+      }
+
+      if (eventInsert != null) {
+        try {
+          eventInsert.close();
+        } catch (SQLException ignore) {
+        }
+
+      }
+
+      if (taskInsert != null) {
+        try {
+          taskInsert.close();
         } catch (SQLException ignore) {
         }
 

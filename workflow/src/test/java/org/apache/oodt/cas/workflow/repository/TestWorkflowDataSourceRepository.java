@@ -542,5 +542,68 @@ public class TestWorkflowDataSourceRepository {
     String id = repo.addWorkflow(workflowNamed("103", "Plain Pipeline"));
     assertEquals("Plain Pipeline", repo.getWorkflowById(id).getName());
   }
-}
 
+  /**
+   * workflow_id is a supplied primary key, not a generated one, so the row
+   * addWorkflow just wrote carries the caller's id. commitWorkflow read the
+   * id back as SELECT MAX(workflow_id) and returned that instead, which is
+   * the caller's id only while ids happen to arrive in ascending order --
+   * which is why the tests above, all of which count upwards, did not catch
+   * it. Define a workflow with an id below one already stored and the
+   * returned identifier names a different workflow.
+   */
+  @Test
+  public void testAddWorkflowReturnsTheIdItStored() throws RepositoryException {
+    DataSourceWorkflowRepository repo = new DataSourceWorkflowRepository(ds);
+
+    assertEquals("500", repo.addWorkflow(workflowNamed("500", "Later")));
+    assertEquals("the id of a different workflow was returned", "200",
+        repo.addWorkflow(workflowNamed("200", "Earlier")));
+
+    // and the id that came back names the workflow that was defined
+    assertEquals("Earlier", repo.getWorkflowById("200").getName());
+    assertEquals("Later", repo.getWorkflowById("500").getName());
+  }
+
+  /**
+   * addWorkflow validated that the referenced tasks exist and then never
+   * wrote workflow_task_map, which is the table getWorkflowById reads to
+   * find them. A workflow defined through this method came back with no
+   * tasks and could not be run.
+   */
+  @Test
+  public void testAddWorkflowStoresItsTasks() throws RepositoryException {
+    DataSourceWorkflowRepository repo = new DataSourceWorkflowRepository(ds);
+
+    String id = repo.addWorkflow(workflowNamed("300", "With Tasks"));
+
+    Workflow stored = repo.getWorkflowById(id);
+    assertNotNull(stored);
+    assertThat(stored.getTasks(), allOf(notNullValue(), hasSize(1)));
+    assertEquals("1", stored.getTasks().get(0).getTaskId());
+  }
+
+  /** the task order the caller gave is the order they come back in. */
+  @Test
+  public void testAddWorkflowKeepsTheTaskOrder() throws RepositoryException {
+    DataSourceWorkflowRepository repo = new DataSourceWorkflowRepository(ds);
+
+    Workflow w = new Workflow();
+    w.setId("400");
+    w.setName("Two Tasks");
+    WorkflowTask second = new WorkflowTask();
+    second.setTaskId("2");
+    WorkflowTask first = new WorkflowTask();
+    first.setTaskId("1");
+    List<WorkflowTask> tasks = new Vector<WorkflowTask>();
+    tasks.add(second);
+    tasks.add(first);
+    w.setTasks(tasks);
+
+    Workflow stored = repo.getWorkflowById(repo.addWorkflow(w));
+    assertThat(stored.getTasks(), hasSize(2));
+    assertEquals("2", stored.getTasks().get(0).getTaskId());
+    assertEquals("1", stored.getTasks().get(1).getTaskId());
+  }
+
+}

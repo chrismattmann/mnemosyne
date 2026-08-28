@@ -331,6 +331,15 @@ public class PackagedWorkflowRepository implements WorkflowRepository {
   }
 
   /*
+   * Both of these used to reach getAllKeys() on a null Metadata. An unknown
+   * task id misses the map, and a task that declares no <configuration>
+   * block never puts one there in the first place -- which is most of the
+   * tasks in the shipped examples, so this was reachable from a policy
+   * directory that is entirely valid. An absent configuration is an empty
+   * configuration, not a failure.
+   */
+
+  /*
    * (non-Javadoc)
    * 
    * @see
@@ -894,6 +903,9 @@ public class PackagedWorkflowRepository implements WorkflowRepository {
 
   private WorkflowTaskConfiguration convertToTaskConfiguration(Metadata met) {
     WorkflowTaskConfiguration config = new WorkflowTaskConfiguration();
+    if (met == null) {
+      return config;
+    }
     for (String key : met.getAllKeys()) {
       config.addConfigProperty(key, met.getMetadata(key));
     }
@@ -903,6 +915,9 @@ public class PackagedWorkflowRepository implements WorkflowRepository {
   private WorkflowConditionConfiguration convertToConditionConfiguration(
       Metadata met) {
     WorkflowConditionConfiguration config = new WorkflowConditionConfiguration();
+    if (met == null) {
+      return config;
+    }
     for (String key : met.getAllKeys()) {
       config.addConfigProperty(key, met.getMetadata(key));
     }

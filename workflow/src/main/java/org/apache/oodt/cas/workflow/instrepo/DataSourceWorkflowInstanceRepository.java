@@ -857,29 +857,27 @@ public class DataSourceWorkflowInstanceRepository extends
                 startNum = 0;
             }
 
-            // must call next first, or else no relative cursor
-            if (rs.next()) {
-                // grab the first one
-                int numGrabbed;
-                if(pageNum == 1){
-                    numGrabbed = 1;
-                    wInstIds.add(rs.getString("workflow_instance_id"));                    
-                }
-                else{
-                    numGrabbed = 0;
-                }
+            // This used to call rs.next() to get a "relative cursor", count
+            // that row on page 1 and not on later pages, then rs.relative()
+            // from wherever it had landed. On page 2 and beyond the cursor
+            // ended up ON the page's first row and the loop below then
+            // called next() past it, so one instance was skipped at every
+            // page boundary: with four instances at a page size of three,
+            // the fourth appeared on no page at all and page 2 came back
+            // empty while getTotalPages() still counted it.
+            //
+            // Positioning to the row *before* the page and letting the loop
+            // advance onto the first one needs no special case for page 1,
+            // where startNum is 0 and the cursor is already before the first
+            // row.
+            if (startNum > 0) {
+                rs.absolute(startNum);
+            }
 
-                if(pageNum != 1){
-                    // now move the cursor to the correct position
-                    rs.relative(startNum);                    
-                }
-
-                // grab the rest
-                while (rs.next() && numGrabbed < pageSize) {
-                    String wInstId = rs.getString("workflow_instance_id");
-                    wInstIds.add(wInstId);
-                    numGrabbed++;
-                }
+            int numGrabbed = 0;
+            while (numGrabbed < pageSize && rs.next()) {
+                wInstIds.add(rs.getString("workflow_instance_id"));
+                numGrabbed++;
             }
 
             if (wInstIds.size() == 0) {
