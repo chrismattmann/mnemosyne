@@ -1576,13 +1576,15 @@ public class LuceneCatalog implements Catalog {
             String startVal = ((RangeQueryCriteria) queryCriteria).getStartValue();
             String endVal = ((RangeQueryCriteria) queryCriteria).getEndValue();
             boolean inclusive = ((RangeQueryCriteria) queryCriteria).getInclusive();
-            Term startTerm = null;
-            if (!startVal.equals("")) {
-                startTerm = new Term(queryCriteria.getElementName(), startVal);
-            } else {
-                startTerm = new Term(queryCriteria.getElementName());
-            }
-            return TermRangeQuery.newStringRange(startTerm.field(), startVal, endVal, inclusive,inclusive);
+            // This used to build a Term from startVal only to read .field()
+            // back off it, which is queryCriteria.getElementName() either way,
+            // so both branches produced the same string and neither Term was
+            // used for anything else. The startVal.equals("") that chose
+            // between them is what turned an open lower bound into a
+            // NullPointerException; newStringRange takes null for an open end
+            // directly.
+            return TermRangeQuery.newStringRange(queryCriteria.getElementName(),
+                    startVal, endVal, inclusive, inclusive);
         } else {
             throw new CatalogException("Invalid QueryCriteria ["
                     + queryCriteria.getClass().getCanonicalName() + "]");

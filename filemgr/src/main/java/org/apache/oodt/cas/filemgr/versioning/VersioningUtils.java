@@ -281,6 +281,16 @@ public final class VersioningUtils {
             LOG.log(Level.WARNING,
                     "URISyntaxException getting URI from URI str: [" + uriStr
                             + "]");
+        } catch (IllegalArgumentException e) {
+            // new File(URI) throws this, unchecked, for a URI that parses but
+            // is not a usable file path: a non-file scheme, an opaque URI, one
+            // carrying an authority or a fragment. Callers here
+            // (FileManager:1087, FinalFileLocationExtractor) null-check rather
+            // than catch, so null-on-failure is the contract this method is
+            // read as having, and an unchecked throw escaped it.
+            LOG.log(Level.WARNING,
+                    "URI is not a usable file path: [" + uriStr + "]: "
+                            + e.getMessage());
         }
 
         return absPath;
