@@ -27,7 +27,7 @@
         </label>
         <label>
           Workflow
-          <select v-model="workflow">
+          <select :value="workflow" @change="$emit('filter-workflow', $event.target.value)">
             <option value="">All workflows</option>
             <option v-for="item in workflowOptions" :key="item.id || item.name" :value="item.name">
               {{ item.name }}
@@ -37,8 +37,8 @@
         <label>
           On or after
           <span class="date-field">
-            <input v-model="since" type="date"/>
-            <button v-if="since" type="button" class="ghost" @click="since = ''">Clear</button>
+            <input :value="since" type="date" @input="$emit('filter-since', $event.target.value)"/>
+            <button v-if="since" type="button" class="ghost" @click="$emit('filter-since', '')">Clear</button>
           </span>
         </label>
       </div>
@@ -114,16 +114,16 @@ export default {
   props: {
     payload: { type: Object, default: null },
     status: { type: String, default: 'ALL' },
+    workflow: { type: String, default: '' },
+    since: { type: String, default: '' },
     workflows: { type: Array, default: () => [] },
     loading: { type: Boolean, default: false }
   },
-  emits: ['status', 'page', 'open-workflow', 'open-task', 'open-instance', 'open-product'],
+  emits: ['status', 'page', 'filter-workflow', 'filter-since', 'open-workflow', 'open-task', 'open-instance', 'open-product'],
   setup(props) {
     const pageBody = computed(() => (props.payload && props.payload.page) || {})
     const sort = ref('')
     const dir = ref('asc')
-    const workflow = ref('')
-    const since = ref('')
     const now = computed(() => Date.now())
     const instances = computed(() => {
       return (pageBody.value.instances || []).map((inst) => Object.assign({}, inst, {
@@ -140,7 +140,7 @@ export default {
       wall: (row) => row.wallMs
     }
     const filtered = computed(() => {
-      return instances.value.filter((inst) => instanceMatches(inst, workflow.value, since.value))
+      return instances.value.filter((inst) => instanceMatches(inst, props.workflow, props.since))
     })
     const rows = computed(() => {
       if (!sort.value) {
@@ -181,8 +181,6 @@ export default {
       statuses,
       instances,
       rows,
-      workflow,
-      since,
       workflowOptions,
       sort,
       dir,

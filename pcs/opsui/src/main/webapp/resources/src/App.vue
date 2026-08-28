@@ -36,14 +36,14 @@
       </nav>
     </header>
 
-    <StatusView v-if="route.view === 'status'" :report="health" :loading="loading" @open-product="openLatestFile" @open-instances="openInstances" @open-config="openConfig"/>
+    <StatusView v-if="route.view === 'status'" :report="health" :loading="loading" :refreshed-at="refreshedAt" :stale="stale" @open-product="openLatestFile" @open-instances="openInstances" @open-config="openConfig"/>
     <ConfigView v-else-if="route.view === 'config'" :payload="configPayload" :loading="loading" @back="go({ view: 'status' })"/>
     <CatalogView v-else-if="route.view === 'catalog'" :types="types" :loading="loading" @open="openType" @query="openSearch" @find="openProduct"/>
     <SearchView v-else-if="route.view === 'search'" :payload="searchPayload" :loading="loading" @query="openSearch" @open="openProduct" @open-type="openType" @back="go({ view: 'catalog' })"/>
     <TypeView v-else-if="route.view === 'type'" :payload="typePayload" :loading="loading" @more="openTypeMore" @open="openProduct" @back="go({ view: 'catalog' })"/>
     <ProductView v-else-if="route.view === 'product'" :payload="productPayload" :pedigree="pedigree" :loading="loading" @open-type="openType" @open-instance="openInstance" @open-workflow="openWorkflow" @open-task="openTask" @open-product="openProduct" @back="go({ view: 'catalog' })"/>
-    <InstancesView v-else-if="route.view === 'instances'" :payload="instancePayload" :workflows="workflows" :status="route.status || 'ALL'" :loading="loading" @status="openInstances" @page="openInstancesPage" @open-workflow="openWorkflow" @open-task="openTaskFromInstanceRow" @open-instance="openInstance" @open-product="openProduct"/>
-    <InstanceView v-else-if="route.view === 'instance'" :payload="instanceDetail" :loading="loading" @open-workflow="openWorkflow" @open-task="openTaskFromInstance" @open-instance="openInstance" @open-type="openType" @open-product="openProduct" @back="go({ view: 'instances', status: route.status || 'ALL', page: 1 })"/>
+    <InstancesView v-else-if="route.view === 'instances'" :payload="instancePayload" :workflows="workflows" :status="route.status || 'ALL'" :workflow="route.workflow || ''" :since="route.since || ''" :loading="loading" @status="openInstances" @page="openInstancesPage" @filter-workflow="setInstanceWorkflow" @filter-since="setInstanceSince" @open-workflow="openWorkflow" @open-task="openTaskFromInstanceRow" @open-instance="openInstance" @open-product="openProduct"/>
+    <InstanceView v-else-if="route.view === 'instance'" :payload="instanceDetail" :loading="loading" @open-workflow="openWorkflow" @open-task="openTaskFromInstance" @open-instance="openInstance" @open-type="openType" @open-product="openProduct" @back="backFromInstance"/>
     <ResourcesView v-else-if="route.view === 'resources'" :payload="resourcePayload" :stubs="resourceStubs" :loading="loading"/>
     <WorkflowsView v-else-if="route.view === 'workflows'" :workflows="workflows" :loading="loading" @open="openWorkflow"/>
     <WorkflowView v-else-if="route.view === 'workflow'" :payload="workflowPayload" :loading="loading" @open-task="openTaskFromWorkflow" @open-instance="openInstance" @open-product="openProduct" @back="go({ view: 'workflows' })"/>
@@ -75,6 +75,7 @@ import {
 } from './api.js'
 import { catalogSqlError } from './sqlQuery.js'
 import { mergeTypeCatalog } from './catalogPages.js'
+import { instancesQuery, splitHash } from './instanceHash.js'
 
 export default {
   name: 'App',
@@ -100,11 +101,13 @@ export default {
     const configPayload = ref(null)
     const searchPayload = ref(null)
     const resourcePayload = ref(null)
+    const refreshedAt = ref(0)
+    const stale = ref(false)
     let timer = null
 
     function parseHash() {
-      const raw = (window.location.hash || '').replace(/^#\/?/, '')
-      const parts = raw.split('/').filter(Boolean).map((p) => {
+      const split = splitHash(window.location.hash || '')
+      const parts = split.path.split('/').filter(Boolean).map((p) => {
         try {
           return decodeURIComponent(p)
         } catch (e) {
@@ -137,7 +140,9 @@ export default {
         return {
           view: 'instances',
           status: parts[1] || 'ALL',
-          page: Number(parts[2] || 1)
+          page: Number(parts[2] || 1),
+          workflow: split.query.workflow || '',
+          since: split.query.since || ''
         }
       }
       if (head === 'workflows') {
@@ -185,6 +190,7 @@ export default {
         const status = next.status || 'ALL'
         const page = next.page && next.page !== 1 ? '/' + next.page : ''
         return 'instances/' + encodeURIComponent(status) + page
+          + instancesQuery(next.workflow, next.since)
       }
       if (next.view === 'workflows') {
         return 'workflows'
@@ -262,20 +268,45 @@ export default {
       }
     }
 
+    function instanceRoute(extra) {
+      return Object.assign({
+        view: 'instances',
+        status: route.value.status || 'ALL',
+        page: route.value.page || 1,
+        workflow: route.value.workflow || '',
+        since: route.value.since || ''
+      }, extra || {})
+    }
+
     function openInstances(status) {
-      go({ view: 'instances', status: status || 'ALL', page: 1 })
+      go(instanceRoute({ status: status || 'ALL', page: 1 }))
     }
 
     function openInstancesPage(page) {
-      go({
-        view: 'instances',
-        status: route.value.status || 'ALL',
-        page
-      })
+      go(instanceRoute({ page: page }))
+    }
+
+    function setInstanceWorkflow(workflow) {
+      go(instanceRoute({ workflow: workflow || '', page: 1 }))
+    }
+
+    function setInstanceSince(since) {
+      go(instanceRoute({ since: since || '', page: 1 }))
+    }
+
+    function backFromInstance() {
+      go(instanceRoute({ view: 'instances' }))
     }
 
     function openInstance(id) {
-      go({ view: 'instance', id })
+      go({
+        view: 'instance',
+        id,
+        status: route.value.status,
+        workflow: route.value.workflow,
+        since: route.value.since,
+        page: route.value.page
+      })
     }
 
     function openWorkflow(id) {
@@ -357,6 +388,8 @@ export default {
         if (r.view === 'status') {
           const body = await getHealth()
           health.value = body.report || body
+          refreshedAt.value = Date.now()
+          stale.value = false
         } else if (r.view === 'catalog') {
           const body = await getTypes()
           types.value = body.types || []
@@ -435,7 +468,12 @@ export default {
         }
         error.value = ''
       } catch (e) {
-        error.value = e.message || String(e)
+        if (route.value.view === 'status' && health.value) {
+          stale.value = true
+          error.value = ''
+        } else {
+          error.value = e.message || String(e)
+        }
       } finally {
         loading.value = false
       }
@@ -471,10 +509,10 @@ export default {
     })
 
     return {
-      route, loading, error, health, types, typePayload, productPayload,
+      route, loading, error, health, refreshedAt, stale, types, typePayload, productPayload,
       pedigree, instancePayload, instanceDetail, workflows, workflowPayload, taskPayload,
       conditionPayload, configPayload, searchPayload, resourcePayload, resourceStubs, go, openType, openTypePage, openTypeMore, openProduct,
-      openProductByPath, openLatestFile, openInstances, openInstancesPage, openInstance, openWorkflow, openTask, openTaskFromWorkflow, openTaskFromInstance, openTaskFromInstanceRow, openCondition, openConditionFromTask, backFromTask, backFromCondition, openConfig, openSearch
+      openProductByPath, openLatestFile, openInstances, openInstancesPage, setInstanceWorkflow, setInstanceSince, backFromInstance, openInstance, openWorkflow, openTask, openTaskFromWorkflow, openTaskFromInstance, openTaskFromInstanceRow, openCondition, openConditionFromTask, backFromTask, backFromCondition, openConfig, openSearch
     }
   }
 }
