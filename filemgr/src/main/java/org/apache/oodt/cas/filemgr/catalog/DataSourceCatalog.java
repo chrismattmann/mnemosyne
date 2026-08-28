@@ -2007,7 +2007,20 @@ public class DataSourceCatalog implements Catalog {
                 getProductSql.append(this.getSqlQuery(new BooleanQueryCriteria(query.getCriteria(), BooleanQueryCriteria
                     .AND), type));
               }
-              getProductSql.append(" ORDER BY products.product_datetime DESC ");
+              // Was ORDER BY products.product_datetime, which is not in the
+              // SELECT DISTINCT list. HSQLDB rejects that outright ("ORDER BY
+              // item should be in the SELECT DISTINCT list") and so does
+              // PostgreSQL; only MySQL accepts it, so this whole branch --
+              // every query and every page under productIdString -- was
+              // unusable on a standards-compliant database.
+              //
+              // Ordering by the column actually selected is the standard
+              // resolution, and matches what the non-string branch above
+              // already does. Carrying product_datetime into the SELECT list
+              // instead would need the same change in getSqlQuery, whose
+              // output also feeds "product_id NOT IN (...)" -- and a
+              // subquery there must return exactly one column.
+              getProductSql.append(" ORDER BY products.product_id DESC ");
               
             }
             

@@ -165,10 +165,20 @@ public class SqlScript {
     }
 
     private boolean isComment(String line) {
-        if ((line != null) && (line.length() > 0)) {
-            return (line.charAt(0) == '#');
+        if (line == null) {
+            return false;
         }
-        return false;
+        String trimmed = line.trim();
+        if (trimmed.length() == 0) {
+            return false;
+        }
+        // '#' alone was recognised, so a line beginning with SQL's own
+        // comment marker was appended into the statement being built and
+        // corrupted it -- silently, since the failure surfaces later as
+        // whatever the mangled statement happens to mean. The project ships
+        // scripts written that way: sdschema.sql opens with a '---' licence
+        // header.
+        return trimmed.charAt(0) == '#' || trimmed.startsWith("--");
     }
 
     private boolean checkStatementEnds(String s) {
