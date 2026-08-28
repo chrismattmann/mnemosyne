@@ -21,6 +21,7 @@ import org.apache.avro.AvroRemoteException;
 import org.apache.oodt.cas.resource.structs.avrotypes.OodtError;
 import org.apache.avro.ipc.NettyTransceiver;
 import org.apache.oodt.commons.rpc.AvroTransceivers;
+import org.apache.oodt.commons.rpc.RequestTimeout;
 import org.apache.avro.ipc.Transceiver;
 import org.apache.avro.ipc.specific.SpecificRequestor;
 import org.jboss.netty.channel.ChannelFactory;
@@ -100,7 +101,10 @@ public class AvroRpcResourceManagerClient implements ResourceManagerClient {
         for (int attempt = 1; attempt <= CONNECT_ATTEMPTS; attempt++) {
             try {
                 this.client = new NettyTransceiver(new InetSocketAddress(url.getHost(), url.getPort()), CHANNEL_FACTORY);
-                proxy = (ResourceManager) SpecificRequestor.getClient(ResourceManager.class, client);
+                // Bounded: the transceiver above is given no request
+                // timeout, so a lost response parked the caller forever.
+                proxy = RequestTimeout.bound(ResourceManager.class,
+                    (ResourceManager) SpecificRequestor.getClient(ResourceManager.class, client));
                 return;
             } catch (IOException e) {
                 lastException = e;

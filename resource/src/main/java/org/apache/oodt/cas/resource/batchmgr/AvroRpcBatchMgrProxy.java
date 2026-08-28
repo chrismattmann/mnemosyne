@@ -28,7 +28,9 @@ import org.jboss.netty.util.HashedWheelTimer;
 import org.apache.oodt.cas.resource.structs.AvroTypeFactory;
 import org.apache.oodt.cas.resource.structs.JobSpec;
 import org.apache.oodt.cas.resource.structs.ResourceNode;
-import org.apache.oodt.cas.resource.system.extern.AvroRpcBatchStub;
+import org.apache.oodt.cas.resource.structs.avrotypes.AvroIntrBatchmgr;
+import org.apache.oodt.commons.rpc.AvroTransceivers;
+import org.apache.oodt.commons.rpc.RequestTimeout;
 import org.apache.oodt.cas.resource.util.XmlRpcStructFactory;
 
 import java.io.IOException;
@@ -65,7 +67,14 @@ public class AvroRpcBatchMgrProxy extends Thread implements Runnable {
 
     private transient Transceiver client;
 
-    private transient AvroRpcBatchStub proxy;
+    // Was AvroRpcBatchStub, which is the server class, not the protocol.
+    // SpecificRequestor.getClient builds a java.lang.reflect.Proxy, and that
+    // requires an interface -- so connecting threw
+    // "IllegalArgumentException: ...AvroRpcBatchStub is not an interface",
+    // unchecked and past the IOException catch below. Every path through
+    // this class died on its first line, which is to say the Avro batch
+    // manager could not dispatch a job at all.
+    private transient AvroIntrBatchmgr proxy;
 
     private AvroRpcBatchMgr parent;
 
@@ -77,48 +86,42 @@ public class AvroRpcBatchMgrProxy extends Thread implements Runnable {
     }
 
     public boolean nodeAlive() {
-
         try {
-            this.client = new NettyTransceiver(
-                    new InetSocketAddress(remoteHost.getIpAddr().getHost(), remoteHost.getIpAddr().getPort()),
-                    CHANNEL_FACTORY);
-            this.proxy = (AvroRpcBatchStub) SpecificRequestor.getClient(AvroRpcBatchStub.class, client);
+            connect();
         } catch (IOException e) {
-            e.printStackTrace();
+            // The connection failure used to be logged and then ignored,
+            // leaving proxy null for the call below to dereference. A node
+            // this cannot reach is a node that is not alive.
             LOG.log(Level.SEVERE, "Failed connection with the server.", e);
+            return false;
         }
-
-
-
-        boolean alive = false;
 
         try {
-            alive = proxy.isAlive();
+            return proxy.isAlive();
         } catch (AvroRemoteException e) {
-            alive = false;
+            return false;
+        } finally {
+            disconnect();
         }
-        return alive;
-
     }
 
     public boolean killJob() {
-
         try {
-            this.client = new NettyTransceiver(
-                    new InetSocketAddress(remoteHost.getIpAddr().getHost(), remoteHost.getIpAddr().getPort()),
-                    CHANNEL_FACTORY);
-            this.proxy = (AvroRpcBatchStub) SpecificRequestor.getClient(AvroRpcBatchStub.class, client);
+            connect();
         } catch (IOException e) {
             LOG.log(Level.SEVERE, "Failed connection with the server.", e);
+            return false;
         }
-
 
         boolean result = false;
         try {
             result = proxy.killJob(AvroTypeFactory.getAvroJob(jobSpec.getJob()));
         } catch (AvroRemoteException e) {
-            e.printStackTrace();
+            LOG.log(Level.WARNING, "Unable to kill job: ["
+                    + jobSpec.getJob().getId() + "]: " + e.getMessage(), e);
             result = false;
+        } finally {
+            disconnect();
         }
 
         if (result) {
@@ -130,15 +133,18 @@ public class AvroRpcBatchMgrProxy extends Thread implements Runnable {
 
     public void run() {
         try {
-            this.client = new NettyTransceiver(
-                    new InetSocketAddress(remoteHost.getIpAddr().getHost(), remoteHost.getIpAddr().getPort()),
-                    CHANNEL_FACTORY);
-            this.proxy = (AvroRpcBatchStub) SpecificRequestor.getClient(AvroRpcBatchStub.class, client);
+            connect();
         } catch (IOException e) {
+            // Was logged and ignored, leaving proxy null for executeJob to
+            // dereference; the job then failed with a NullPointerException
+            // rather than with the connection error that caused it.
             LOG.log(Level.SEVERE, "Failed connection with the server.", e);
+            parent.jobFailure(jobSpec);
+            parent.notifyMonitor(remoteHost, jobSpec);
+            return;
         }
 
-        boolean result = false;
+        boolean result;
         try {
             parent.jobExecuting(jobSpec);
             result = proxy.executeJob(AvroTypeFactory.getAvroJob(jobSpec.getJob()),
@@ -150,7 +156,8 @@ public class AvroRpcBatchMgrProxy extends Thread implements Runnable {
         } catch (Exception e) {
             LOG.log(Level.SEVERE, "Job execution failed for jobId '" + jobSpec.getJob().getId() + "' : " + e.getMessage(), e);
             parent.jobFailure(jobSpec);
-        }finally {
+        } finally {
+            disconnect();
             parent.notifyMonitor(remoteHost, jobSpec);
         }
 
@@ -160,6 +167,36 @@ public class AvroRpcBatchMgrProxy extends Thread implements Runnable {
 
 
 
+
+    /**
+     * Opens the transport to the node this proxy speaks for.
+     *
+     * Each of the three entry points opened its own and none of them closed
+     * it, so a proxy leaked one socket per call -- the same leak as #144 and
+     * #192, three times over in one class. They are closed in a finally now.
+     */
+    private void connect() throws IOException {
+        this.client = new NettyTransceiver(
+                new InetSocketAddress(remoteHost.getIpAddr().getHost(), remoteHost.getIpAddr().getPort()),
+                CHANNEL_FACTORY);
+        // Bounded, because a batch stub that stops responding mid-job used
+        // to hold this thread for the life of the process.
+        this.proxy = RequestTimeout.bound(AvroIntrBatchmgr.class,
+                SpecificRequestor.getClient(AvroIntrBatchmgr.class, client));
+    }
+
+    /** Releases the transport, leaving the shared Netty threads running. */
+    private void disconnect() {
+        Transceiver toClose = this.client;
+        this.client = null;
+        this.proxy = null;
+        try {
+            AvroTransceivers.closeSharing(toClose);
+        } catch (IOException e) {
+            LOG.log(Level.WARNING, "Unable to close the batch stub transport: "
+                    + e.getMessage(), e);
+        }
+    }
 
     private static ExecutorService newDaemonCachedThreadPool(final String namePrefix) {
         return Executors.newCachedThreadPool(newDaemonThreadFactory(namePrefix));
