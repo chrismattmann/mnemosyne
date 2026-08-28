@@ -63,8 +63,9 @@ export function typeHasMore(catalog, loadedCount) {
 }
 
 /**
- * Fill type-product pages. A refresh rebuilds from page 1 through the
- * current total so a live ingest shows up without leaving the page.
+ * Fill type-product pages. A refresh rebuilds from page 1 through
+ * `through` (the pages already on screen) so a live ingest updates
+ * counts without swallowing Load more.
  */
 export async function loadTypePages(options) {
   const name = options.name
@@ -79,8 +80,7 @@ export async function loadTypePages(options) {
   if (merged && merged.catalog) {
     havePage = Number(merged.catalog.page) || 0
   }
-  const cap = refresh ? Number.POSITIVE_INFINITY : through
-  for (let p = havePage + 1; p <= cap; p++) {
+  for (let p = havePage + 1; p <= through; p++) {
     const body = await getPage(name, p)
     merged = mergeTypeCatalog(merged, body)
     const total = Number(body && body.catalog && body.catalog.totalPages) || 1

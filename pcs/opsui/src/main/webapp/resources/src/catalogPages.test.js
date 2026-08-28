@@ -39,7 +39,7 @@ test('typeHasMore is true when another page exists or the count is short', () =>
   assert.equal(typeHasMore({ page: 3, totalPages: 3, numProducts: 46 }, 46), false)
 })
 
-test('a refresh rebuilds from page 1 so newly ingested products appear', async () => {
+test('a refresh reloads only the pages already shown', async () => {
   const pages = {
     1: {
       catalog: {
@@ -72,9 +72,33 @@ test('a refresh rebuilds from page 1 so newly ingested products appear', async (
       return pages[page]
     }
   })
-  assert.deepEqual(fetched, [['TsvSplit', 1], ['TsvSplit', 2]])
-  assert.deepEqual(next.catalog.products.map((p) => p.id), ['a', 'b', 'c'])
+  assert.deepEqual(fetched, [['TsvSplit', 1]])
+  assert.deepEqual(next.catalog.products.map((p) => p.id), ['a', 'b'])
   assert.equal(next.catalog.numProducts, 3)
+  assert.equal(typeHasMore(next.catalog, next.catalog.products.length), true)
+})
+
+test('a refresh through page 2 rebuilds those pages from the start', async () => {
+  const fetched = []
+  const next = await loadTypePages({
+    name: 'TsvSplit',
+    through: 2,
+    refresh: true,
+    getPage: async (name, page) => {
+      fetched.push(page)
+      return {
+        catalog: {
+          type: { name: 'TsvSplit' },
+          page,
+          totalPages: 3,
+          numProducts: 5,
+          products: [{ id: String(page) }]
+        }
+      }
+    }
+  })
+  assert.deepEqual(fetched, [1, 2])
+  assert.deepEqual(next.catalog.products.map((p) => p.id), ['1', '2'])
 })
 
 test('without refresh, later pages append onto what is already shown', async () => {

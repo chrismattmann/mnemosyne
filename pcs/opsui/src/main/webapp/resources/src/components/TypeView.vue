@@ -42,19 +42,19 @@
         </tr>
       </tbody>
     </table>
-    <p v-if="rows.length" class="muted shown">
-      Showing {{ rows.length }} of {{ numProducts }} products.
-    </p>
-    <p v-if="hasMore" ref="moreEl" class="more">
-      <button class="ghost" type="button" :disabled="loading" @click="loadMore">
-        {{ loading ? 'Loading…' : 'Load more' }}
+    <div v-if="rows.length" class="more">
+      <p class="muted shown">
+        Showing {{ rows.length }} of {{ numProducts }} products.
+      </p>
+      <button v-if="hasMore" type="button" :disabled="loading" @click="loadMore">
+        {{ loading ? 'Loading…' : moreLabel }}
       </button>
-    </p>
+    </div>
   </section>
 </template>
 
 <script>
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import RefreshNote from './RefreshNote.vue'
 import SortHead from './SortHead.vue'
 import { typeHasMore } from '../catalogPages.js'
@@ -77,7 +77,6 @@ export default {
     const totalPages = computed(() => catalog.value.totalPages || 1)
     const products = computed(() => catalog.value.products || [])
     const hasMore = computed(() => typeHasMore(catalog.value, products.value.length))
-    const moreEl = ref(null)
     const sort = ref('')
     const dir = ref('asc')
     const rows = computed(() => {
@@ -89,7 +88,16 @@ export default {
         : (row) => row.name || ''
       return sortRows(products.value, getter, dir.value)
     })
-    let observer = null
+    const remaining = computed(() => {
+      const total = catalog.value.numProducts != null ? catalog.value.numProducts : 0
+      return Math.max(0, total - products.value.length)
+    })
+    const moreLabel = computed(() => {
+      if (!remaining.value) {
+        return 'Load more'
+      }
+      return 'Load more · ' + remaining.value + ' remaining'
+    })
 
     function onSort(field) {
       const next = toggleSort(field, sort.value, dir.value)
@@ -108,30 +116,6 @@ export default {
       emit('refresh')
     }
 
-    function attach() {
-      if (observer) {
-        observer.disconnect()
-        observer = null
-      }
-      if (typeof IntersectionObserver === 'undefined' || !moreEl.value) {
-        return
-      }
-      observer = new IntersectionObserver((entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
-          loadMore()
-        }
-      })
-      observer.observe(moreEl.value)
-    }
-
-    onMounted(attach)
-    watch([hasMore, moreEl], attach, { flush: 'post' })
-    onUnmounted(() => {
-      if (observer) {
-        observer.disconnect()
-      }
-    })
-
     return {
       name: computed(() => type.value.name || ''),
       description: computed(() => type.value.description || ''),
@@ -142,7 +126,7 @@ export default {
       dir,
       onSort,
       hasMore,
-      moreEl,
+      moreLabel,
       loadMore
     }
   }
@@ -155,11 +139,15 @@ h2 {
 }
 
 .shown {
-  margin-top: 0.8rem;
+  margin: 0;
   font-size: 0.85rem;
 }
 
 .more {
-  margin: 0.8rem 0 1.4rem;
+  margin: 0.9rem 0 1.6rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
 }
 </style>

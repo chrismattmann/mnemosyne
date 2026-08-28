@@ -442,9 +442,12 @@ export default {
           resourcePayload.value = res
           health.value = healthBody.report || healthBody
         } else if (r.view === 'type') {
+          const loaded = Number(
+            typePayload.value && typePayload.value.catalog && typePayload.value.catalog.page
+          ) || 0
           typePayload.value = await loadTypePages({
             name: r.name,
-            through: r.page || 1,
+            through: Math.max(r.page || 1, loaded),
             previous: typePayload.value,
             refresh: Boolean(options && options.refreshType) || quiet,
             getPage: getTypeProducts
