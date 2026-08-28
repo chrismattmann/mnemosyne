@@ -79,7 +79,10 @@ public class LuceneCatalog implements Catalog {
 
     Directory indexDir = null;
 
-    private DirectoryReader reader;
+    // The reader used to be a field that every read method reassigned, so
+    // concurrent reads clobbered each other's and only the last one could
+    // ever be closed. Each read opens its own now, and closes it.
+
     /* the path to the index directory for this catalog */
     private String indexFilePath = null;
 
@@ -90,7 +93,16 @@ public class LuceneCatalog implements Catalog {
      * temporary Cache of product/metadata/reference information before it is
      * written to the index
      */
-    private static ConcurrentHashMap<String, CompleteProduct> CATALOG_CACHE = new ConcurrentHashMap<>();
+    // Was static, so every LuceneCatalog in the JVM shared one cache
+    // whatever index directory it was pointed at: two catalogs over two
+    // unrelated indexes saw each other's products. Per catalog now, and
+    // cleared when the catalog closes -- it had no eviction at all, so it
+    // grew for the life of the process.
+    private final ConcurrentHashMap<String, CompleteProduct> catalogCache =
+        new ConcurrentHashMap<String, CompleteProduct>();
+
+    /* the single writer this catalog holds; see writer() */
+    private IndexWriter writer;
 
     /* our product ID generator */
     private static UUIDGenerator generator = UUIDGenerator.getInstance();
@@ -164,8 +176,8 @@ public class LuceneCatalog implements Catalog {
     public synchronized void addMetadata(Metadata m, Product product)
             throws CatalogException {
         CompleteProduct p;
-        if(product.getProductId()!=null && CATALOG_CACHE.containsKey(product.getProductId())) {
-             p = CATALOG_CACHE.get(product.getProductId());
+        if(product.getProductId()!=null && catalogCache.containsKey(product.getProductId())) {
+             p = catalogCache.get(product.getProductId());
         }
         else{
                 // move product from index to cache
@@ -182,7 +194,7 @@ public class LuceneCatalog implements Catalog {
                     + product.getProductId() + "]");
             addCompleteProductToIndex(p);
             // now remove its entry from the cache
-            CATALOG_CACHE.remove(product.getProductId());
+            catalogCache.remove(product.getProductId());
         }
     }
 
@@ -197,8 +209,8 @@ public class LuceneCatalog implements Catalog {
             throws CatalogException {
         CompleteProduct p;
 
-        if(product.getProductId()!=null && CATALOG_CACHE.containsKey(product.getProductId())) {
-             p = CATALOG_CACHE.get(product.getProductId());
+        if(product.getProductId()!=null && catalogCache.containsKey(product.getProductId())) {
+             p = catalogCache.get(product.getProductId());
         }
         else{
             String prodId = product.getProductId();
@@ -242,7 +254,7 @@ public class LuceneCatalog implements Catalog {
                             + product.getProductId() + "]");
             addCompleteProductToIndex(p);
             // now remove its entry from the cache
-            CATALOG_CACHE.remove(product.getProductId());
+            catalogCache.remove(product.getProductId());
         }
     }
 
@@ -254,7 +266,7 @@ public class LuceneCatalog implements Catalog {
     @Override
     public synchronized void addProduct(Product product)
             throws CatalogException {
-        if(product.getProductId()!=null && CATALOG_CACHE.containsKey(product.getProductId())) {
+        if(product.getProductId()!=null && catalogCache.containsKey(product.getProductId())) {
             throw new CatalogException(
                 "Attempt to add a product that already existed: product: ["
                 + product.getProductName() + "]");
@@ -277,7 +289,7 @@ public class LuceneCatalog implements Catalog {
             }
 
             completeProduct.setProduct(product);
-            CATALOG_CACHE.put(product.getProductId(), completeProduct);
+            catalogCache.put(product.getProductId(), completeProduct);
 
         }
 
@@ -291,10 +303,10 @@ public class LuceneCatalog implements Catalog {
     @Override
     public synchronized void modifyProduct(Product product)
             throws CatalogException {
-        if (product.getProductId()!=null && CATALOG_CACHE.containsKey(product.getProductId())) {
+        if (product.getProductId()!=null && catalogCache.containsKey(product.getProductId())) {
             LOG.log(Level.FINE, "Modifying product: [" + product.getProductId()
                     + "]: found product in cache!");
-            CompleteProduct cp = CATALOG_CACHE.get(product
+            CompleteProduct cp = catalogCache.get(product
                     .getProductId());
             cp.setProduct(product);
         } else {
@@ -323,6 +335,13 @@ public class LuceneCatalog implements Catalog {
     public synchronized void removeProduct(Product product)
             throws CatalogException {
         removeProductDocument(product);
+        // The document went out of the index and the cache entry stayed, so
+        // a removed product id still resolved from cache -- and adding that
+        // id again threw "already existed" for a product the catalog no
+        // longer held.
+        if (product.getProductId() != null) {
+            catalogCache.remove(product.getProductId());
+        }
     }
 
     /*
@@ -348,8 +367,8 @@ public class LuceneCatalog implements Catalog {
     @Override
     public synchronized void addProductReferences(Product product)
             throws CatalogException {
-        if(product.getProductId()!=null && CATALOG_CACHE.containsKey(product.getProductId())) {
-            CompleteProduct p = CATALOG_CACHE.get(product
+        if(product.getProductId()!=null && catalogCache.containsKey(product.getProductId())) {
+            CompleteProduct p = catalogCache.get(product
                 .getProductId());
             p.getProduct().setProductReferences(product.getProductReferences());
                 if (hasMetadataAndRefs(p)) {
@@ -358,7 +377,7 @@ public class LuceneCatalog implements Catalog {
                         + product.getProductId() + "]");
                     addCompleteProductToIndex(p);
                     // now remove its entry from the cache
-                    CATALOG_CACHE.remove(product.getProductId());
+                    catalogCache.remove(product.getProductId());
                 }
 
         }
@@ -394,6 +413,44 @@ public class LuceneCatalog implements Catalog {
         return getCompleteProductById(productId, false);
     }
 
+    /**
+     * Opens a reader over the index.
+     *
+     * Every call site used to catch the IOException, print the stack trace
+     * and carry on, so a directory that could not be opened surfaced as a
+     * NullPointerException on the next line -- or worse, as a search against
+     * whichever reader the previous call had left in the field.
+     */
+    private DirectoryReader openReader() throws CatalogException {
+        try {
+            return DirectoryReader.open(indexDir);
+        } catch (IOException e) {
+            LOG.log(Level.WARNING, "Unable to open index directory: ["
+                    + indexFilePath + "]: Message: " + e.getMessage(), e);
+            throw new CatalogException("Unable to open index directory: ["
+                    + indexFilePath + "]: Message: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Closes a reader, which the six read methods left as //TODO CLOSE.
+     *
+     * A file manager reading products leaked a file handle per read, so the
+     * failure arrived far from its cause as some unrelated open reporting
+     * "Too many open files".
+     */
+    private static void closeQuietly(DirectoryReader reader) {
+        if (reader == null) {
+            return;
+        }
+        try {
+            reader.close();
+        } catch (Exception ignore) {
+            // Nothing a caller can do about a reader that will not close, and
+            // the read itself has already succeeded or failed on its own.
+        }
+    }
+
     private CompleteProduct getCompleteProductById(String productId,
             boolean getRefs) throws CatalogException {
         return getCompleteProductById(productId, getRefs, false);
@@ -402,12 +459,9 @@ public class LuceneCatalog implements Catalog {
     private CompleteProduct getCompleteProductById(String productId,
             boolean getRefs, boolean getMet) throws CatalogException {
         IndexSearcher searcher = null;
+        DirectoryReader reader = null;
         try {
-            try {
-                reader = DirectoryReader.open(indexDir);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+            reader = openReader();
 
             searcher = new IndexSearcher(reader);
             Term productIdTerm = new Term("product_id", productId);
@@ -462,12 +516,9 @@ public class LuceneCatalog implements Catalog {
     private Product getProductByName(String productName, boolean getRefs)
             throws CatalogException {
         IndexSearcher searcher = null;
+        DirectoryReader reader = null;
         try {
-            try {
-                reader = DirectoryReader.open(indexDir);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+            reader = openReader();
             searcher = new IndexSearcher(reader);
             Term productIdTerm = new Term("product_name", productName);
             org.apache.lucene.search.Query query = new TermQuery(productIdTerm);
@@ -510,12 +561,7 @@ public class LuceneCatalog implements Catalog {
                             + e.getMessage());
             throw new CatalogException(e.getMessage(), e);
         } finally {
-            if (searcher != null) {
-                try {
-//TODO CLOSE SEARCHER
-                } catch (Exception ignore) {
-                }
-            }
+            closeQuietly(reader);
         }
     }
 
@@ -546,14 +592,11 @@ public class LuceneCatalog implements Catalog {
 
     private List<Product> getProducts(boolean getRefs) throws CatalogException {
         IndexSearcher searcher = null;
+        DirectoryReader reader = null;
         List<Product> products = new Vector<Product>();
 
         try {
-            try {
-                reader = DirectoryReader.open(indexDir);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+            reader = openReader();
             searcher = new IndexSearcher(reader);
             Term productIdTerm = new Term("myfield", "myvalue");
             org.apache.lucene.search.Query query = new TermQuery(productIdTerm);
@@ -617,14 +660,11 @@ public class LuceneCatalog implements Catalog {
     private List<Product> getProductsByProductType(ProductType type, boolean getRefs)
             throws CatalogException {
         IndexSearcher searcher = null;
+        DirectoryReader reader = null;
         List<Product> products = new Vector<Product>();
 
         try {
-            try {
-                reader = DirectoryReader.open(indexDir);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+            reader = openReader();
             searcher = new IndexSearcher(reader);
             Term productIdTerm = new Term("product_type_id", type
                     .getProductTypeId());
@@ -665,12 +705,7 @@ public class LuceneCatalog implements Catalog {
                             + e.getMessage());
             throw new CatalogException(e.getMessage(), e);
         } finally {
-            if (searcher != null) {
-                try {
-//TODO CLOSE
-               } catch (Exception ignore) {
-                }
-            }
+            closeQuietly(reader);
         }
 
         return products;
@@ -679,12 +714,9 @@ public class LuceneCatalog implements Catalog {
     @Override
     public synchronized Metadata getMetadata(Product product) throws CatalogException {
         IndexSearcher searcher = null;
+        DirectoryReader reader = null;
         try {
-            try {
-                reader = DirectoryReader.open(indexDir);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+            reader = openReader();
             searcher = new IndexSearcher(reader);
             TermQuery qry = new TermQuery(new Term("*", "*"));
             TopDocs tdocks  = searcher.search(qry, 100);
@@ -720,12 +752,7 @@ public class LuceneCatalog implements Catalog {
                             + e.getMessage());
             throw new CatalogException(e.getMessage(), e);
         } finally {
-            if (searcher != null) {
-                try {
-//TODO CLOSE
-               } catch (Exception ignore) {
-                }
-            }
+            closeQuietly(reader);
         }
     }
     
@@ -774,13 +801,10 @@ public class LuceneCatalog implements Catalog {
     public synchronized List<Product> getTopNProducts(int n) throws CatalogException {
         List<Product> products = new Vector<Product>();
         IndexSearcher searcher = null;
+        DirectoryReader reader = null;
 
         try {
-            try {
-                reader = DirectoryReader.open(indexDir);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+            reader = openReader();
             searcher = new IndexSearcher(reader);
 
             // construct a Boolean query here
@@ -825,12 +849,7 @@ public class LuceneCatalog implements Catalog {
                             + e.getMessage());
             throw new CatalogException(e.getMessage(), e);
         } finally {
-            if (searcher != null) {
-                try {
-                    //TODO CLOSE
-                } catch (Exception ignore) {
-                }
-            }
+            closeQuietly(reader);
         }
 
         return products;
@@ -1078,66 +1097,43 @@ public class LuceneCatalog implements Catalog {
 
     private synchronized void removeProductDocument(Product product)
             throws CatalogException {
-
-        try {
-            reader = DirectoryReader.open(indexDir);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        // This opened a DirectoryReader it never used, and closed it in a
+        // finally: a reader opened, fsynced over and thrown away on every
+        // delete. Deleting needs a writer and nothing else.
         try {
             LOG.log(Level.FINE,
                     "LuceneCatalog: remove document from index for product: ["
                             + product.getProductId() + "]");
-            IndexWriterConfig config = new IndexWriterConfig(new StandardAnalyzer());
-
-            config.setOpenMode(IndexWriterConfig.OpenMode.CREATE_OR_APPEND);
-            LogMergePolicy lmp =new LogDocMergePolicy();
-            lmp.setMergeFactor(mergeFactor);
-            config.setMergePolicy(lmp);
-
-                IndexWriter writer = new IndexWriter(indexDir, config);
+            IndexWriter writer = writer();
             writer.deleteDocuments(new Term("product_id", product
                     .getProductId()));
-            writer.close();
-
+            writer.commit();
         } catch (IOException e) {
             LOG.log(Level.WARNING, "Exception removing product: ["
                     + product.getProductName() + "] from index: Message: "
                     + e.getMessage());
             throw new CatalogException(e.getMessage(), e);
-        } finally {
-            if (reader != null) {
-                try {
-                    reader.close();
-                } catch (Exception ignore) {
-                }
-
-            }
-
         }
     }
 
     private synchronized void addCompleteProductToIndex(CompleteProduct cp)
             throws CatalogException {
-        IndexWriter writer = null;
-        IndexWriterConfig config = new IndexWriterConfig(new StandardAnalyzer());
-
-        config.setOpenMode(IndexWriterConfig.OpenMode.CREATE_OR_APPEND);
-        LogMergePolicy lmp = new LogDocMergePolicy();
-        lmp.setMergeFactor(mergeFactor);
-        config.setMergePolicy(lmp);
-
-        // Opening the writer used to print the stack trace of any IOException
-        // and carry on with writer still null, so a directory that could not
-        // be opened -- no permission, a lock held by another process, a full
-        // disk -- was reported to the caller as a NullPointerException on the
-        // next line, with the real cause on stdout. The failure to open is
-        // the failure to index.
         Document doc = toDoc(cp.getProduct(), cp.getMetadata());
         try {
-            writer = new IndexWriter(indexDir, config);
+            // One writer for the catalog's life, rather than one per
+            // document. Opening a writer reads the segment infos and takes
+            // the directory's write lock, and closing it commits and fsyncs;
+            // doing both around a single addDocument put all of that on the
+            // ingest path, once per product.
+            //
+            // The commit stays. It is what makes the product durable and
+            // visible to the next reader, and this catalog has no other
+            // point at which to do it -- addProduct is expected to be
+            // readable by the getProductById on the next line. What has gone
+            // is the open and close either side of it.
+            IndexWriter writer = writer();
             writer.addDocument(doc);
-            // TODO: determine a better way to optimize the index
+            writer.commit();
         } catch (Exception e) {
             LOG.log(Level.WARNING, "Unable to index product: ["
                     + cp.getProduct().getProductName() + "]: Message: "
@@ -1145,21 +1141,64 @@ public class LuceneCatalog implements Catalog {
             throw new CatalogException("Unable to index product: ["
                     + cp.getProduct().getProductName() + "]: Message: "
                     + e.getMessage(), e);
-        } finally {
-            // Closed once, here. It was closed inside the try as well, so the
-            // ordinary path closed twice and the second close ran against an
-            // already-closed writer.
+        }
+    }
+
+    /**
+     * The writer this catalog holds, opened on first use.
+     *
+     * Lucene's write lock is held for as long as this is open, which makes
+     * the catalog the single writer to its index directory -- the arrangement
+     * Lucene is designed for. Two catalogs over one directory were already
+     * mutually exclusive for the duration of each write; now the exclusion
+     * lasts as long as the catalog does, which is why Catalog declares
+     * close() and why FileManager closes the old catalog before replacing it.
+     */
+    private synchronized IndexWriter writer() throws CatalogException {
+        if (writer == null) {
+            IndexWriterConfig config = new IndexWriterConfig(new StandardAnalyzer());
+            config.setOpenMode(IndexWriterConfig.OpenMode.CREATE_OR_APPEND);
+            LogMergePolicy lmp = new LogDocMergePolicy();
+            lmp.setMergeFactor(mergeFactor);
+            config.setMergePolicy(lmp);
             try {
-                if (writer != null) {
-                    writer.close();
-                }
-            } catch (Exception e) {
-                LOG.log(Level.WARNING, "Unable to close the index writer for "
-                        + "product: [" + cp.getProduct().getProductName()
-                        + "]: Message: " + e.getMessage(), e);
+                writer = new IndexWriter(indexDir, config);
+            } catch (IOException e) {
+                // Used to be printStackTrace followed by a use of the null it
+                // left behind, so a directory that could not be opened for
+                // writing was reported as a NullPointerException.
+                LOG.log(Level.WARNING, "Unable to open index directory for "
+                        + "writing: [" + indexFilePath + "]: Message: "
+                        + e.getMessage(), e);
+                throw new CatalogException("Unable to open index directory for "
+                        + "writing: [" + indexFilePath + "]: Message: "
+                        + e.getMessage(), e);
             }
         }
+        return writer;
+    }
 
+    /**
+     * Releases the writer and the cache.
+     *
+     * Nothing released either before: the writer because there was never one
+     * to release, the cache because it was static and lived as long as the
+     * JVM.
+     */
+    @Override
+    public synchronized void close() throws CatalogException {
+        catalogCache.clear();
+        IndexWriter toClose = writer;
+        writer = null;
+        if (toClose != null) {
+            try {
+                toClose.close();
+            } catch (IOException e) {
+                throw new CatalogException("Unable to close the index writer "
+                        + "for: [" + indexFilePath + "]: Message: "
+                        + e.getMessage(), e);
+            }
+        }
     }
 
     private CompleteProduct toCompleteProduct(Document doc) {
@@ -1394,13 +1433,10 @@ public class LuceneCatalog implements Catalog {
     private int getNumHits(Query query, ProductType type)
             throws CatalogException {
         IndexSearcher searcher = null;
+        DirectoryReader reader = null;
 
         int numHits = -1;
-        try {
-            reader = DirectoryReader.open(indexDir);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        reader = openReader();
         try {
             searcher = new IndexSearcher(reader);
 
@@ -1431,12 +1467,7 @@ public class LuceneCatalog implements Catalog {
                             + e.getMessage());
             throw new CatalogException(e.getMessage());
         } finally {
-            if (searcher != null) {
-                try {
-                    //TODO CLOSE
-                } catch (Exception ignore) {
-                }
-            }
+            closeQuietly(reader);
         }
 
         return numHits;
@@ -1446,6 +1477,7 @@ public class LuceneCatalog implements Catalog {
             throws CatalogException {
         List<Product> products = new Vector<Product>(pageSize);
         IndexSearcher searcher = null;
+        DirectoryReader reader = null;
 
         boolean doSkip = true;
 
@@ -1453,11 +1485,7 @@ public class LuceneCatalog implements Catalog {
             doSkip = false;
         }
 
-        try {
-            reader = DirectoryReader.open(indexDir);
-        } catch (IOException e) {
-            logger.error("Error when creating directory reader, indexDir: {}, error: {}", indexDir, e.getMessage());
-        }
+        reader = openReader();
 
         try {
             searcher = new IndexSearcher(reader);
@@ -1537,12 +1565,7 @@ public class LuceneCatalog implements Catalog {
                             + e.getMessage());
             throw new CatalogException(e.getMessage());
         } finally {
-            if (searcher != null) {
-                try {
-                    //TODO CLOSE
-                } catch (Exception ignore) {
-                }
-            }
+            closeQuietly(reader);
         }
 
         return products;

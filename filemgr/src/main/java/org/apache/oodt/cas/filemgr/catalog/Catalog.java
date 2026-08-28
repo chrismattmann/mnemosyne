@@ -342,4 +342,22 @@ public interface Catalog extends Pagination {
      */
     int getNumProducts(ProductType type) throws CatalogException;
 
+    /**
+     * Releases whatever this Catalog is holding open.
+     *
+     * There was no way to say this before, so nothing that owned a Catalog
+     * could release one: LuceneCatalog leaked a file handle per read and
+     * could not keep a writer open because it had nowhere to close it, and
+     * FileManager.loadConfiguration replaced its catalog on every refresh
+     * and dropped the previous one on the floor.
+     *
+     * Defaulted to doing nothing, so an implementation holding no resources
+     * -- which is most of them, the DataSource ones borrow their connections
+     * per call -- need not implement it.
+     *
+     * @throws CatalogException if anything could not be released
+     */
+    default void close() throws CatalogException {
+    }
+
 }

@@ -1097,6 +1097,29 @@ public class FileManager {
         return pMet;
     }
 
+    /**
+     * Releases what this file manager holds, which is its catalog.
+     *
+     * Called from the server's shutdown; before this the catalog was simply
+     * abandoned at exit, along with any index writer or file handle it held.
+     */
+    public void close() {
+        closeQuietly(catalog);
+        catalog = null;
+    }
+
+    private static void closeQuietly(Catalog toClose) {
+        if (toClose == null) {
+            return;
+        }
+        try {
+            toClose.close();
+        } catch (CatalogException e) {
+            LOG.log(Level.WARNING, "Unable to close the catalog: "
+                    + e.getMessage(), e);
+        }
+    }
+
     public void loadConfiguration() throws FileNotFoundException, IOException {
         
         try{
@@ -1115,6 +1138,12 @@ public class FileManager {
                 .getProperty("filemgr.repository.factory",
                         "org.apache.oodt.cas.filemgr.repository.DataSourceRepositoryManagerFactory");
 
+        // The previous catalog was replaced and dropped. Nothing released
+        // what it held, so every refreshConfigAndPolicy leaked whatever the
+        // old one had open -- and with LuceneCatalog now holding its index
+        // writer, the replacement would not be able to take the write lock
+        // the abandoned one is still holding.
+        closeQuietly(catalog);
         catalog = GenericFileManagerObjectFactory
                 .getCatalogServiceFromFactory(metaFactory);
         repositoryManager = GenericFileManagerObjectFactory
