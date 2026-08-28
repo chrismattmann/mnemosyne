@@ -274,9 +274,21 @@ public class AvroRpcWorkflowManagerClient implements WorkflowManagerClient {
     @Override
     public void setWorkflowManagerUrl(URL workflowManagerUrl) {
         this.workflowManagerUrl = workflowManagerUrl;
+        // The transport in place is released before another replaces it.
+        // This is a public setter that assigned straight over the field, so
+        // every call after the first orphaned a connection -- and if
+        // getClient threw, it orphaned the one just built as well.
         try {
-            client = new NettyTransceiver(
+            close();
+        } catch (IOException e) {
+            logger.warn("Unable to close the previous workflow manager "
+                + "connection: {}", e.getMessage());
+        }
+        Transceiver opened = null;
+        try {
+            opened = new NettyTransceiver(
                 new InetSocketAddress(workflowManagerUrl.getHost(), workflowManagerUrl.getPort()), CHANNEL_FACTORY);
+            client = opened;
             // Bounded: the transceiver is given no request timeout, so a
             // lost response parked the caller forever.
             proxy = RequestTimeout.bound(
@@ -284,7 +296,15 @@ public class AvroRpcWorkflowManagerClient implements WorkflowManagerClient {
                 SpecificRequestor.getClient(
                     org.apache.oodt.cas.workflow.struct.avrotypes.WorkflowManager.class, client));
         } catch (IOException e) {
+            closeQuietly(opened);
+            client = null;
+            proxy = null;
             logger.error("Error occurred when setting workflow manager url: {}", workflowManagerUrl, e);
+        } catch (RuntimeException e) {
+            closeQuietly(opened);
+            client = null;
+            proxy = null;
+            throw e;
         }
 
     }
@@ -296,6 +316,18 @@ public class AvroRpcWorkflowManagerClient implements WorkflowManagerClient {
         } catch (AvroRemoteException e) {
             logger.error("Error occurred when checking if WM is alive", e);
             return false;
+        }
+    }
+
+    /** Releases a transport that will not be kept, on a failure path. */
+    private static void closeQuietly(Transceiver transceiver) {
+        if (transceiver == null) {
+            return;
+        }
+        try {
+            closeTransceiver(transceiver);
+        } catch (Exception ignore) {
+            // already failing; nothing useful to add
         }
     }
 

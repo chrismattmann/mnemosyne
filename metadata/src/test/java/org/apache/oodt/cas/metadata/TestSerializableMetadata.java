@@ -198,4 +198,84 @@ public class TestSerializableMetadata extends TestCase {
     assertEquals(PREFIX, preAfter);
   }
 
+
+    /**
+     * The writer skipped URLEncoder when useCDATA was set and the reader
+     * decoded unconditionally, so a CDATA document came back wrong.
+     *
+     * "a+b" read back as "a b", and "100%" threw inside URLDecoder, was
+     * caught, logged and returned as null -- the value simply gone. A percent
+     * sign in a metadata value is ordinary: cloud cover, completeness, any
+     * measurement expressed as a percentage.
+     */
+    public void testCdataRoundTripKeepsAPlus() throws Exception {
+        assertEquals("a+b", roundTrip("key", "a+b", true));
+    }
+
+    public void testCdataRoundTripKeepsAPercent() throws Exception {
+        assertEquals("100%", roundTrip("key", "100%", true));
+    }
+
+    /** And a key carrying one, which used to land on the root group. */
+    public void testCdataRoundTripKeepsAPercentInAKey() throws Exception {
+        Metadata read = roundTripAll("cloud%cover", "5", true);
+
+        assertTrue("the key was lost: " + read.getAllKeys(),
+                read.containsKey("cloud%cover"));
+        assertEquals("5", read.getMetadata("cloud%cover"));
+    }
+
+    /** The encoded path was always right and stays right. */
+    public void testEncodedRoundTripIsUnchanged() throws Exception {
+        assertEquals("a+b", roundTrip("key", "a+b", false));
+        assertEquals("100%", roundTrip("key", "100%", false));
+    }
+
+    /** The two agree, which is the property that was violated. */
+    public void testBothFormsAgree() throws Exception {
+        for (String value : new String[] { "a+b", "100%", "plain", "a b",
+                                           "50% & rising", "" }) {
+            assertEquals("the two forms disagree about [" + value + "]",
+                    roundTrip("key", value, false),
+                    roundTrip("key", value, true));
+        }
+    }
+
+    /**
+     * A document written before the encoding attribute existed carries no
+     * attribute and is URL-encoded; it has to keep reading correctly.
+     */
+    public void testADocumentWithNoEncodingAttributeIsReadAsEncoded()
+            throws Exception {
+        String xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+                + "<cas:metadata xmlns:cas=\"http://oodt.jpl.nasa.gov/1.0/cas\">"
+                + "<keyval type=\"vector\"><key>key</key><val>a%2Bb</val></keyval>"
+                + "</cas:metadata>";
+
+        SerializableMetadata met = new SerializableMetadata("UTF-8", false);
+        met.loadMetadataFromXmlStream(
+                new java.io.ByteArrayInputStream(xml.getBytes("UTF-8")));
+
+        assertEquals("a+b", met.getMetadata("key"));
+    }
+
+    private static String roundTrip(String key, String value, boolean useCDATA)
+            throws Exception {
+        return roundTripAll(key, value, useCDATA).getMetadata(key);
+    }
+
+    private static Metadata roundTripAll(String key, String value,
+            boolean useCDATA) throws Exception {
+        SerializableMetadata written = new SerializableMetadata("UTF-8", useCDATA);
+        written.addMetadata(key, value);
+
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        written.writeMetadataToXmlStream(out);
+
+        SerializableMetadata read = new SerializableMetadata("UTF-8", useCDATA);
+        read.loadMetadataFromXmlStream(
+                new java.io.ByteArrayInputStream(out.toByteArray()));
+        return read;
+    }
+
 }

@@ -17,6 +17,8 @@ package org.apache.oodt.cas.metadata;
 
 //JDK imports
 
+import org.apache.oodt.commons.xml.DOMUtil;
+import java.util.Vector;
 import org.apache.oodt.commons.xml.XMLUtils;
 
 import org.w3c.dom.Document;
@@ -177,6 +179,24 @@ public class SerializableMetadata extends Metadata implements Serializable {
 
             Element root = document.createElementNS("http://oodt.jpl.nasa.gov/1.0/cas", "metadata");
             root.setPrefix("cas");
+            // The document says how its values are written. The writer skips
+            // URLEncoder when useCDATA is set and the reader decoded
+            // unconditionally, so a CDATA document came back wrong: "a+b"
+            // read as "a b", and "100%" threw inside URLDecoder, was caught,
+            // logged and returned as null -- the value simply gone. A percent
+            // sign in a metadata value is ordinary: cloud cover, completeness,
+            // any measurement expressed as a percentage.
+            //
+            // Recording the choice keeps both halves honest, and a document
+            // written before this carries no attribute and is still read as
+            // URL-encoded, which is what it is.
+            // Written only for CDATA. Absent already means URL-encoded --
+            // that is what every document written before this contains -- so
+            // marking the encoded case would change bytes that consumers
+            // compare, for no gain.
+            if (this.useCDATA) {
+                root.setAttribute(VALUE_ENCODING_ATTR, VALUE_ENCODING_NONE);
+            }
             document.appendChild(root);
 
             // now add the set of metadata elements in the properties object
@@ -228,6 +248,22 @@ public class SerializableMetadata extends Metadata implements Serializable {
      * @throws IOException
      *             for any exception
      */
+    /** Names how the values in a document are written; see the writer. */
+    private static final String VALUE_ENCODING_ATTR = "valueEncoding";
+
+    /** Values are written as they stand, which is what CDATA is for. */
+    private static final String VALUE_ENCODING_NONE = "none";
+
+    /** The val elements of a keyval, taken as written. */
+    private static List<String> rawValues(Element keyValElem) {
+        List<String> values = new Vector<String>();
+        NodeList valueNodes = keyValElem.getElementsByTagName("val");
+        for (int i = 0; i < valueNodes.getLength(); i++) {
+            values.add(DOMUtil.getSimpleElementText((Element) valueNodes.item(i)));
+        }
+        return values;
+    }
+
     public void loadMetadataFromXmlStream(InputStream in) throws IOException {
         try {
             DocumentBuilderFactory factory = DocumentBuilderFactory
@@ -237,15 +273,32 @@ public class SerializableMetadata extends Metadata implements Serializable {
             Element root = parser.parse(new InputSource(in))
                     .getDocumentElement();
 
+            // Absent means URL-encoded: that is what every document written
+            // before this attribute existed contains.
+            boolean urlEncoded = !VALUE_ENCODING_NONE.equals(
+                root.getAttribute(VALUE_ENCODING_ATTR));
+
             NodeList keyValElems = root.getElementsByTagName("keyval");
 
             for (int i = 0; i < keyValElems.getLength(); i++) {
                 Element keyValElem = (Element) keyValElems.item(i);
 
-                String elemName = XMLUtils.read(keyValElem, "key",
-                        this.xmlEncoding);
-                List<String> elemValues = XMLUtils.readMany(keyValElem, "val",
-                        this.xmlEncoding);
+                String elemName = urlEncoded
+                        ? XMLUtils.read(keyValElem, "key", this.xmlEncoding)
+                        : DOMUtil.getSimpleElementText(keyValElem, "key");
+                List<String> elemValues = urlEncoded
+                        ? XMLUtils.readMany(keyValElem, "val", this.xmlEncoding)
+                        : rawValues(keyValElem);
+                if (elemName == null) {
+                    // XMLUtils.read swallows a decode failure and answers
+                    // null, and addMetadata(null, values) resolves to the
+                    // root group -- where the values are stored but never
+                    // enumerated, so the data is neither present nor
+                    // reported missing.
+                    throw new IOException("A metadata key could not be read "
+                        + "from the document; it was written in a form this "
+                        + "reader could not decode");
+                }
                 this.addMetadata(elemName, elemValues);
             }
         } catch (Exception e) {
