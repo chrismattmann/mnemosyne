@@ -56,8 +56,18 @@ public abstract class RssWriter
    */
   public String getBaseUri()
   {
+    // The base URI was read and then thrown away: this returned either ""
+    // or "/", with the "baseUri +" simply missing. ProductRssWriter builds
+    // <link>, <guid> and the atom:link href on the result, so a feed served
+    // from http://host/fmprod/ advertised links like
+    // "/product?productId=..." -- every link in every JAX-RS RSS feed was
+    // relative, and guid, which aggregators use as an item's stable
+    // identity, was not a URI at all. Shared by DatasetRssWriter,
+    // ReferenceRssWriter, TransfersRssWriter and RdfWriter.
     String baseUri = uriInfo.getBaseUri().toString();
-    return baseUri.endsWith("/") ? "" : "/";
+    return baseUri.endsWith("/")
+        ? baseUri.substring(0, baseUri.length() - 1)
+        : baseUri;
   }
 
 
