@@ -23,6 +23,7 @@
         :placeholder="exampleSql"/>
       <button type="submit">Query</button>
     </form>
+    <p class="muted cap-note">A query returns at most {{ queryCap }} products.</p>
     <p v-if="queryError" class="banner">{{ queryError }}</p>
     <p v-if="loading && !types.length" class="empty">Loading types…</p>
     <p v-else-if="!types.length" class="empty">No product types yet.</p>
@@ -63,7 +64,7 @@
 import { computed, ref } from 'vue'
 import SortHead from './SortHead.vue'
 import { sortRows, toggleSort } from '../sort.js'
-import { EXAMPLE_CATALOG_SQL, catalogSqlError } from '../sqlQuery.js'
+import { EXAMPLE_CATALOG_SQL, QUERY_RESULT_CAP, catalogSqlError } from '../sqlQuery.js'
 import { partitionTypes } from '../catalogGroups.js'
 
 export default {
@@ -112,7 +113,7 @@ export default {
       }
     }
     return {
-      sql, queryError, exampleSql: EXAMPLE_CATALOG_SQL, sort, dir, onSort, submit,
+      sql, queryError, exampleSql: EXAMPLE_CATALOG_SQL, queryCap: QUERY_RESULT_CAP, sort, dir, onSort, submit,
       showEmpty, populated, empty, visibleRows
     }
   }
@@ -133,6 +134,11 @@ h2 {
 .query input {
   flex: 1;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+}
+
+.cap-note {
+  margin: -0.5rem 0 1rem;
   font-size: 0.85rem;
 }
 

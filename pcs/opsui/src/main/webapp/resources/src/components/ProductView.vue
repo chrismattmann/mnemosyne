@@ -20,7 +20,7 @@
     <p v-if="loading && !product.id && !product.missing" class="empty">Loading product…</p>
     <article v-else-if="product.missing" class="card missing">
       <h2>Not in File Manager</h2>
-      <p class="muted">Nothing named or identified as <span class="mono">{{ product.id }}</span> is cataloged. Solr postings and old job UUIDs live outside this catalog.</p>
+      <p class="muted">Nothing named or identified as <span class="mono">{{ product.id }}</span> is in the File Manager catalog. It may never have been ingested, or it may have been removed.</p>
     </article>
     <template v-else>
       <div class="head">

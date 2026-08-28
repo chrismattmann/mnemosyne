@@ -68,8 +68,8 @@
               <tr v-for="crawler in crawlers" :key="crawler.crawlerName || crawler.crawler">
                 <td>{{ crawler.crawlerName || crawler.crawler }}</td>
                 <td>
-                  <span class="pill" :class="crawlerPill(crawler.status)">
-                    {{ crawlerLabel(crawler.status) }}
+                  <span class="pill" :class="onDemandPill(crawler.status)">
+                    {{ onDemandLabel(crawler.status) }}
                   </span>
                 </td>
                 <td>{{ crawlCount(crawler) }}</td>
@@ -100,6 +100,7 @@
 
       <article v-if="stubs.length" class="card">
         <h3>Batch stubs</h3>
+        <p class="muted crawler-note">Batch stubs are separate daemons from the Resource Manager. They start on demand, so “not running” is expected unless a batch job is in flight.</p>
         <table>
           <thead>
             <tr><th>Daemon</th><th>URL</th><th>Status</th></tr>
@@ -107,9 +108,9 @@
           <tbody>
             <tr v-for="stub in stubs" :key="stub.url">
               <td>{{ stub.daemon }}</td>
-              <td>{{ stub.url }}</td>
+              <td class="url">{{ stub.url }}</td>
               <td>
-                <span class="pill" :class="up(stub.status) ? 'up' : 'down'">{{ stub.status }}</span>
+                <span class="pill" :class="onDemandPill(stub.status)">{{ onDemandLabel(stub.status) }}</span>
               </td>
             </tr>
           </tbody>
@@ -123,6 +124,7 @@
 import { computed, ref } from 'vue'
 import SortHead from './SortHead.vue'
 import { sortRows, toggleSort } from '../sort.js'
+import { onDemandLabel, onDemandPill } from '../onDemandStatus.js'
 
 export default {
   name: 'StatusView',
@@ -135,25 +137,6 @@ export default {
   setup(props) {
     function up(status) {
       return String(status || '').toUpperCase() === 'UP'
-    }
-
-    function crawlerPill(status) {
-      const value = String(status || '').toUpperCase()
-      if (value === 'UP') {
-        return 'up'
-      }
-      if (value === 'DOWN') {
-        return 'neutral'
-      }
-      return status ? 'down' : 'neutral'
-    }
-
-    function crawlerLabel(status) {
-      const value = String(status || '').toUpperCase()
-      if (value === 'DOWN') {
-        return 'not running'
-      }
-      return status || '—'
     }
 
     function missingStat(value) {
@@ -240,7 +223,7 @@ export default {
     })
 
     return {
-      up, crawlerPill, crawlerLabel, crawlCount, avgTime, generated, daemons, stubs, jobs, sortedJobs,
+      up, onDemandPill, onDemandLabel, crawlCount, avgTime, generated, daemons, stubs, jobs, sortedJobs,
       jobSort, jobDir, sortJobs, crawlers, files, filesEmpty
     }
   }
