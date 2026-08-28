@@ -45,7 +45,7 @@ public class TestResmgr {
   public static void main(String[] Args) {
 
     if (Args.length != 1) {
-      System.err.println("Specify a XmlRpcResourceManager Host");
+      System.err.println("Specify a Resource Manager host");
       System.exit(1);
     }
 

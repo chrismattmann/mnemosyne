@@ -48,7 +48,7 @@ import junit.framework.TestCase;
  * @version $Revision$
  * 
  * <p>
- * Test suite for the {@link XmlRpcFileManagerClient}
+ * Test suite for the Avro File Manager client
  * </p>.
  */
 @Deprecated

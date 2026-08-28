@@ -75,7 +75,7 @@ public class PCSHealthMonitorReport implements Serializable {
    *          THe {@link PCSDaemonStatus} for the Resource Manager.
    * @param batchStubStatus
    *          A {@lik List} of {@link PCSDaemonStatus}es for each
-   *          {@link org.apache.oodt.cas.resource.system.extern.XmlRpcBatchStub}.
+   *          {@link org.apache.oodt.cas.resource.system.extern.AvroRpcBatchStub}.
    * @param crawlerStatus
    *          A {@link List} of {@link CrawlerStatus}es.
    * @param latestProductsIngested

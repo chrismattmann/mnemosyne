@@ -527,8 +527,8 @@ public class Metadata implements Serializable {
 
     /**
      * Create Metadata Group.
-     * By default we create a group using a Hashtable for XMLRPC support. Once this has been superceeded by the Avro
-     * Impl we should make the HashMap implementation the default.
+     * Groups still default to Hashtable for the Avro struct mapping that
+     * replaced XML-RPC.
      * @param name
      * @param legacy
      */

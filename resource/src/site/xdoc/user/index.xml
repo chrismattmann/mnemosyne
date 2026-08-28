@@ -34,7 +34,7 @@ the License.
       <section name="Architecture">
         <p>The Resource Manager component is responsible for execution, monitoring and tracking of jobs,
         storage and networking resources for an underlying set of hardware resources. The Resource Manager is an 
-        extensible software component that provides an XML-RPC external interface, and a fully 
+        extensible software component that provides an Avro RPC external interface, and a fully 
         tailorable Java-based API for resource management. The critical objects managed by the Resource 
         Manager include:</p>
         
@@ -62,7 +62,7 @@ the License.
           within the Resource Manager that can have many implementations. This is particularly useful when 
           it comes to software component configuration because it allows different implementations of an 
           existing interface to be selected at deployment time. So, the Resource Manager component may 
-          submit Jobs to a custom XML-RPC batch submission system, or it may use an available off-the-shelf 
+          submit Jobs to the Avro RPC batch submission system, or it may use an available off-the-shelf 
           batch submission system, such as LSF or Load-Share. The selection  of the actual component implementations 
           is handled entirely by the extension point mechanism. Using extension points, it is fairly simple to support 
           many different types of what are typically referred to as "plug-in architectures" Each of the core extension 
@@ -131,9 +131,8 @@ the License.
           resource monitoring (e.g., Ganglia).</li>
           <li>Scalability – The Resource Manager uses the popular client-server paradigm, allowing new Resource Manager 
           servers to be instantiated, as needed, without affecting the Resource Manager clients, and vice-versa. </li>
-          <li>Communication over lightweight, standard protocols – The Resource Manager uses XML-RPC, as its main 
-          external interface, between Resource Manager client and server. XML-RPC, the little brother of SOAP, is 
-          fast, extensible, and uses the underlying HTTP protocol for data transfer.</li>
+          <li>Communication over lightweight, standard protocols – The Resource Manager uses Avro RPC as its main 
+          external interface between Resource Manager client and server.</li>
           <li>Wrapping - the use of wrappers to insulate the internal code of Job Instances from their external interfaces
           allows a variety of different popular programming languages (e.g., shell scripting, Java, Python, Perl, Ruby) to be
           used to implement the actual job.</li>
@@ -155,8 +154,8 @@ the License.
          <ul>
            <li><b>Batch Manager</b><br/>
             <ol>
-             <li>XML-RPC based Batch Manager – an implementation of the Batch Manager extension point that uses
-             a custom, light-weight XML-RPC Batch Submission system, and batch stubs deployed on each of the Resource
+             <li>Avro RPC Batch Manager – an implementation of the Batch Manager extension point that uses
+             Avro RPC batch stubs deployed on each of the Resource
              Nodes.</li>
            </ol>
            </li>
@@ -191,11 +190,11 @@ the License.
            </li> 
            <li><b>System (Resource Manager client and Resource Manager server)</b><br/>
              <ol>
-               <li>XML-RPC based Resource Manager server – an implementation of the external server interface
-               for the Resource Manager that uses XML-RPC as the transportation medium.
+               <li>Avro RPC Resource Manager server – an implementation of the external server interface
+               for the Resource Manager that uses Avro RPC as the transportation medium.
                </li>
-               <li>XML-RPC based Resource Manager client – an implementation of the client interface for the 
-               XML-RPC Resource Manager server that uses XML-RPC as the transportation medium.
+               <li>Avro RPC Resource Manager client – an implementation of the client interface for the 
+               Avro Resource Manager server.
                </li>
              </ol>
            </li>            	
@@ -365,7 +364,7 @@ the License.
 
       <source># ./resmgr start</source>
 
-      <p>This will startup the Resource Manager XML-RPC server interface. Your Resource Manager 
+      <p>This will startup the Resource Manager Avro RPC server interface. Your Resource Manager 
       is now ready to run! You can test out the Resource Manager by submitting the following example
       Job, defined in the XML file below (save the file to a location on your system, such as
       <code>/usr/local/resmgr/examples/exJob.xml</code>):</p>
@@ -393,7 +392,7 @@ the License.
       property back to the screen, saying <code>Hello ${user.name}!</code>.
       </p>
 
-      <p>To run the job, first you must start an XML-RPC batch stub, to execute the job on the local node. Let's assume a default port of port <code>2001</code>:</p>
+      <p>To run the job, first you must start an Avro RPC batch stub, to execute the job on the local node. Let's assume a default port of port <code>2001</code>:</p>
 
       <source># ./batch_stub 2001
       </source>
@@ -464,7 +463,7 @@ the License.
          <tbody>
          <tr>
            <td>resource.batchmgr.factory</td>
-           <td>org.apache.oodt.cas.resource.batchmgr.XmlRpcBatchMgrFactory
+           <td>org.apache.oodt.cas.resource.batchmgr.AvroRpcBatchMgrFactory
            </td>
          </tr>
          <tr>

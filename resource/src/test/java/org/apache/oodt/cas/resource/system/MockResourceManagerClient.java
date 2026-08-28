@@ -36,7 +36,7 @@ import org.apache.oodt.cas.resource.structs.exceptions.QueueManagerException;
 import com.google.common.collect.Lists;
 
 /**
- * Mock implementation of {@link XmlRpcResourceManagerClient}.
+ * Mock implementation of {@link ResourceManagerClient}.
  * 
  * Implements the client interface rather than extending a real client.
  *

@@ -23,6 +23,11 @@ etc/logging.properties or etc/log4j2.xml.
   user. Drops the xmlrpc and commons-httpclient dependencies, and with them
   CVE-2012-5783
 
+* Drop leftover xmlrpc.* keys from shipped etc files and RADiX copies, and
+  remove the PHP XML-RPC filemgr client. Avro is the only RPC; those
+  properties were unread. XmlRpcStructFactory / XmlRpcWriteable stay until
+  a later rename.
+
 * OODT-1006 Introduce docker images for file manager, resource manager, ReactJs based OPSUI and file manager/workflow manager REST APIs
 
 * OODT-1006 Add Dockerfile for OODT deployment

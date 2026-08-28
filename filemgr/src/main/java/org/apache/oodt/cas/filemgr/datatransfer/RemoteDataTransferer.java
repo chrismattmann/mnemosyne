@@ -44,7 +44,7 @@ import java.util.logging.Logger;
  * 
  *          <p>
  *          An implementation of the {@link DataTransfer} interface that
- *          transfers files to a remote file manager over XML-RPC, using the
+ *          transfers files to a remote file manager over Avro RPC, using the
  *          File Manager Client.
  *          </p>
  * 
@@ -59,7 +59,7 @@ public class RemoteDataTransferer implements DataTransfer {
    private URL fileManagerUrl = null;
 
    /*
-    * the size of the chunks that files should be transferred over XML-RPC using
+    * the size of the chunks that files should be transferred over Avro RPC using
     */
    private int chunkSize = 1024;
 

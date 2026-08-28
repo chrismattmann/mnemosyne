@@ -39,7 +39,7 @@ import junit.framework.TestCase;
 
 /**
  * 
- * Test harness for the XmlRpcFileManagerServer.
+ * Test harness for the Avro File Manager server.
  * 
  * @since OODT-72
  * 

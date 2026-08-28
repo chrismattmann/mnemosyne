@@ -34,8 +34,8 @@ import java.util.logging.Logger;
 
 /**
  *
- * Class that manage the initialization of {@link FileManagerServer} and {@link FileManagerClient}
- * ether with AvroRpc or XmlRpc logic. Default is AvroRpc.
+ * Initializes {@link FileManagerServer} and {@link FileManagerClient}
+ * using the configured Avro RPC factories.
  *
  * @author radu
  *
@@ -72,7 +72,7 @@ public class RpcCommunicationFactory {
     /**
      * Initialization of RPC client.
      * @param filemgrUrl
-     * @return instance of ether AvroRpc of XMLRPC of FileManagerClient default is AvroRpc.
+     * @return a File Manager client (Avro RPC)
      * @throws ConnectionException
      */
     public static FileManagerClient createClient(URL filemgrUrl) throws ConnectionException {
@@ -92,13 +92,6 @@ public class RpcCommunicationFactory {
         }
     }
 
-    /**
-     * Initialization of RPC client
-     * @param filemgrUrl
-     * @param testConnection
-     * @return instance of ether AvroRpc of XMLRPC of FileManagerClient.
-     * @throws ConnectionException
-     */
     /**
      * A client that owns its connection instead of sharing the per-URL one.
      * Use it wherever a call might be made while a request is already in
@@ -146,7 +139,7 @@ public class RpcCommunicationFactory {
      * Initialization of RPC server.
      *
      * @param port
-     * @return instance of ether AvroRpc of XMLRPC of FileManagerServer.
+     * @return a File Manager server (Avro RPC)
      * @throws IOException
      */
     public static FileManagerServer createServer(int port) throws IOException {

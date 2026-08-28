@@ -306,7 +306,7 @@ bin/ etc/ logs/ doc/ lib/ policy/
       </source>
 
 
-      <p>This will startup the file manager XML-RPC server interface. Your File Manager 
+      <p>This will startup the file manager Avro RPC server interface. Your File Manager 
       is now ready to run! You can test out the file manager by running a simple ingest 
       command using the filemgr-client command below. First create a simple text file 
       called "blah.txt" and place it inside <code>$FILEMGR_HOME/bin</code> Then, create 

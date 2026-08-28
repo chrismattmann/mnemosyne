@@ -47,7 +47,7 @@ the License.
       <section name="Project Description">
         <p>The File Manager component is responsible for tracking, ingesting and moving 
         file data and metadata between a client system and a server system. The File 
-        Manager is an extensible software component that provides an XML-RPC external 
+        Manager is an extensible software component that provides an Avro RPC external 
         interface, and a fully tailorable Java-based API for file management.</p> 
       </section>
       
@@ -163,9 +163,8 @@ the License.
         as needed, without affecting the File Manager clients, and vice-versa.</p>
           
         <p><strong>Standard communication protocols.</strong> The File Manager uses 
-        XML-RPC as its main external interface between the File Manager client and 
-        server. XML-RPC, the little brother of SOAP, is fast, extensible, and uses 
-        the underlying HTTP protocol for data transfer.</p>
+        Avro RPC as its main external interface between the File Manager client and 
+        server.</p>
           
         <p><strong>RSS-based Product syndication.</strong> The File Manager web 
         interface allows for the RSS-based syndication of Product feeds based on 
@@ -219,7 +218,7 @@ the License.
               <td>The Data Transfer extension point allows for the movement of a 
               Product to and from the archive managed by the File Manager component. 
               Different protocols for Data Transfer may include local (disk-based) 
-              copy, or remote XML-RPC based transfer across networked machines.
+              copy, or remote Avro RPC based transfer across networked machines.
               </td>
             </tr>
             <tr>
@@ -284,8 +283,8 @@ the License.
                supports locally accessible Network File System (NFS) disks.</li>
                
                <li><strong>Remote Data Transfer.</strong> An implementation of the Data 
-               Transfer interface that uses the XML-RPC File Manager client to transfer 
-               files to a remote XML-RPC File Manager server.</li>
+               Transfer interface that uses the File Manager client to transfer 
+               files to a remote File Manager server over Avro RPC.</li>
                
                <li><strong>InPlace Data Transfer.</strong> An implementation of the Data 
                Transfer interface that avoids transfering any products -- this can be used 
@@ -321,13 +320,13 @@ the License.
          
          <subsection name="System (File Manager client and File Manager server)">        
              <ul>
-               <li><strong>XML-RPC based File Manager server.</strong> An 
+               <li><strong>Avro RPC File Manager server.</strong> An 
                implementation of the external server interface for the File Manager that 
-               uses XML-RPC as the transportation medium.</li>
+               uses Avro RPC as the transportation medium.</li>
                
-               <li><strong>XML-RPC based File Manager client.</strong> An 
-               implementation of the client interface for the XML-RPC File Manager 
-               server that uses XML-RPC as the transportation medium.</li>
+               <li><strong>Avro RPC File Manager client.</strong> An 
+               implementation of the client interface for the Avro File Manager 
+               server.</li>
              </ul>
          </subsection> 
          
