@@ -23,6 +23,9 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import org.w3c.dom.Document;
 
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
 //Junit imports
 import junit.framework.TestCase;
 
@@ -36,6 +39,8 @@ import junit.framework.TestCase;
  * 
  */
 public class PGEConfigFileWriterTest extends TestCase {
+
+  private static final Logger LOG = Logger.getLogger(PGEConfigFileWriterTest.class.getName());
 
   private PGEConfigurationFile configFile = null;
 

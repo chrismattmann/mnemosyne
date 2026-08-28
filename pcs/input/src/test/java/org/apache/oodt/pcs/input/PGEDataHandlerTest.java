@@ -20,6 +20,9 @@ import java.io.File;
 import javax.xml.parsers.SAXParser;
 import javax.xml.parsers.SAXParserFactory;
 
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
 //Junit imports
 import junit.framework.TestCase;
 
@@ -34,6 +37,8 @@ import junit.framework.TestCase;
  * 
  */
 public class PGEDataHandlerTest extends TestCase {
+
+  private static final Logger LOG = Logger.getLogger(PGEDataHandlerTest.class.getName());
 
   private static final String testFilePath = "./src/main/resources/pge-data-sax-example.xml";
 
