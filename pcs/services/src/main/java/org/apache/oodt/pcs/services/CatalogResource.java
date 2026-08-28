@@ -35,6 +35,7 @@ import javax.ws.rs.QueryParam;
 
 import net.sf.json.JSONObject;
 
+import org.apache.oodt.cas.filemgr.structs.Element;
 import org.apache.oodt.cas.filemgr.structs.Product;
 import org.apache.oodt.cas.filemgr.structs.ProductPage;
 import org.apache.oodt.cas.filemgr.structs.ProductType;
@@ -183,6 +184,7 @@ public class CatalogResource extends PCSService {
         return queryJson(body);
       }
       ComplexQuery cq = SqlParser.parseSqlQuery(trimmed);
+      SqlParser.resolveIdentifiers(cq, catalogTypeNames(fm), catalogElementNames(fm));
       List<QueryResult> found = fm.getFmgrClient().complexQuery(cq);
       List<Map<String, Object>> results = new ArrayList<Map<String, Object>>();
       int limit = found == null ? 0 : Math.min(found.size(), MAX_QUERY_RESULTS);
@@ -212,6 +214,58 @@ public class CatalogResource extends PCSService {
     } finally {
       fm.close();
     }
+  }
+
+  private static List<String> catalogTypeNames(FileManagerUtils fm) {
+    List<String> names = new ArrayList<String>();
+    List types = fm.safeGetProductTypes();
+    if (types == null) {
+      return names;
+    }
+    for (Object item : types) {
+      if (item instanceof ProductType && ((ProductType) item).getName() != null) {
+        names.add(((ProductType) item).getName());
+      }
+    }
+    return names;
+  }
+
+  private static List<String> catalogElementNames(FileManagerUtils fm) {
+    List<String> names = new ArrayList<String>();
+    names.add("Filename");
+    names.add("FileLocation");
+    names.add("FileSize");
+    names.add("ProductType");
+    names.add("ProductName");
+    names.add("InputFiles");
+    names.add("MimeType");
+    names.add("CAS.ProductName");
+    names.add("CAS.ProductId");
+    names.add("CAS.ProductReceivedTime");
+    List types = fm.safeGetProductTypes();
+    if (types == null || fm.getFmgrClient() == null) {
+      return names;
+    }
+    for (Object item : types) {
+      if (!(item instanceof ProductType)) {
+        continue;
+      }
+      try {
+        List elements = fm.getFmgrClient().getElementsByProductType((ProductType) item);
+        if (elements == null) {
+          continue;
+        }
+        for (Object element : elements) {
+          if (element instanceof Element && ((Element) element).getElementName() != null
+              && !names.contains(((Element) element).getElementName())) {
+            names.add(((Element) element).getElementName());
+          }
+        }
+      } catch (Exception ignored) {
+        // keep the core keys; a missing validation layer should not fail the query
+      }
+    }
+    return names;
   }
 
   private static String queryJson(Map<String, Object> body) {

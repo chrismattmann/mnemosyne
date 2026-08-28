@@ -227,4 +227,29 @@ public class TestSqlParser {
         assertNull(parsed.getReducedMetadata());
         assertNull(parsed.getReducedProductTypeNames());
     }
+
+    @Test
+    public void testIdentifiersAreResolvedCaseInsensitively() throws Exception {
+        ComplexQuery parsed = SqlParser.parseSqlQuery(
+                "select filename from employmentjob where filename == 'x'");
+        SqlParser.resolveIdentifiers(parsed,
+                java.util.Arrays.asList("EmploymentJob", "EmploymentJobTranslated"),
+                java.util.Arrays.asList("Filename", "FileLocation"));
+        assertEquals(java.util.Arrays.asList("Filename"), parsed.getReducedMetadata());
+        assertEquals(java.util.Arrays.asList("EmploymentJob"), parsed.getReducedProductTypeNames());
+        assertEquals("Filename", parsed.getCriteria().get(0).getElementName());
+    }
+
+    @Test
+    public void testUnknownProductTypeIsAFormulationError() throws Exception {
+        ComplexQuery parsed = SqlParser.parseSqlQuery("SELECT Filename FROM nope");
+        try {
+            SqlParser.resolveIdentifiers(parsed,
+                    java.util.Arrays.asList("EmploymentJob"),
+                    java.util.Arrays.asList("Filename"));
+            fail("expected QueryFormulationException");
+        } catch (QueryFormulationException e) {
+            assertTrue(e.getMessage(), e.getMessage().contains("nope"));
+        }
+    }
 }
