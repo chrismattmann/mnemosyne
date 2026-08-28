@@ -29,13 +29,16 @@ import org.apache.oodt.commons.date.DateUtils;
 import org.apache.oodt.commons.pagination.PaginationUtils;
 
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.sql.Timestamp;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.List;
+import java.util.TimeZone;
 import java.util.Vector;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -63,6 +66,9 @@ public class ScienceDataCatalog implements Catalog {
   protected ValidationLayer validationLayer = null;
 
   protected int pageSize = -1;
+
+  /** Rows per round trip when writing data points. */
+  private static final int DATA_POINT_BATCH_SIZE = 100;
 
   // Our log stream
   private Logger LOG = Logger.getLogger(ScienceDataCatalog.class
@@ -109,84 +115,23 @@ public class ScienceDataCatalog implements Catalog {
         LOG.log(Level.INFO, "Will now extract " + dataPoints.size()
             + " data points for variable '" + keyName + "'... ");
 
-        StringBuffer queryBuffer = new StringBuffer(
-            "INSERT INTO `dataPoint` (`granule_id`,`dataset_id`,`parameter_id`,"
-                + "`latitude`,`longitude`,`vertical`,`time`,`value`) VALUES ");
-        // grab a count of items in the dataPoints list
-
-        LOG.log(Level.INFO, "there are " + dataPoints.size()
-            + " data points in the List");
-
-        // CGOODALE int to count how many times this thing loops
-        int iterCount = 0;
-
-        for (String dataPoint : dataPoints) {
-
-          // Decompose each dataPoint into its component parts:
-          // lat,lon,vertical,time,value
-          String[] components = dataPoint.split(",");
-
-          // Append the dataPoint to the StringBuffer
-          queryBuffer.append(" ( ");
-          queryBuffer.append(granuleId); // granuleId
-          queryBuffer.append(" , ");
-          queryBuffer.append(datasetId); // datasetId
-          queryBuffer.append(" , ");
-          queryBuffer.append(paramId); // parameterId
-          queryBuffer.append(" , ");
-          queryBuffer.append(components[0]); // Lat
-          queryBuffer.append(" , ");
-          queryBuffer.append(components[1]); // Lon
-          queryBuffer.append(" , ");
-          queryBuffer.append(components[2]); // vertical
-          queryBuffer.append(" , ");
-          queryBuffer.append('"'); // Conversion from ISO to MySQL Compliant
-          // DateTime Format
-          queryBuffer.append(components[3].substring(0, 4)); // YYYY
-          queryBuffer.append("-");
-          queryBuffer.append(components[3].substring(4, 6)); // MM
-          queryBuffer.append("-");
-          queryBuffer.append(components[3].substring(6, 8)); // DD
-          queryBuffer.append(" ");
-          queryBuffer.append(components[3].substring(9, 11)); // HH
-          queryBuffer.append(":");
-          queryBuffer.append(components[3].substring(11, 13)); // mm
-          // no datasets contain seconds at this time
-          // including this code would cause some datasets to
-          // parse Z, into seconds
-          queryBuffer.append('"'); // End time
-          queryBuffer.append(" , ");
-          queryBuffer.append(components[4]); // Value
-          queryBuffer.append(" ) ");
-
-          queryBuffer.append(',');// Statement seperator
-
-          // Periodically commit the query
-          if (iterCount > 100) {
-
-            queryBuffer.deleteCharAt(queryBuffer.length() - 1);
-            queryBuffer.append(";");
-
-            // Commit the query;
-            this.commitQuery(queryBuffer, null);
-
-            // RESET query
-            queryBuffer = new StringBuffer(
-                "INSERT INTO `dataPoint` (`granule_id`,`dataset_id`,`parameter_id`,`latitude`,"
-                    + "`longitude`,`vertical`,`time`,`value`) VALUES ");
-
-            // RESET iterCount
-            iterCount = 0;
-          } else {
-            // Increment the counter
-            iterCount++;
-          }
-        }
-
-        // Commit any remaining data points
-        queryBuffer.deleteCharAt(queryBuffer.length() - 1);
-        queryBuffer.append(";");
-        this.commitQuery(queryBuffer, null);
+        // This used to build one enormous INSERT ... VALUES (..),(..),(..)
+        // string, flushed every hundred rows. Three things were wrong with
+        // it, all MySQL-shaped:
+        //
+        //   - multi-row VALUES is a MySQL extension. HSQLDB rejects it
+        //     outright ("Unexpected token: ,"), and it is not standard SQL;
+        //   - the timestamp was wrapped in double quotes, which are an
+        //     identifier quote everywhere except MySQL, so the value was
+        //     read as a column name;
+        //   - the statement was terminated with a semicolon, which belongs
+        //     to a client, not to a JDBC statement.
+        //
+        // A batched PreparedStatement says the same thing in SQL every
+        // engine accepts, and binding the values means the ISO timestamp no
+        // longer has to be reassembled into MySQL's literal format by
+        // substring arithmetic.
+        insertDataPoints(granuleId, datasetId, paramId, dataPoints);
 
         LOG.log(Level.INFO, "Extracted " + dataPoints.size()
             + " data points for variable '" + keyName + "' ");
@@ -200,6 +145,110 @@ public class ScienceDataCatalog implements Catalog {
     }
   }
 
+  /**
+   * Writes one batch of data points.
+   *
+   * @param granuleId the granule these points belong to
+   * @param datasetId the dataset they belong to
+   * @param paramId   the parameter they measure
+   * @param dataPoints each "lat,lon,vertical,time,value"
+   */
+  private void insertDataPoints(int granuleId, int datasetId, int paramId,
+      List<String> dataPoints) throws CatalogException {
+    if (dataPoints == null || dataPoints.isEmpty()) {
+      return;
+    }
+
+    String sql = "INSERT INTO dataPoint (granule_id, dataset_id, parameter_id, "
+        + "latitude, longitude, vertical, time, value) "
+        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+
+    Connection conn = null;
+    PreparedStatement insert = null;
+    try {
+      conn = this.dataSource.getConnection();
+      conn.setAutoCommit(false);
+      insert = conn.prepareStatement(sql);
+
+      int batched = 0;
+      for (String dataPoint : dataPoints) {
+        // lat,lon,vertical,time,value
+        String[] components = dataPoint.split(",");
+        if (components.length < 5) {
+          LOG.log(Level.WARNING, "Skipping malformed data point: [" + dataPoint
+              + "]");
+          continue;
+        }
+
+        insert.setInt(1, granuleId);
+        insert.setInt(2, datasetId);
+        insert.setInt(3, paramId);
+        insert.setDouble(4, Double.parseDouble(components[0].trim()));
+        insert.setDouble(5, Double.parseDouble(components[1].trim()));
+        insert.setDouble(6, Double.parseDouble(components[2].trim()));
+        insert.setTimestamp(7, toTimestamp(components[3].trim()));
+        insert.setDouble(8, Double.parseDouble(components[4].trim()));
+        insert.addBatch();
+
+        if (++batched >= DATA_POINT_BATCH_SIZE) {
+          insert.executeBatch();
+          conn.commit();
+          batched = 0;
+        }
+      }
+
+      if (batched > 0) {
+        insert.executeBatch();
+      }
+      conn.commit();
+    } catch (SQLException e) {
+      LOG.log(Level.WARNING, "Unable to write data points for granule: ["
+          + granuleId + "]: Message: " + e.getMessage(), e);
+      try {
+        if (conn != null) {
+          conn.rollback();
+        }
+      } catch (SQLException rollbackFailed) {
+        LOG.log(Level.SEVERE, "Unable to roll back the data point batch: "
+            + rollbackFailed.getMessage());
+      }
+      throw new CatalogException(e.getMessage(), e);
+    } finally {
+      if (insert != null) {
+        try {
+          insert.close();
+        } catch (SQLException ignore) {
+        }
+      }
+      if (conn != null) {
+        try {
+          conn.close();
+        } catch (SQLException ignore) {
+        }
+      }
+    }
+  }
+
+  /**
+   * Reads the compact timestamp these files carry: yyyyMMdd'T'HHmm, with no
+   * seconds -- the comment on the code this replaces notes that no dataset
+   * has them, and that parsing further ran into a trailing Z.
+   *
+   * The old code reassembled this into MySQL's literal format with substring
+   * arithmetic and wrapped it in double quotes. Bound as a Timestamp, the
+   * driver renders it for whichever database it is talking to.
+   */
+  private static Timestamp toTimestamp(String compact) {
+    Calendar when = Calendar.getInstance(TimeZone.getTimeZone("GMT"));
+    when.clear();
+    when.set(Integer.parseInt(compact.substring(0, 4)),
+        Integer.parseInt(compact.substring(4, 6)) - 1,
+        Integer.parseInt(compact.substring(6, 8)),
+        Integer.parseInt(compact.substring(9, 11)),
+        Integer.parseInt(compact.substring(11, 13)));
+    return new Timestamp(when.getTimeInMillis());
+  }
+
   public int createGranule(int datasetId, String filename)
       throws CatalogException, SQLException {
     // Detect duplicate granule
@@ -207,13 +256,19 @@ public class ScienceDataCatalog implements Catalog {
     Statement statement = null;
     boolean alreadyExists = false;
     int granuleId = 0;
-    String queryExists = "SELECT granule_id FROM `granule` WHERE `filename`='"
-        + filename + "' AND `dataset_id`='" + datasetId + "'; ";
+    // Backtick identifiers are MySQL's alone; every other engine reads them
+    // as a syntax error. And the filename was concatenated straight in, so
+    // an apostrophe in it closed the literal.
+    String queryExists = "SELECT granule_id FROM granule WHERE filename = ? "
+        + "AND dataset_id = ?";
     try {
       conn = this.dataSource.getConnection();
       conn.setAutoCommit(true);
-      statement = conn.createStatement();
-      ResultSet rs = statement.executeQuery(queryExists);
+      PreparedStatement lookup = conn.prepareStatement(queryExists);
+      statement = lookup;
+      lookup.setString(1, filename);
+      lookup.setInt(2, datasetId);
+      ResultSet rs = lookup.executeQuery();
       while (rs.next()) {
         granuleId = rs.getInt("granule_id");
       }
@@ -242,8 +297,8 @@ public class ScienceDataCatalog implements Catalog {
     }
 
     if (!alreadyExists) {
-      String query = "INSERT INTO `granule` (`dataset_id`,`filename`) VALUES ('"
-          + datasetId + "','" + filename + "');";
+      String query = "INSERT INTO granule (dataset_id, filename) VALUES ("
+          + datasetId + ", " + quote(filename) + ")";
       try {
         String maxQuery = "SELECT MAX(granule_id) AS max_id FROM granule";
         granuleId = this.commitQuery(new StringBuffer(query), maxQuery);
@@ -263,14 +318,16 @@ public class ScienceDataCatalog implements Catalog {
     Statement statement = null;
     boolean alreadyExists = false;
     int parameterId = 0;
-    String queryExists = "SELECT parameter_id FROM `parameter` WHERE `longName`='"
-        + longName + "' AND `dataset_id`='" + datasetId + "'; ";
+    String queryExists = "SELECT parameter_id FROM parameter WHERE longName = ? "
+        + "AND dataset_id = ?";
     try {
       conn = this.dataSource.getConnection();
       conn.setAutoCommit(true);
-      int count = 0;
-      statement = conn.createStatement();
-      ResultSet rs = statement.executeQuery(queryExists);
+      PreparedStatement lookup = conn.prepareStatement(queryExists);
+      statement = lookup;
+      lookup.setString(1, longName);
+      lookup.setInt(2, datasetId);
+      ResultSet rs = lookup.executeQuery();
       while (rs.next()) {
         parameterId = rs.getInt("parameter_id");
       }
@@ -300,8 +357,8 @@ public class ScienceDataCatalog implements Catalog {
 
     if (!alreadyExists) {
       // Insert the parameter into the database
-      String query = "INSERT INTO `parameter` (`longName`,`dataset_id`,`description`) VALUES ('"
-          + longName + "','" + datasetId + "','') ";
+      String query = "INSERT INTO parameter (longName, dataset_id, description) "
+          + "VALUES (" + quote(longName) + ", " + datasetId + ", '')";
 
       try {
         String maxQuery = "SELECT MAX(parameter_id) AS max_id FROM parameter";
@@ -313,6 +370,21 @@ public class ScienceDataCatalog implements Catalog {
 
     // Return the id of the parameter
     return parameterId;
+  }
+
+  /**
+   * A SQL string literal for a value that has to be inlined.
+   *
+   * commitQuery takes a finished statement, so these two inserts cannot bind
+   * theirs the way the lookups above now do. Doubling the apostrophes is the
+   * standard escape, and is what keeps a filename like "o'brien.nc" from
+   * closing the literal it sits in.
+   */
+  private static String quote(String value) {
+    if (value == null) {
+      return "NULL";
+    }
+    return "'" + value.replace("'", "''") + "'";
   }
 
   public int commitQuery(StringBuffer query, String maxQuery)
