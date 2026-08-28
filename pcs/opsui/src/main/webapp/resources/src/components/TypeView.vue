@@ -24,14 +24,14 @@
     <table v-else>
       <thead>
         <tr>
-          <th>Name</th>
-          <th>Received</th>
+          <SortHead field="name" :sort="sort" :dir="dir" @sort="onSort">Name</SortHead>
+          <SortHead field="received" :sort="sort" :dir="dir" @sort="onSort">Received</SortHead>
           <th>Status</th>
           <th>Structure</th>
         </tr>
       </thead>
       <tbody>
-        <tr v-for="product in products" :key="product.id">
+        <tr v-for="product in rows" :key="product.id">
           <td>
             <a href="#" @click.prevent="$emit('open', product.id)">{{ product.name }}</a>
           </td>
@@ -41,8 +41,8 @@
         </tr>
       </tbody>
     </table>
-    <p v-if="products.length" class="muted shown">
-      Showing {{ products.length }} of {{ numProducts }} products.
+    <p v-if="rows.length" class="muted shown">
+      Showing {{ rows.length }} of {{ numProducts }} products.
     </p>
     <p v-if="hasMore" ref="moreEl" class="more">
       <button class="ghost" type="button" :disabled="loading" @click="loadMore">
@@ -54,9 +54,12 @@
 
 <script>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import SortHead from './SortHead.vue'
+import { parseStamp, sortRows, toggleSort } from '../sort.js'
 
 export default {
   name: 'TypeView',
+  components: { SortHead },
   props: {
     payload: { type: Object, default: null },
     loading: { type: Boolean, default: false }
@@ -69,7 +72,25 @@ export default {
     const totalPages = computed(() => catalog.value.totalPages || 1)
     const hasMore = computed(() => page.value < totalPages.value)
     const moreEl = ref(null)
+    const sort = ref('')
+    const dir = ref('asc')
+    const products = computed(() => catalog.value.products || [])
+    const rows = computed(() => {
+      if (!sort.value) {
+        return products.value
+      }
+      const getter = sort.value === 'received'
+        ? (row) => parseStamp(row.receivedTime)
+        : (row) => row.name || ''
+      return sortRows(products.value, getter, dir.value)
+    })
     let observer = null
+
+    function onSort(field) {
+      const next = toggleSort(field, sort.value, dir.value)
+      sort.value = next.field
+      dir.value = next.dir
+    }
 
     function loadMore() {
       if (props.loading || !hasMore.value) {
@@ -106,7 +127,11 @@ export default {
       name: computed(() => type.value.name || ''),
       description: computed(() => type.value.description || ''),
       numProducts: computed(() => catalog.value.numProducts != null ? catalog.value.numProducts : 0),
-      products: computed(() => catalog.value.products || []),
+      products,
+      rows,
+      sort,
+      dir,
+      onSort,
       hasMore,
       moreEl,
       loadMore

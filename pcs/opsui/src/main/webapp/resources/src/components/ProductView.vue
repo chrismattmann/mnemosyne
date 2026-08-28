@@ -58,6 +58,16 @@
       </article>
 
       <article class="card">
+        <h3>Peek</h3>
+        <p v-if="peek.loading" class="empty">Reading the first {{ peekBytes }} bytes…</p>
+        <p v-else-if="peek.error" class="muted">{{ peek.error }}</p>
+        <p v-else-if="peek.binary" class="muted">Binary file — download it instead of previewing.</p>
+        <pre v-else-if="peek.text" class="peek">{{ peek.text }}</pre>
+        <p v-else class="empty">Nothing to preview.</p>
+        <p v-if="peek.truncated" class="muted shown">First {{ peekBytes }} bytes. Download for the rest.</p>
+      </article>
+
+      <article class="card">
         <h3>Metadata</h3>
         <MetadataTable
           :metadata="metadata"
@@ -69,39 +79,31 @@
           @open-product="$emit('open-product', $event)"/>
       </article>
 
-      <div class="split">
-        <article class="card">
-          <h3>Upstream lineage</h3>
-          <p v-if="pedigree && pedigree.error" class="muted">{{ pedigree.error }}</p>
-          <LineageTree
-            v-else
-            :value="upstream"
-            :self-name="product.name"
-            empty="No cataloged upstream products."
-            @open="$emit('open-product', $event)"/>
-        </article>
-        <article class="card">
-          <h3>Downstream lineage</h3>
-          <LineageTree
-            :value="downstream"
-            :self-name="product.name"
-            empty="No cataloged downstream products."
-            @open="$emit('open-product', $event)"/>
-        </article>
-      </div>
+      <article class="card">
+        <h3>Lineage</h3>
+        <p v-if="pedigree && pedigree.error" class="muted">{{ pedigree.error }}</p>
+        <LineageGraph
+          v-else
+          :upstream="upstream"
+          :downstream="downstream"
+          :self-name="product.name"
+          empty="No cataloged relatives."
+          @open="$emit('open-product', $event)"/>
+      </article>
     </template>
   </section>
 </template>
 
 <script>
-import { computed } from 'vue'
-import LineageTree from './LineageTree.vue'
+import { computed, ref, watch } from 'vue'
+import LineageGraph from './LineageGraph.vue'
 import MetadataTable from './MetadataTable.vue'
-import { productDataUrl } from '../api.js'
+import { peekProduct, productDataUrl } from '../api.js'
+import { isTextMime, PEEK_BYTES } from '../productPeek.js'
 
 export default {
   name: 'ProductView',
-  components: { LineageTree, MetadataTable },
+  components: { LineageGraph, MetadataTable },
   props: {
     payload: { type: Object, default: null },
     pedigree: { type: Object, default: null },
@@ -115,6 +117,43 @@ export default {
     const metadata = computed(() => product.value.metadata || {})
     const tree = computed(() => (props.pedigree && props.pedigree.pedigree) || {})
     const downloadHref = computed(() => product.value.id ? productDataUrl(product.value.id) : '#')
+    const peek = ref({ loading: false, text: '', binary: false, truncated: false, error: '' })
+
+    watch(
+      () => product.value.id,
+      async () => {
+        peek.value = { loading: false, text: '', binary: false, truncated: false, error: '' }
+        if (!product.value.id || product.value.missing) {
+          return
+        }
+        const mime = (refs.value[0] && refs.value[0].mimeType) || ''
+        if (mime && !isTextMime(mime)) {
+          peek.value = { loading: false, text: '', binary: true, truncated: false, error: '' }
+          return
+        }
+        peek.value.loading = true
+        try {
+          const result = await peekProduct(product.value.id)
+          const binary = Boolean(result.binary)
+          peek.value = {
+            loading: false,
+            text: binary ? '' : (result.text || ''),
+            binary: binary,
+            truncated: Boolean(result.truncated),
+            error: ''
+          }
+        } catch (e) {
+          peek.value = {
+            loading: false,
+            text: '',
+            binary: false,
+            truncated: false,
+            error: e.message || String(e)
+          }
+        }
+      },
+      { immediate: true }
+    )
 
     function refHref(index) {
       return productDataUrl(product.value.id, index)
@@ -132,7 +171,7 @@ export default {
       product, typeName, refs, metadata,
       upstream: computed(() => tree.value.upstream),
       downstream: computed(() => tree.value.downstream),
-      downloadHref, refHref, backToType
+      downloadHref, refHref, backToType, peek, peekBytes: PEEK_BYTES
     }
   }
 }
@@ -168,10 +207,22 @@ h2, h3 {
   margin-bottom: 0.8rem;
 }
 
-.split {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.8rem;
+.peek {
+  margin: 0;
+  max-height: 16rem;
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.78rem;
+  white-space: pre-wrap;
+  word-break: break-all;
+  background: #f5f0ea;
+  padding: 0.7rem 0.8rem;
+  border-radius: 4px;
+}
+
+.shown {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
 }
 
 .break {
@@ -187,9 +238,5 @@ h2, h3 {
   margin-bottom: 0.4rem;
 }
 
-@media (max-width: 800px) {
-  .split {
-    grid-template-columns: 1fr;
-  }
-}
+
 </style>
