@@ -19,6 +19,8 @@ import java.util.Collections;
 import java.io.Serializable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.Hashtable;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.List;
 import java.util.Map;
 import java.util.Stack;
@@ -267,7 +269,13 @@ public class Metadata implements Serializable {
    * @return All keys for the given group and below
    */
   public List<String> getKeys(String group) {
-    Group foundGroup = this.getGroup(group);
+    // getGroup(key) creates the group when it is absent, so asking a
+    // container what is in a group it does not have used to add that group
+    // as a side effect: containsGroup said false, a read went by, and then
+    // it said true. A container grew every time it was inspected, and the
+    // null guard below was dead code because the creating overload cannot
+    // return null.
+    Group foundGroup = this.getGroup(group, false);
     if (foundGroup != null) {
       return this.getKeys(foundGroup);
     } else {
@@ -310,7 +318,13 @@ public class Metadata implements Serializable {
    * @return All keys for the given group and below
    */
   public List<String> getAllKeys(String group) {
-    Group foundGroup = this.getGroup(group);
+    // getGroup(key) creates the group when it is absent, so asking a
+    // container what is in a group it does not have used to add that group
+    // as a side effect: containsGroup said false, a read went by, and then
+    // it said true. A container grew every time it was inspected, and the
+    // null guard below was dead code because the creating overload cannot
+    // return null.
+    Group foundGroup = this.getGroup(group, false);
     if (foundGroup != null) {
       return this.getAllKeys(foundGroup);
     } else {
@@ -468,7 +482,15 @@ public class Metadata implements Serializable {
   }
 
   public List<String> getGroups(String group) {
-    return this.getGroups(this.getGroup(group));
+    // getGroup(key) creates the group when it is absent, so asking a
+    // container what is in a group it does not have used to add that group
+    // as a side effect: containsGroup said false, a read went by, and then
+    // it said true. A container grew every time it was inspected, and the
+    // null guard below was dead code because the creating overload cannot
+    // return null.
+    Group foundGroup = this.getGroup(group, false);
+    return foundGroup != null ? this.getGroups(foundGroup)
+        : new Vector<String>();
   }
 
   protected List<String> getGroups(Group group) {
@@ -505,7 +527,9 @@ public class Metadata implements Serializable {
   }
 
   protected Group createNewRoot() {
-    return new Group(Group.ROOT_GROUP_NAME);
+    Group newRoot = new Group(Group.ROOT_GROUP_NAME);
+    newRoot.markAsRoot();
+    return newRoot;
   }
 
   protected class Group implements Serializable {
@@ -513,6 +537,14 @@ public class Metadata implements Serializable {
     private static final long serialVersionUID = 1L;
 
     private static final String ROOT_GROUP_NAME = "root";
+
+    /**
+     * Whether this is the container's own sentinel root rather than a group
+     * a caller added. Held as a flag so the answer does not depend on the
+     * group's name, which a caller is entitled to choose freely.
+     */
+    private boolean root = false;
+
 
     private String name;
     private List<String> values;
@@ -543,8 +575,27 @@ public class Metadata implements Serializable {
       return this.name;
     }
 
+    /** Marks this group as the container's sentinel root; see getFullPath. */
+    void markAsRoot() {
+      this.root = true;
+    }
+
+    /** Whether this is the sentinel root rather than a group a caller added. */
+    boolean isRoot() {
+      return this.root;
+    }
+
     public String getFullPath() {
-      if (this.parent != null && !this.parent.getName().equals(ROOT_GROUP_NAME)) {
+      // The top of the tree is recognised by identity. This used to compare
+      // the parent's *name* against ROOT_GROUP_NAME, which is the string
+      // "root" -- so a user group that happened to be called root satisfied
+      // the test and every descendant reported a path with a level missing.
+      // "root/x" enumerated as "x", which then did not resolve, and the copy
+      // constructor turned that into a NullPointerException two frames away
+      // in Group.addValues. The sentinel's name lived in the same namespace
+      // as user data, and "root" is an ordinary word for the top of a tree
+      // in policy files written by users.
+      if (this.parent != null && !this.parent.isRoot()) {
         return this.parent.getFullPath() + "/" + this.name;
       } else {
         return this.name;
@@ -652,26 +703,50 @@ public class Metadata implements Serializable {
   }
 
   public boolean equals(Object obj) {
-    if (obj instanceof Metadata) {
-      Metadata compMet = (Metadata) obj;
-      if (this.getKeys().equals(compMet.getKeys())) {
-        for (String key : this.getKeys()) {
-          if (!this.getAllMetadata(key).equals(compMet.getAllMetadata(key))) {
-            return false;
-          }
-        }
-        return true;
-      } else {
-        return false;
-      }
-
-    } else {
+    if (!(obj instanceof Metadata)) {
       return false;
     }
+    Metadata compMet = (Metadata) obj;
+
+    // Compared as a set. getKeys() returns a List, and List.equals is
+    // ordered, so two containers holding identical content compared unequal
+    // when their distinct keys had gone in in a different order.
+    //
+    // And over getAllKeys() rather than getKeys(), so nested groups take
+    // part. Walking only the root's children meant two containers differing
+    // solely in a nested group's values compared equal. The order of the
+    // values *under* a key stays significant -- adding the same key twice
+    // makes it multi-valued, and that sequence is data.
+    Set<String> keys = new HashSet<String>(this.getAllKeys());
+    if (!keys.equals(new HashSet<String>(compMet.getAllKeys()))) {
+      return false;
+    }
+    for (String key : keys) {
+      List<String> mine = this.getAllMetadata(key);
+      List<String> theirs = compMet.getAllMetadata(key);
+      if (mine == null ? theirs != null : !mine.equals(theirs)) {
+        return false;
+      }
+    }
+    return true;
   }
 
   @Override
   public int hashCode() {
-    return root != null ? root.hashCode() : 0;
+    // Derived from the same content equals compares. It used to be
+    // root.hashCode(), and Group does not override hashCode, so this was an
+    // identity hash: two containers that compared equal had different hash
+    // codes essentially always, and a Metadata could not be put in a HashSet,
+    // used as a HashMap key, or deduplicated -- a lookup would miss an entry
+    // that was present.
+    //
+    // Summed rather than accumulated in order, because the key set is
+    // unordered and the hash has to agree with equals about that.
+    int hash = 0;
+    for (String key : this.getAllKeys()) {
+      List<String> values = this.getAllMetadata(key);
+      hash += key.hashCode() ^ (values != null ? values.hashCode() : 0);
+    }
+    return hash;
   }
 }
