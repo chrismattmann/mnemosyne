@@ -17,15 +17,19 @@
 <template>
   <section>
     <p><a href="#" @click.prevent="backToType">← {{ typeName || 'Catalog' }}</a></p>
-    <div class="head">
-      <div>
-        <h2>{{ product.name || 'Product' }}</h2>
-        <p class="muted">{{ product.id }} · {{ product.transferStatus }} · {{ product.structure }}</p>
-      </div>
-      <a v-if="product.id" class="download" :href="downloadHref">Download</a>
-    </div>
-    <p v-if="loading && !product.id" class="empty">Loading product…</p>
+    <p v-if="loading && !product.id && !product.missing" class="empty">Loading product…</p>
+    <article v-else-if="product.missing" class="card missing">
+      <h2>Not in File Manager</h2>
+      <p class="muted">Nothing named or identified as <span class="mono">{{ product.id }}</span> is cataloged. Solr postings and old job UUIDs live outside this catalog.</p>
+    </article>
     <template v-else>
+      <div class="head">
+        <div>
+          <h2>{{ product.name || 'Product' }}</h2>
+          <p class="muted">{{ product.id }} · {{ product.transferStatus }} · {{ product.structure }}</p>
+        </div>
+        <a v-if="product.id" class="download" :href="downloadHref">Download</a>
+      </div>
       <article class="card">
         <h3>References</h3>
         <p v-if="!refs.length" class="empty">No file references.</p>
@@ -69,11 +73,20 @@
         <article class="card">
           <h3>Upstream lineage</h3>
           <p v-if="pedigree && pedigree.error" class="muted">{{ pedigree.error }}</p>
-          <LineageTree v-else :value="upstream"/>
+          <LineageTree
+            v-else
+            :value="upstream"
+            :self-name="product.name"
+            empty="No cataloged upstream products."
+            @open="$emit('open-product', $event)"/>
         </article>
         <article class="card">
           <h3>Downstream lineage</h3>
-          <LineageTree :value="downstream"/>
+          <LineageTree
+            :value="downstream"
+            :self-name="product.name"
+            empty="No cataloged downstream products."
+            @open="$emit('open-product', $event)"/>
         </article>
       </div>
     </template>
@@ -163,6 +176,15 @@ h2, h3 {
 
 .break {
   word-break: break-all;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+}
+
+.missing h2 {
+  margin-bottom: 0.4rem;
 }
 
 @media (max-width: 800px) {

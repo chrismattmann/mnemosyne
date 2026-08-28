@@ -26,7 +26,10 @@
     <p v-if="queryError || error" class="banner">{{ queryError || error }}</p>
     <p v-else-if="loading && !results.length" class="empty">Running query…</p>
     <p v-else-if="!results.length" class="empty">No products matched.</p>
-    <table v-else>
+    <p v-if="truncated" class="notice cap">
+      Showing the first {{ limit }} matches. The catalog query stops there — add a WHERE clause to narrow it.
+    </p>
+    <table v-if="results.length">
       <thead>
         <tr>
           <th>Name</th>
@@ -52,7 +55,6 @@
         </tr>
       </tbody>
     </table>
-    <p v-if="truncated" class="muted">Showing the first {{ results.length }} matches.</p>
   </section>
 </template>
 
@@ -84,13 +86,15 @@ export default {
         emit('query', sql.value)
       }
     }
+    const results = computed(() => query.value.results || [])
     return {
       sql,
       queryError,
       exampleSql: EXAMPLE_CATALOG_SQL,
-      results: computed(() => query.value.results || []),
+      results,
       error: computed(() => query.value.error || ''),
       truncated: computed(() => Boolean(query.value.truncated)),
+      limit: computed(() => Number(query.value.limit) || results.value.length || 200),
       submit,
       typeName(product) {
         return (product && product.type && product.type.name) || ''
@@ -117,7 +121,7 @@ h2 {
   font-size: 0.85rem;
 }
 
-.muted {
-  margin-top: 0.8rem;
+.cap {
+  margin: 0 0 0.8rem;
 }
 </style>

@@ -110,7 +110,7 @@ public class FileManagerUtils implements PCSConfigMetadata, Serializable, AutoCl
     } catch (Exception e) {
       LOG.log(Level.WARNING, "Exception obtaining top" + n
           + " products: message: " + e.getMessage());
-      return null;
+      return Collections.emptyList();
     }
   }
 

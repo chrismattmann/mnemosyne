@@ -58,6 +58,7 @@
 
         <article class="card">
           <h3>Crawlers</h3>
+          <p class="muted crawler-note">Crawlers start on demand. They are not a standing daemon, so “not running” is expected unless a crawl is in flight.</p>
           <p v-if="!crawlers.length" class="empty">No crawlers configured.</p>
           <table v-else>
             <thead>
@@ -67,8 +68,8 @@
               <tr v-for="crawler in crawlers" :key="crawler.crawlerName || crawler.crawler">
                 <td>{{ crawler.crawlerName || crawler.crawler }}</td>
                 <td>
-                  <span class="pill" :class="up(crawler.status) ? 'up' : (crawler.status ? 'down' : 'neutral')">
-                    {{ crawler.status || '—' }}
+                  <span class="pill" :class="crawlerPill(crawler.status)">
+                    {{ crawlerLabel(crawler.status) }}
                   </span>
                 </td>
                 <td>{{ crawlCount(crawler) }}</td>
@@ -81,15 +82,15 @@
 
       <article class="card">
         <h3>Latest files</h3>
-        <p v-if="!files.length" class="empty">Nothing ingested yet.</p>
+        <p v-if="!files.length" class="empty">{{ filesEmpty }}</p>
         <table v-else>
           <thead>
-            <tr><th>Path</th><th>Received</th></tr>
+            <tr><th>Name</th><th>Received</th></tr>
           </thead>
           <tbody>
             <tr v-for="file in files" :key="file.id || file.filepath">
               <td>
-                <a href="#" @click.prevent="$emit('open-product', file.id || file.name || file.filepath)">{{ file.name || file.filepath }}</a>
+                <a href="#" @click.prevent="$emit('open-product', file.id || file.name)">{{ file.name || file.filepath }}</a>
               </td>
               <td>{{ file.receivedTime }}</td>
             </tr>
@@ -134,6 +135,25 @@ export default {
   setup(props) {
     function up(status) {
       return String(status || '').toUpperCase() === 'UP'
+    }
+
+    function crawlerPill(status) {
+      const value = String(status || '').toUpperCase()
+      if (value === 'UP') {
+        return 'up'
+      }
+      if (value === 'DOWN') {
+        return 'neutral'
+      }
+      return status ? 'down' : 'neutral'
+    }
+
+    function crawlerLabel(status) {
+      const value = String(status || '').toUpperCase()
+      if (value === 'DOWN') {
+        return 'not running'
+      }
+      return status || '—'
     }
 
     function missingStat(value) {
@@ -211,9 +231,17 @@ export default {
       return latest.files || []
     })
 
+    const filesEmpty = computed(() => {
+      const fm = ((props.report && props.report.daemonStatus) || {}).fm || {}
+      if (up(fm.status)) {
+        return 'No recent ingestions in File Manager.'
+      }
+      return 'Nothing ingested yet.'
+    })
+
     return {
-      up, crawlCount, avgTime, generated, daemons, stubs, jobs, sortedJobs,
-      jobSort, jobDir, sortJobs, crawlers, files
+      up, crawlerPill, crawlerLabel, crawlCount, avgTime, generated, daemons, stubs, jobs, sortedJobs,
+      jobSort, jobDir, sortJobs, crawlers, files, filesEmpty
     }
   }
 }
@@ -253,6 +281,11 @@ h2, h3 {
 .url {
   word-break: break-all;
   font-size: 0.82rem;
+}
+
+.crawler-note {
+  margin: -0.2rem 0 0.7rem;
+  font-size: 0.85rem;
 }
 
 .daemon h3 {

@@ -15,42 +15,34 @@
  limitations under the License.
 -->
 <template>
-  <ul v-if="nodes.length" class="tree">
+  <p v-if="!nodes.length && empty" class="empty">{{ empty }}</p>
+  <ul v-else-if="nodes.length" class="tree">
     <li v-for="(node, i) in nodes" :key="i">
-      <span>{{ node.name }}</span>
-      <LineageTree v-if="node.rawChildren != null" :value="node.rawChildren"/>
+      <a href="#" @click.prevent="$emit('open', node.name)">{{ node.name }}</a>
+      <LineageTree
+        v-if="node.children != null"
+        :value="node.children"
+        :self-name="selfName"
+        empty=""
+        @open="$emit('open', $event)"/>
     </li>
   </ul>
 </template>
 
 <script>
-function asNodes(value) {
-  if (value == null) {
-    return []
-  }
-  if (typeof value === 'string') {
-    return [{ name: value, rawChildren: null }]
-  }
-  if (Array.isArray(value)) {
-    return value.flatMap(asNodes)
-  }
-  if (typeof value === 'object') {
-    return Object.keys(value).map((name) => ({
-      name,
-      rawChildren: value[name]
-    }))
-  }
-  return []
-}
+import { lineageNodes } from '../lineage.js'
 
 export default {
   name: 'LineageTree',
   props: {
-    value: { default: null }
+    value: { default: null },
+    selfName: { type: String, default: '' },
+    empty: { type: String, default: '' }
   },
+  emits: ['open'],
   computed: {
     nodes() {
-      return asNodes(this.value)
+      return lineageNodes(this.value, this.selfName)
     }
   }
 }

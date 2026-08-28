@@ -19,10 +19,11 @@ package org.apache.oodt.pcs.services;
 
 //JDK imports
 import java.net.MalformedURLException;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Vector;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -224,28 +225,35 @@ public class HealthResource extends PCSService {
     return output;
   }
 
-  private void encodeLatestFile(List<Object> latestFilesOutput, Product p)
-      throws MalformedURLException {
-    FileManagerUtils fm = new FileManagerUtils(PCSService.conf.getFmUrl());
-    p.setProductType(fm.safeGetProductTypeById(p.getProductType()
-        .getProductTypeId()));
-    p.setProductReferences(fm.safeGetProductReferences(p));
-    Metadata prodMet = fm.safeGetMetadata(p);
-    if (prodMet == null) {
-      prodMet = new Metadata();
+  private void encodeLatestFile(List<Object> latestFilesOutput, Product p) {
+    try {
+      FileManagerUtils fm = new FileManagerUtils(PCSService.conf.getFmUrl());
+      if (p.getProductType() != null && p.getProductType().getProductTypeId() != null) {
+        p.setProductType(fm.safeGetProductTypeById(p.getProductType()
+            .getProductTypeId()));
+      }
+      p.setProductReferences(fm.safeGetProductReferences(p));
+      Metadata prodMet = fm.safeGetMetadata(p);
+      if (prodMet == null) {
+        prodMet = new Metadata();
+      }
+      Map<String, Object> fileOutput = new LinkedHashMap<String, Object>();
+      if (p.getProductId() != null) {
+        fileOutput.put("id", p.getProductId());
+      }
+      if (p.getProductName() != null) {
+        fileOutput.put("name", p.getProductName());
+      }
+      String path = fm.getFilePath(p);
+      fileOutput.put("filepath", path == null ? "" : path);
+      String received = prodMet.getMetadata("CAS." + CoreMetKeys.PRODUCT_RECEVIED_TIME);
+      fileOutput.put("receivedTime", received != null ? received : "UNKNOWN");
+      latestFilesOutput.add(fileOutput);
+    } catch (Exception e) {
+      LOG.log(Level.WARNING, "Unable to encode latest file: ["
+          + (p == null ? "null" : p.getProductName()) + "]: error: Message: "
+          + e.getMessage());
     }
-    Map<String, Object> fileOutput = new ConcurrentHashMap<String, Object>();
-    if (p.getProductId() != null) {
-      fileOutput.put("id", p.getProductId());
-    }
-    if (p.getProductName() != null) {
-      fileOutput.put("name", p.getProductName());
-    }
-    fileOutput.put("filepath", fm.getFilePath(p));
-    fileOutput.put("receivedTime", prodMet.getMetadata("CAS."
-        + CoreMetKeys.PRODUCT_RECEVIED_TIME) != null ? prodMet
-        .getMetadata("CAS." + CoreMetKeys.PRODUCT_RECEVIED_TIME) : "UNKNOWN");
-    latestFilesOutput.add(fileOutput);
   }
 
   private Map<String, String> encodeCrawlerStatus(CrawlerStatus status) {
@@ -320,12 +328,7 @@ public class HealthResource extends PCSService {
         report.getLatestProductsIngested().size() > 0){
       for (Product prod : (List<Product>) (List<?>) report
           .getLatestProductsIngested()) {
-        try {
-          this.encodeLatestFile(latestFilesList, prod);
-        } catch (MalformedURLException e) {
-          LOG.log(Level.WARNING, "Unable to encode latest file: ["
-              + prod.getProductName() + "]: error: Message: " + e.getMessage());
-        }
+        this.encodeLatestFile(latestFilesList, prod);
       }
     }
     latestFilesOutput.put("files", latestFilesList);

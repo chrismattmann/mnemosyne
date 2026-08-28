@@ -15,35 +15,32 @@
  * limitations under the License.
  */
 
-export function classifyMetKey(key) {
-  const k = String(key || '').toLowerCase().replace(/[^a-z0-9]/g, '')
-  if (k === 'workflowinstid' || k === 'jobid') {
-    return 'instance'
-  }
-  if (k === 'workflowid') {
-    return 'workflow'
-  }
-  if (k === 'taskid') {
-    return 'task'
-  }
-  if (k === 'producttype' || k === 'producttypename' || k === 'casproducttype'
-      || k === 'casproducttypename') {
-    return 'type'
-  }
-  if (k === 'filename' || k === 'productname' || k === 'casproductname'
-      || k === 'casfilename' || k === 'inputfiles' || k === 'splitfilename'
-      || k === 'tsvfile' || k === 'sourcetsv') {
-    return 'product'
-  }
-  return null
-}
-
-export function metValues(value) {
+/**
+ * Flatten a pedigree JSON blob into clickable nodes. The PCS encoder
+ * nests relatives under the current product's name; that self root is
+ * stripped so a TSV page lists the split, not itself, and a product
+ * with only itself in the tree looks empty rather than inventing
+ * children.
+ */
+export function lineageNodes(value, selfName) {
   if (value == null || value === '') {
     return []
   }
-  if (Array.isArray(value)) {
-    return value.filter((item) => item != null && String(item).length > 0).map(String)
+  if (typeof value === 'string') {
+    return value === selfName ? [] : [{ name: value, children: null }]
   }
-  return [String(value)]
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => lineageNodes(item, selfName))
+  }
+  if (typeof value === 'object') {
+    const keys = Object.keys(value)
+    if (keys.length === 1 && keys[0] === selfName) {
+      return lineageNodes(value[keys[0]], selfName)
+    }
+    return keys.map((name) => ({
+      name,
+      children: value[name]
+    }))
+  }
+  return []
 }
