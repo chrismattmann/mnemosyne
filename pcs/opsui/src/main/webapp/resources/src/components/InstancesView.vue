@@ -18,15 +18,33 @@
   <section>
     <div class="head">
       <h2>Workflow instances</h2>
-      <label>
-        Status
-        <select :value="status" @change="$emit('status', $event.target.value)">
-          <option v-for="item in statuses" :key="item" :value="item">{{ item }}</option>
-        </select>
-      </label>
+      <div class="filters">
+        <label>
+          Status
+          <select :value="status" @change="$emit('status', $event.target.value)">
+            <option v-for="item in statuses" :key="item" :value="item">{{ item }}</option>
+          </select>
+        </label>
+        <label>
+          Workflow
+          <select v-model="workflow">
+            <option value="">All workflows</option>
+            <option v-for="item in workflowOptions" :key="item.id || item.name" :value="item.name">
+              {{ item.name }}
+            </option>
+          </select>
+        </label>
+        <label>
+          On or after
+          <span class="date-field">
+            <input v-model="since" type="date"/>
+            <button v-if="since" type="button" class="ghost" @click="since = ''">Clear</button>
+          </span>
+        </label>
+      </div>
     </div>
     <p v-if="loading && !instances.length" class="empty">Loading instances…</p>
-    <p v-else-if="!instances.length" class="empty">No instances for this filter.</p>
+    <p v-else-if="!rows.length" class="empty">No instances for this filter.</p>
     <table v-else>
       <thead>
         <tr>
@@ -82,6 +100,7 @@ import { computed, ref } from 'vue'
 import Pager from './Pager.vue'
 import SortHead from './SortHead.vue'
 import { formatWallClock, parseStamp, sortRows, toggleSort, wallClockMs } from '../sort.js'
+import { instanceMatches, workflowFilterOptions } from '../instanceFilter.js'
 
 const STATUSES = [
   'ALL', 'QUEUED', 'RSUBMIT', 'BUILDING CONFIG FILE', 'PGE EXEC', 'CRAWLING',
@@ -95,6 +114,7 @@ export default {
   props: {
     payload: { type: Object, default: null },
     status: { type: String, default: 'ALL' },
+    workflows: { type: Array, default: () => [] },
     loading: { type: Boolean, default: false }
   },
   emits: ['status', 'page', 'open-workflow', 'open-task', 'open-instance', 'open-product'],
@@ -102,6 +122,8 @@ export default {
     const pageBody = computed(() => (props.payload && props.payload.page) || {})
     const sort = ref('')
     const dir = ref('asc')
+    const workflow = ref('')
+    const since = ref('')
     const now = computed(() => Date.now())
     const instances = computed(() => {
       return (pageBody.value.instances || []).map((inst) => Object.assign({}, inst, {
@@ -117,12 +139,16 @@ export default {
       end: (row) => parseStamp(row.endDateTime),
       wall: (row) => row.wallMs
     }
+    const filtered = computed(() => {
+      return instances.value.filter((inst) => instanceMatches(inst, workflow.value, since.value))
+    })
     const rows = computed(() => {
       if (!sort.value) {
-        return instances.value
+        return filtered.value
       }
-      return sortRows(instances.value, getters[sort.value] || getters.workflow, dir.value)
+      return sortRows(filtered.value, getters[sort.value] || getters.workflow, dir.value)
     })
+    const workflowOptions = computed(() => workflowFilterOptions(instances.value, props.workflows))
     const statuses = computed(() => {
       const current = props.status
       if (current && STATUSES.indexOf(current) === -1) {
@@ -155,6 +181,9 @@ export default {
       statuses,
       instances,
       rows,
+      workflow,
+      since,
+      workflowOptions,
       sort,
       dir,
       onSort,
@@ -180,9 +209,25 @@ h2 {
   margin: 0;
 }
 
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 1rem;
+  align-items: end;
+}
+
 label {
   color: var(--muted);
   font-size: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.date-field {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
 }
 
 .mono {

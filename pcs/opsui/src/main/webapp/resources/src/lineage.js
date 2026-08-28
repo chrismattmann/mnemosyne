@@ -44,3 +44,24 @@ export function lineageNodes(value, selfName) {
   }
   return []
 }
+
+/**
+ * Linear bubble chain: upstream relatives, then this product, then
+ * downstream relatives. Nested children stay off the chain so a TSV
+ * page is TSV then split, matching the workflow graph language.
+ */
+export function lineageChain(upstream, downstream, selfName) {
+  const up = lineageNodes(upstream, selfName)
+  const down = lineageNodes(downstream, selfName)
+  const nodes = []
+  up.forEach((node) => {
+    nodes.push({ name: node.name, role: 'up' })
+  })
+  if (selfName && (up.length || down.length)) {
+    nodes.push({ name: selfName, role: 'self' })
+  }
+  down.forEach((node) => {
+    nodes.push({ name: node.name, role: 'down' })
+  })
+  return nodes
+}
