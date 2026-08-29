@@ -100,6 +100,67 @@ public class WorkflowProcessorQueue {
    * are structural markers this engine creates itself, but a user's workflow
    * is no longer classified by the shape of its id.
    */
+  /**
+   * Fills in the workflow model when the instance came back from its
+   * repository without one.
+   *
+   * <p>
+   * An instance repository stores instance state -- status, dates, priority,
+   * the current task. The model belongs to the model repository, and this
+   * queue already holds it. DataSourceWorkflowInstanceRepository reconstructs
+   * an instance with a Workflow carrying nothing but its id, so the graph was
+   * empty, no execution type matched a processor class, and instances sat in
+   * their initial state for ever. Lucene and the in-memory repository happen
+   * to retain more, which is why the engine appeared to work with those two
+   * and not with JDBC.
+   * </p>
+   *
+   * <p>
+   * Looking the model up here fixes every instance repository at once, rather
+   * than asking each of them to persist a copy of something the model
+   * repository already holds -- two copies being free to drift apart.
+   * </p>
+   */
+  private void resolveModelFromRepository(WorkflowInstance instance) {
+    if (modelRepo == null || instance.getWorkflow() == null) {
+      return;
+    }
+
+    ParentChildWorkflow current = instance.getParentChildWorkflow();
+    boolean alreadyModelled = current != null && current.getGraph() != null
+        && current.getGraph().getExecutionType() != null
+        && !current.getGraph().getExecutionType().equals("");
+    if (alreadyModelled) {
+      return;
+    }
+
+    String modelId = instance.getWorkflow().getId();
+    if (modelId == null || modelId.equals("")) {
+      return;
+    }
+
+    try {
+      Workflow model = modelRepo.getWorkflowById(modelId);
+      if (model == null) {
+        LOG.log(Level.FINE, "Instance: [" + instance.getId()
+            + "] refers to workflow: [" + modelId
+            + "], which the model repository does not hold");
+        return;
+      }
+      if (model instanceof ParentChildWorkflow) {
+        instance.setParentChildWorkflow((ParentChildWorkflow) model);
+      } else {
+        instance.setWorkflow(model);
+      }
+      LOG.log(Level.FINE, "Instance: [" + instance.getId()
+          + "] carried no model; resolved [" + modelId
+          + "] from the model repository");
+    } catch (Exception e) {
+      LOG.log(Level.SEVERE, "Unable to resolve workflow model [" + modelId
+          + "] for instance: [" + instance.getId() + "]", e);
+    }
+  }
+
   private void ensureExecutionType(WorkflowInstance instance) {
     ParentChildWorkflow workflow = instance.getParentChildWorkflow();
     if (workflow == null || workflow.getGraph() == null) {
@@ -263,6 +324,7 @@ public class WorkflowProcessorQueue {
     } else {
       // Convert here, at this engine's boundary, rather than requiring the
       // repository to have produced a graph.
+      resolveModelFromRepository(inst);
       ensureExecutionType(inst);
       if (inst.getParentChildWorkflow().getGraph() == null) {
         LOG.log(Level.SEVERE,
