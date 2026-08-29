@@ -129,6 +129,47 @@ public class TestModelResolvedForBareInstance extends TestCase {
         processor.getWorkflowInstance().getParentChildWorkflow().getTasks().size());
   }
 
+  /**
+   * The other half of what a JDBC repository hands back: the schema stores
+   * workflow_instance_status as a string, so setStatus builds a state with a
+   * name and no category -- and getProcessors skips anything whose state has
+   * no category, so such instances were invisible to the querier.
+   */
+  public void testAstateCarryingOnlyANameIsStillVisibleToTheQuerier()
+      throws Exception {
+    Workflow bare = new Workflow();
+    bare.setId("urn:oodt:e2e:TwoStep");
+
+    WorkflowInstance inst = new WorkflowInstance();
+    inst.setWorkflow(bare);
+    inst.setStatus("Loaded");
+    inst.setCurrentTaskId("urn:oodt:e2e:First");
+    assertNull("setStatus should leave the category unset",
+        inst.getState().getCategory());
+    instanceRepo.addWorkflowInstance(inst);
+
+    List<WorkflowProcessor> processors = queue.getProcessors();
+
+    assertEquals("an instance with a name-only state must still be processed",
+        1, processors.size());
+    assertNotNull("and its category should have been resolved",
+        processors.get(0).getWorkflowInstance().getState().getCategory());
+  }
+
+  /** A state the lifecycle does not define must not bring the queue down. */
+  public void testAnunknownStateNameIsSurvivable() throws Exception {
+    Workflow bare = new Workflow();
+    bare.setId("urn:oodt:e2e:TwoStep");
+
+    WorkflowInstance inst = new WorkflowInstance();
+    inst.setWorkflow(bare);
+    inst.setStatus("NoSuchStateAnywhere");
+    inst.setCurrentTaskId("urn:oodt:e2e:First");
+    instanceRepo.addWorkflowInstance(inst);
+
+    assertNotNull(queue.getProcessors());
+  }
+
   /** A model the repository does not hold must not bring the queue down. */
   public void testAnunknownModelIdIsSurvivable() throws Exception {
     bareInstanceFor("urn:oodt:no:such:workflow");
