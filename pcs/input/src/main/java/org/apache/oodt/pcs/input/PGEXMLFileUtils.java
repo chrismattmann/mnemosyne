@@ -25,6 +25,7 @@ import org.xml.sax.InputSource;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URLDecoder;
 import java.util.Collections;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.List;
@@ -107,7 +108,7 @@ public final class PGEXMLFileUtils {
 
         for (int k = 0; k < colNodeList.getLength(); k++) {
           Element colElement = (Element) colNodeList.item(k);
-          colList.add(DOMUtil.getSimpleElementText(colElement));
+          colList.add(decode(colElement, DOMUtil.getSimpleElementText(colElement)));
         }
 
         pgeMatrix.getRows().add(colList);
@@ -171,7 +172,7 @@ public final class PGEXMLFileUtils {
 
         for (int k = 0; k < colNodeList.getLength(); k++) {
           Element colElement = (Element) colNodeList.item(k);
-          colList.add(DOMUtil.getSimpleElementText(colElement));
+          colList.add(decode(colElement, DOMUtil.getSimpleElementText(colElement)));
         }
 
         pgeMatrix.getRows().add(colList);
@@ -203,7 +204,7 @@ public final class PGEXMLFileUtils {
       String scalarName = scalar.getAttribute("name");
 
       // get the value of it
-      String scalarValue = DOMUtil.getSimpleElementText(scalar);
+      String scalarValue = decode(scalar, DOMUtil.getSimpleElementText(scalar));
 
       scalarMap.put(scalarName, new PGEScalar(scalarName, scalarValue));
     }
@@ -231,7 +232,7 @@ public final class PGEXMLFileUtils {
       String scalarName = scalar.getAttribute("name");
 
       // get the value of it
-      String scalarValue = DOMUtil.getSimpleElementText(scalar);
+      String scalarValue = decode(scalar, DOMUtil.getSimpleElementText(scalar));
 
       scalarList.add(new PGEScalar(scalarName, scalarValue));
     }
@@ -274,7 +275,7 @@ public final class PGEXMLFileUtils {
 
       for (int j = 0; j < vecElems.getLength(); j++) {
         Element vecElem = (Element) vecElems.item(j);
-        vecElemList.add(DOMUtil.getSimpleElementText(vecElem));
+        vecElemList.add(decode(vecElem, DOMUtil.getSimpleElementText(vecElem)));
       }
 
       vec.setElements(vecElemList);
@@ -318,7 +319,7 @@ public final class PGEXMLFileUtils {
 
       for (int j = 0; j < vecElems.getLength(); j++) {
         Element vecElem = (Element) vecElems.item(j);
-        vecElemList.add(DOMUtil.getSimpleElementText(vecElem));
+        vecElemList.add(decode(vecElem, DOMUtil.getSimpleElementText(vecElem)));
       }
 
       vec.setElements(vecElemList);
@@ -326,6 +327,46 @@ public final class PGEXMLFileUtils {
     }
 
     return vectorList;
+  }
+
+  /**
+   * URL-decodes a value when the document it came from is marked as
+   * URL-encoded, and returns it unchanged otherwise.
+   *
+   * <p>
+   * PGEConfigFileWriter has always been able to URL-encode what it writes, but
+   * nothing here ever decoded, so a file written with that option could not be
+   * read back correctly by this package. The writer now records the choice on
+   * the root element; a document without the attribute holds literal values,
+   * which is what every file written before it existed contains.
+   * </p>
+   *
+   * <p>
+   * URLDecoder raises on a malformed escape, such as a bare percent sign. The
+   * value is then returned undecoded rather than dropped, so a value that is
+   * present but unreadable is not reported as missing.
+   * </p>
+   */
+  private static String decode(Element context, String value) {
+    if (value == null || context == null) {
+      return value;
+    }
+
+    Document document = context.getOwnerDocument();
+    Element root = document != null ? document.getDocumentElement() : null;
+    if (root == null
+        || !Boolean.parseBoolean(root.getAttribute(
+            PGEDataParseKeys.URL_ENCODING_ATTR))) {
+      return value;
+    }
+
+    try {
+      return URLDecoder.decode(value, "UTF-8");
+    } catch (Exception e) {
+      LOG.log(Level.WARNING, "Could not URL-decode value [" + value
+          + "]; keeping it undecoded. Message: " + e.getMessage());
+      return value;
+    }
   }
 
   public static Document getDocumentRoot(String xmlFile) {

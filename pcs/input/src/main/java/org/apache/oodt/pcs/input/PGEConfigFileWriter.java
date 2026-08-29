@@ -111,6 +111,13 @@ public final class PGEConfigFileWriter implements PGEConfigFileKeys,
               "xsi:noNamespaceSchemaLocation",
               (schemaLocation == null || (schemaLocation.equals("")) ? "input.xsd"
                   : schemaLocation));
+      if (urlEncoding) {
+        // Record the encoding in the file. Nothing read these values back
+        // before, so a caller who set urlEncoding got a file that no reader in
+        // this package could interpret. Absent means literal, which is what
+        // every file written before this attribute existed contains.
+        root.setAttribute(URL_ENCODING_ATTR, "true");
+      }
       document.appendChild(root);
 
       if (configFile != null) {
@@ -198,20 +205,8 @@ public final class PGEConfigFileWriter implements PGEConfigFileKeys,
                               + scalarName + "] to PGE config file!");
         }
 
-        if (urlEncoding) {
-          try {
-            scalarElem.appendChild(document.createTextNode(URLEncoder.encode(
-                scalar.getValue(), "UTF-8")));
-          } catch (UnsupportedEncodingException e) {
-            LOG.log(Level.WARNING,
-                "Error creating text node for scalar element: "
-                + scalar.getName() + " in pge group: " + group.getName()
-                + " Message: " + e.getMessage());
-          }
-
-        } else {
-          scalarElem.appendChild(document.createTextNode(scalar.getValue()));
-        }
+        scalarElem.appendChild(document.createTextNode(encode(scalar
+            .getValue())));
 
         groupElem.appendChild(scalarElem);
       }
@@ -234,19 +229,7 @@ public final class PGEConfigFileWriter implements PGEConfigFileKeys,
           }
 
           Element elementElem = document.createElement(VECTOR_ELEMENT_TAG);
-          if (urlEncoding) {
-            try {
-              elementElem.appendChild(document.createTextNode(URLEncoder
-                  .encode(element, "UTF-8")));
-            } catch (UnsupportedEncodingException e) {
-              LOG.log(Level.WARNING,
-                  "Error creating text node for vector element: "
-                  + vector.getName() + " in pge group: " + group.getName()
-                  + " Message: " + e.getMessage());
-            }
-          } else {
-            elementElem.appendChild(document.createTextNode(element));
-          }
+          elementElem.appendChild(document.createTextNode(encode(element)));
 
           vectorElem.appendChild(elementElem);
         }
@@ -288,21 +271,7 @@ public final class PGEConfigFileWriter implements PGEConfigFileKeys,
                                   + matrixName + "]: " + "(" + rowNum + "," + colNum + ")");
             }
 
-            if (urlEncoding) {
-              try {
-                colElem.appendChild(document.createTextNode(URLEncoder.encode(
-                    colValue, "UTF-8")));
-              } catch (UnsupportedEncodingException e) {
-                LOG.log(Level.WARNING,
-                    "Error creating node for matrix element: "
-                    + matrix.getName() + " (" + rowNum + "," + colNum
-                    + ") in pge group: " + group.getName() + " Message: "
-                    + e.getMessage());
-              }
-
-            } else {
-              colElem.appendChild(document.createTextNode(colValue));
-            }
+            colElem.appendChild(document.createTextNode(encode(colValue)));
 
             rowElem.appendChild(colElem);
             colNum++;
@@ -332,6 +301,26 @@ public final class PGEConfigFileWriter implements PGEConfigFileKeys,
   /**
    * @return Returns the urlEncoding.
    */
+  /**
+   * URL-encodes a value when this writer is configured to, and returns it
+   * unchanged otherwise. The three call sites used to catch
+   * UnsupportedEncodingException, log it, and then append no text node at all,
+   * silently dropping the value. UTF-8 is always available, so that branch was
+   * unreachable, but the value is returned as it stands rather than lost.
+   */
+  private String encode(String value) {
+    if (!urlEncoding) {
+      return value;
+    }
+    try {
+      return URLEncoder.encode(value, "UTF-8");
+    } catch (UnsupportedEncodingException e) {
+      LOG.log(Level.WARNING, "Could not URL-encode value [" + value
+          + "]; writing it unencoded. Message: " + e.getMessage());
+      return value;
+    }
+  }
+
   public boolean isUrlEncoding() {
     return urlEncoding;
   }

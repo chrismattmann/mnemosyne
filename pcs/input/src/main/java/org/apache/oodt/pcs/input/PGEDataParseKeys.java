@@ -56,4 +56,11 @@ public interface PGEDataParseKeys {
   String ROWS_ATTR = "rows";
 
   String COLS_ATTR = "cols";
+
+  /**
+   * Set on the root element when PGEConfigFileWriter URL-encoded the values it
+   * wrote. Absent means the values are literal, which is what every file
+   * written before this attribute existed contains.
+   */
+  String URL_ENCODING_ATTR = "urlEncoding";
 }
