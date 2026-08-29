@@ -87,7 +87,7 @@ public class MimeTypeCrawlerAction extends CrawlerAction {
       return mimeTypes;
    }
 
-   public void asetMimeTypes(List<String> mimeTypes) {
+   public void setMimeTypes(List<String> mimeTypes) {
       this.mimeTypes = mimeTypes;
    }
 }

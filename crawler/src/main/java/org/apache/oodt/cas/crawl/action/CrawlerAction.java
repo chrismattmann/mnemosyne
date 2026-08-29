@@ -81,7 +81,13 @@ public abstract class CrawlerAction implements SpringSetIdInjectionType {
    @Override
    public boolean equals(Object obj) {
       if (obj instanceof CrawlerAction) {
-         return ((CrawlerAction) obj).id.equals(id);
+         // This dereferenced the *other* action's id. An action whose id has
+         // not been set yet is exactly the state validate() exists to report,
+         // but CrawlerActionRepo.getActions() puts every action in a HashSet
+         // and ProductCrawler.validateActions() walks that set first -- so the
+         // crash pre-empted the check written to describe it.
+         String otherId = ((CrawlerAction) obj).id;
+         return id == null ? otherId == null : id.equals(otherId);
       } else {
          return false;
       }
@@ -89,7 +95,7 @@ public abstract class CrawlerAction implements SpringSetIdInjectionType {
 
    @Override
    public int hashCode() {
-      return id.hashCode();
+      return id == null ? 0 : id.hashCode();
    }
 
    public void validate() throws CrawlerActionException {
