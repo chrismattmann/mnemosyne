@@ -434,6 +434,21 @@ public class XmlHelper {
 
 	}
 
+	/**
+	 * The most passes {@link #fillIn(String, Metadata, boolean)} will make
+	 * before it decides a value is never going to resolve. Nesting deeper than
+	 * this is not a configuration anyone writes on purpose.
+	 */
+	private static final int MAX_DYNAMIC_REPLACEMENT_PASSES = 20;
+
+	/**
+	 * The largest a value may grow to while being resolved. A pass count alone
+	 * does not bound the memory: a value that refers to itself twice doubles on
+	 * every pass, so twenty passes of "[Loop]" is a megabyte and thirty is a
+	 * gigabyte. This is the guard that actually keeps the heap out of it.
+	 */
+	private static final int MAX_DYNAMIC_REPLACEMENT_LENGTH = 100000;
+
 	public static String fillIn(String value, Metadata inputMetadata)
 		throws PGEException {
 		return fillIn(value, inputMetadata, true);
@@ -442,8 +457,35 @@ public class XmlHelper {
 	public static String fillIn(String value, Metadata inputMetadata, boolean envReplaceRecur) throws PGEException {
 		FileManagerClient fmClient=null;
 		try {
-			while ((value = PathUtils.doDynamicReplacement(value, inputMetadata)).contains("[") && envReplaceRecur) {
-			}
+			// This used to spin forever on any value holding a '[' that does not
+			// resolve, allocating a String on every pass. Two different things
+			// can go wrong, so both are guarded:
+			//
+			//  - the replacement returns the same text each time, which no
+			//    further pass will change, so stop at that fixed point;
+			//  - the replacement returns different, longer text each time --
+			//    doDynamicReplacement ends in replaceEnvVariables, so a
+			//    metadata value that itself contains brackets can expand, and
+			//    "[X]" becomes "[X][X]" becomes "[X][X][X][X]". A fixed point
+			//    is never reached there, so the number of passes is capped.
+			String previous;
+			int passes = 0;
+			do {
+				previous = value;
+				value = PathUtils.doDynamicReplacement(value, inputMetadata);
+				if (++passes > MAX_DYNAMIC_REPLACEMENT_PASSES) {
+					throw new PGEException("Dynamic replacement did not settle after "
+							+ MAX_DYNAMIC_REPLACEMENT_PASSES + " passes for value: ["
+							+ previous + "]: check for a metadata value that refers "
+							+ "to itself");
+				}
+				if (value.length() > MAX_DYNAMIC_REPLACEMENT_LENGTH) {
+					throw new PGEException("Dynamic replacement grew past "
+							+ MAX_DYNAMIC_REPLACEMENT_LENGTH + " characters and did "
+							+ "not settle, for value: [" + previous + "]: check for a "
+							+ "metadata value that refers to itself");
+				}
+			} while (envReplaceRecur && value.contains("[") && !value.equals(previous));
 
 			if (value.toUpperCase().matches("^\\s*SQL\\s*\\(.*\\)\\s*\\{.*\\}\\s*$")) {
 				fmClient = RpcCommunicationFactory
