@@ -20,10 +20,12 @@ import org.xml.sax.Attributes;
 import org.xml.sax.SAXException;
 import org.xml.sax.helpers.DefaultHandler;
 
+import java.net.URLDecoder;
 import java.util.List;
 import java.util.Map;
 import java.util.Vector;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
@@ -69,6 +71,9 @@ public class PGEDataHandler extends DefaultHandler implements PGEDataParseKeys {
   // the matrix row being read, accumulated until its </tr>
   private List<Object> currentMatrixRow = null;
 
+  /* whether the document declared its values URL-encoded, read off the root */
+  private boolean urlEncoded = false;
+
   public PGEDataHandler() {
     vecElement = false;
     matrixElement = false;
@@ -82,6 +87,14 @@ public class PGEDataHandler extends DefaultHandler implements PGEDataParseKeys {
    */
   public void startElement(String uri, String localName, String qName,
       Attributes attributes) throws SAXException {
+    if (qName.equals(PGE_INPUT_TAG_NAME)) {
+      // PGEConfigFileWriter records here whether it URL-encoded the values.
+      // Absent means literal, which is what every file written before the
+      // attribute existed contains.
+      this.urlEncoded = Boolean.parseBoolean(attributes
+          .getValue(URL_ENCODING_ATTR));
+    }
+
     if (notParsing()) {
       // only care about if it's a scalar/vector or matrix
       if (qName.equals(SCALAR_TAG_NAME)) {
@@ -132,12 +145,12 @@ public class PGEDataHandler extends DefaultHandler implements PGEDataParseKeys {
   public void endElement(String uri, String localName, String qName)
       throws SAXException {
     if (qName.equals(SCALAR_TAG_NAME)) {
-      this.currentScalar.setValue(this.charBuf.toString());
+      this.currentScalar.setValue(decode(this.charBuf.toString()));
       this.scalars.put(this.currentScalar.getName(), this.currentScalar);
       clearCharBuf();
       parseStatus = UNSET;
     } else if (qName.equals(VECTOR_ELEMENT_TAG)) {
-      this.currentVector.getElements().add(this.charBuf.toString());
+      this.currentVector.getElements().add(decode(this.charBuf.toString()));
       clearCharBuf();
       this.vecElement = false;
     } else if (qName.equals(VECTOR_TAG_NAME)) {
@@ -163,7 +176,7 @@ public class PGEDataHandler extends DefaultHandler implements PGEDataParseKeys {
       }
     } else if (qName.equals(MATRIX_COL_TAG)) {
       if (this.currentMatrixRow != null) {
-        this.currentMatrixRow.add(this.charBuf.toString());
+        this.currentMatrixRow.add(decode(this.charBuf.toString()));
       }
       clearCharBuf();
       this.matrixElement = false;
@@ -179,6 +192,25 @@ public class PGEDataHandler extends DefaultHandler implements PGEDataParseKeys {
     if (isParsingScalar() || isParsingVectorElement()
         || isParsingMatrixElement()) {
       this.charBuf.append(ch, start, length);
+    }
+  }
+
+  /**
+   * URL-decodes a value when the document declared itself encoded, and returns
+   * it unchanged otherwise. A malformed escape leaves the value as it stands
+   * rather than dropping it, so a value that is present but unreadable is not
+   * reported as missing.
+   */
+  private String decode(String value) {
+    if (!urlEncoded || value == null) {
+      return value;
+    }
+    try {
+      return URLDecoder.decode(value, "UTF-8");
+    } catch (Exception e) {
+      LOG.log(Level.WARNING, "Could not URL-decode value [" + value
+          + "]; keeping it undecoded. Message: " + e.getMessage());
+      return value;
     }
   }
 
