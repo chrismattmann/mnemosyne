@@ -349,7 +349,11 @@ public final class MimeTypeUtils {
         int totalRead = 0;
 
         int lastRead = stream.read(bytes);
-        while (lastRead != -1) {
+        // Stop on a read that returns nothing as well as on end of stream. A
+        // stream that answers 0 to a non-zero length request leaves totalRead
+        // where it was, so the loop made no progress and never ended; what has
+        // been read so far is returned, as it is at end of stream.
+        while (lastRead > 0) {
             totalRead += lastRead;
             if (totalRead == bytes.length) {
                 return bytes;
