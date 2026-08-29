@@ -40,7 +40,10 @@ public class MajorMinorVersionTypeHandler extends ValueReplaceTypeHandler {
     protected String getCatalogValue(String origValue) {
         String[] origValueSplit = origValue.split("\\.");
         String majorVersion = origValueSplit[0];
-        String minorVersion = origValueSplit[1];
+        // The documented format above allows zero minor digits, so "0." is
+        // valid input and split returns a single element for it. Indexing [1]
+        // threw ArrayIndexOutOfBoundsException out of the ingest path.
+        String minorVersion = origValueSplit.length > 1 ? origValueSplit[1] : "";
         return StringUtils.leftPad(majorVersion, 2, "0") + "." 
             + StringUtils.rightPad(minorVersion, 2, "0");
     }

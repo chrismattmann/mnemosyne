@@ -113,6 +113,12 @@ public class FileTransferStatus {
      * @return The percentage of the file that has been transferred so far.
      */
     public double computePctTransferred() {
+        // 0.0/0.0 is NaN, and NaN fails every comparison, so a poll loop
+        // waiting for pct >= 1.0 on a zero-byte file waited forever. There is
+        // nothing to transfer, so the transfer is complete.
+        if (fileRef == null || fileRef.getFileSize() <= 0) {
+            return 1.0;
+        }
         return ((double) (bytesTransferred * 1.0) / (fileRef.getFileSize() * 1.0));
     }
 

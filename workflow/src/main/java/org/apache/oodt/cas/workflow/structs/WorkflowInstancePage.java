@@ -152,8 +152,11 @@ public class WorkflowInstancePage implements Serializable {
      */
     public static WorkflowInstancePage blankPage() {
         WorkflowInstancePage blank = new WorkflowInstancePage();
-        blank.setPageNum(0);
-        blank.setTotalPages(0);
+        // An empty result set is a single empty page: both the first and the
+        // last. Page zero of zero made isFirstPage() false, so a client
+        // offered a "previous page" on a result set with nothing in it.
+        blank.setPageNum(1);
+        blank.setTotalPages(1);
         blank.setPageSize(0);
         return blank;
     }
