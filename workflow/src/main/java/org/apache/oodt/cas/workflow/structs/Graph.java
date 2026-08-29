@@ -105,7 +105,12 @@ public class Graph {
         .equals("conditions")) && this.executionType.equals("")) {
       throw new WorkflowException("workflow model '" + graphElem.getNodeName()
           + "' missing execution type");
-    } else {
+    } else if (this.executionType.equals("")) {
+      // Only fall back to the node name when no execution attribute was
+      // declared. Overwriting unconditionally meant that
+      // <workflow execution="sequential"> became the execution type
+      // "workflow", which is not a processor id, so it failed on the next
+      // line with "Unsupported execution type id 'workflow'".
       this.executionType = graphElem.getNodeName();
     }
 

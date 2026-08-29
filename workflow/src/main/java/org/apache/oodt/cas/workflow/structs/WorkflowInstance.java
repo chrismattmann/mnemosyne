@@ -456,7 +456,9 @@ public class WorkflowInstance {
     if(this.workflow.getTasks() != null && 
         this.workflow.getTasks().size() > 0){
       for(WorkflowTask task: this.workflow.getTasks()){
-        if(task.getTaskId().equals(taskId)){
+        // A task can reach here with a null id -- AvroTypeFactory.getWorkflowTask
+        // passes one straight through -- and this dereferenced it.
+        if(task != null && taskId != null && taskId.equals(task.getTaskId())){
           return task;
         }
       }

@@ -448,6 +448,13 @@ public final class GenericWorkflowObjectFactory {
 		newTask.setTaskInstanceClassName(t.getTaskInstanceClassName());
 		newTask.setOrder(t.getOrder());
 		newTask.setConditions(copyConditions(t.getConditions()));
+		// Dropped by a copy the javadoc calls exact. Without the required met
+		// fields and the dates, a copied task runs where the original would
+		// have been held back.
+		newTask.setRequiredMetFields(t.getRequiredMetFields());
+		newTask.setPostConditions(copyConditions(t.getPostConditions()));
+		newTask.setStartDate(t.getStartDate());
+		newTask.setEndDate(t.getEndDate());
 		return newTask;
 	}
 
@@ -481,6 +488,12 @@ public final class GenericWorkflowObjectFactory {
 		newCondition.setConditionName(c.getConditionName());
 		newCondition.setOrder(c.getOrder());
 		newCondition.setConditionInstanceClassName(c.getConditionInstanceClassName());
+		// As above: a copied condition kept neither its identity nor the
+		// timeout, optional flag and configuration that decide how it runs.
+		newCondition.setConditionId(c.getConditionId());
+		newCondition.setTimeoutSeconds(c.getTimeoutSeconds());
+		newCondition.setOptional(c.isOptional());
+		newCondition.setCondConfig(c.getCondConfig());
 		return newCondition;
 	}
 

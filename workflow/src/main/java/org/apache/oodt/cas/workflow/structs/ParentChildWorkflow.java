@@ -34,8 +34,12 @@ public class ParentChildWorkflow extends Workflow {
   private Graph graph;
 
   public ParentChildWorkflow(Workflow workflow) {
-    super(workflow.getName(), workflow.getId(), workflow.getTasks(), workflow
-        .getConditions());
+    // The deprecated four-argument Workflow constructor sends its conditions
+    // to preConditions and gives postConditions a fresh empty list, so
+    // wrapping an existing workflow silently discarded its post-conditions.
+    // WorkflowInstance.getParentChildWorkflow wraps this way on demand.
+    super(workflow.getName(), workflow.getId(), workflow.getTasks(),
+        workflow.getPreConditions(), workflow.getPostConditions());
     this.graph = new Graph();
   }
 
