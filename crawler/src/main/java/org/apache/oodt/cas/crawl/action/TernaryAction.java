@@ -47,17 +47,22 @@ public class TernaryAction extends CrawlerAction {
             + " : description = " + conditionAction.getDescription() + ")");
       boolean passedCondition = conditionAction
             .performAction(product, metadata);
-      if (passedCondition) {
-         LOG.info("Performing action (id = " + successAction.getId()
-               + " : description = " + successAction.getDescription() + ")");
-         return (successAction == null) || successAction.performAction(
-             product, metadata);
-      } else {
-         LOG.info("Performing action (id = " + failureAction.getId()
-               + " : description = " + failureAction.getDescription() + ")");
-         return (failureAction == null) || failureAction.performAction(
-             product, metadata);
+      // The class javadoc says the success or failure action "should be
+      // allowed to remain unspecified", and the null guards were already
+      // there -- but the logging dereferenced the action first, one line
+      // ahead of the guard meant to protect it.
+      return performIfSpecified(passedCondition ? successAction : failureAction,
+            product, metadata);
+   }
+
+   private boolean performIfSpecified(CrawlerAction action, File product,
+         Metadata metadata) throws CrawlerActionException {
+      if (action == null) {
+         return true;
       }
+      LOG.info("Performing action (id = " + action.getId()
+            + " : description = " + action.getDescription() + ")");
+      return action.performAction(product, metadata);
    }
 
    public void setConditionAction(CrawlerAction conditionAction) {

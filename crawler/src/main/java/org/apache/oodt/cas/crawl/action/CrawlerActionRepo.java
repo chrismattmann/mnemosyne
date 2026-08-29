@@ -72,7 +72,17 @@ public class CrawlerActionRepo {
                CrawlerAction.class));
          List<String> phases = action.getPhases();
          for (String phase : phases) {
-            switch (CrawlerActionPhases.getPhaseByName(phase)) {
+            CrawlerActionPhases actionPhase = CrawlerActionPhases
+                  .getPhaseByName(phase);
+            if (actionPhase == null) {
+               // Switching on the lookup unboxed null, so a typo in a bean
+               // file's phases property died with "Cannot invoke
+               // CrawlerActionPhases.ordinal()" and the default branch below,
+               // written to name the offending phase, was unreachable.
+               throw new RuntimeException("Phase '" + phase
+                     + "' is not supported");
+            }
+            switch (actionPhase) {
                case PRE_INGEST:
                   preIngestActions.add(action);
                   break;
