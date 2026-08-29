@@ -248,7 +248,9 @@ public class AvroTypeFactory {
         if (product.getProductType() != null)
             avroProduct.setProductType(getAvroProductType(product.getProductType()));
 
-        if (product.getProductType() != null)
+        // Guarded on the product type, so a typeless product lost its
+        // structure on every RPC call. The two are unrelated.
+        if (product.getProductStructure() != null)
             avroProduct.setProductStructure(product.getProductStructure());
 
         //referince

@@ -509,8 +509,12 @@ public class TestLuceneCatalog extends TestCase {
 
 
         assertNotNull(page);
-        assertEquals(0, page.getPageNum());
-        assertEquals(0, page.getTotalPages());
+        // A blank page, asserted by what it means rather than by the numbers
+        // blankPage() happens to use: no products, and neither a next nor a
+        // previous to offer. See #134 item 17.
+        assertTrue(page.getPageProducts().isEmpty());
+        assertTrue(page.isFirstPage());
+        assertTrue(page.isLastPage());
         assertEquals(0, page.getPageSize());
     }
 
@@ -785,9 +789,11 @@ public class TestLuceneCatalog extends TestCase {
         ProductPage page2 = myCat.getNextPage(type, myCat.getFirstPage(type));
         ProductPage page = myCat.getPrevPage(null, page2);
         assertNotNull(page);
-        assertEquals(0, page.getPageNum());
+        // See the note in testGetNextPageNullType.
+        assertTrue(page.getPageProducts().isEmpty());
+        assertTrue(page.isFirstPage());
+        assertTrue(page.isLastPage());
         assertEquals(0, page.getPageSize());
-        assertEquals(0, page.getTotalPages());
 
     }
 
