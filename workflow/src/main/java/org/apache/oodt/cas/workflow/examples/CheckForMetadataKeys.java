@@ -25,8 +25,15 @@ public class CheckForMetadataKeys implements WorkflowConditionInstance {
 
     public boolean evaluate(Metadata metadata,
             WorkflowConditionConfiguration config) {
-        String[] reqMetKeys = (config.getProperty("reqMetKeys") + ",")
-                .split(",");
+        String configured = config.getProperty("reqMetKeys");
+        if (configured == null || configured.trim().isEmpty()) {
+            // Concatenating "," onto a missing property produced the string
+            // "null", so the condition waited for a metadata key named null
+            // and never passed. Nothing required means nothing to wait for.
+            return true;
+        }
+
+        String[] reqMetKeys = configured.split(",");
         for (String reqMetKey : reqMetKeys) {
             if (!metadata.containsKey(reqMetKey)) {
               return false;

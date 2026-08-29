@@ -152,6 +152,13 @@ public final class XmlRpcStructFactory {
         .get("current_task_start_date_time"));
     wInst.setCurrentTaskEndDateTimeIsoStr((String) workflowInstance
         .get("current_task_end_date_time"));
+    // Written at "priority" above but never read here, so every instance
+    // arrived at the default regardless of what was sent. AvroTypeFactory
+    // reconstructs it the same way.
+    if (workflowInstance.get("priority") != null) {
+      wInst.setPriority(Priority.getPriority(Double
+          .parseDouble((String) workflowInstance.get("priority"))));
+    }
     if (workflowInstance.get("sharedContext") != null) {
       Metadata met = new Metadata();
       met.addMetadata((Map) workflowInstance.get("sharedContext"));

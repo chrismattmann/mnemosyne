@@ -98,9 +98,11 @@ public class WorkflowTask {
   public WorkflowTask(String taskId, String taskName,
       WorkflowTaskConfiguration taskConfig, List conditions,
       String taskInstanceClassName, int order) {
+    // taskInstanceClassName and order were passed as null and -1 rather than
+    // the values given, so a task built this way ran nothing.
     this(taskId, taskName, taskConfig, conditions,
-        new Vector<WorkflowCondition>(), new Vector<String>(), null,
-        null, null, -1);
+        new Vector<WorkflowCondition>(), new Vector<String>(),
+        taskInstanceClassName, null, null, order);
   }
 
   /**
