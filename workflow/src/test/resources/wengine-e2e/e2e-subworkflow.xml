@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+<!--
+  The generic spelling of a sub-workflow: <workflow> names its execution
+  strategy in an attribute rather than in the tag. Equivalent to writing
+  <sequential> or <parallel>, and nests the same way.
+-->
+<cas:workflows xmlns:cas="http://oodt.jpl.nasa.gov/1.0/cas">
+
+  <workflow id="urn:oodt:e2e:GenericOuter" name="Generic Outer"
+            execution="sequential">
+    <task id-ref="urn:oodt:e2e:StepOne"/>
+    <workflow id="urn:oodt:e2e:GenericInner" name="Generic Inner"
+              execution="sequential">
+      <task id-ref="urn:oodt:e2e:StepTwo"/>
+    </workflow>
+  </workflow>
+
+  <!--
+    execution="parallel" has to behave exactly as a <parallel> element does:
+    the repository dissolves such a workflow into one dynamic workflow per
+    task, so it does not appear under its own id.
+  -->
+  <workflow id="urn:oodt:e2e:GenericParallel" name="Generic Parallel"
+            execution="parallel">
+    <task id-ref="urn:oodt:e2e:StepTwo"/>
+    <task id-ref="urn:oodt:e2e:StepThree"/>
+  </workflow>
+
+  <task id="urn:oodt:e2e:StepOne" name="Step One"
+        class="org.apache.oodt.cas.workflow.examples.NoOpTask">
+    <conditions/>
+  </task>
+
+  <task id="urn:oodt:e2e:StepTwo" name="Step Two"
+        class="org.apache.oodt.cas.workflow.examples.NoOpTask">
+    <conditions/>
+  </task>
+
+  <task id="urn:oodt:e2e:StepThree" name="Step Three"
+        class="org.apache.oodt.cas.workflow.examples.NoOpTask">
+    <conditions/>
+  </task>
+
+</cas:workflows>
