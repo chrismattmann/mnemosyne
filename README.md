@@ -21,6 +21,13 @@ which the Apache Software Foundation
 </dependency>
 ```
 
+![Mnemosyne architecture](https://raw.githubusercontent.com/wiki/chrismattmann/mnemosyne/images/mnemosyne-architecture.png)
+
+The **Crawler** brings products in. The **File Manager** is the system of record
+— catalog, metadata, and lineage. **Workflow Manager**, **Resource Manager**, and
+**PGE** process those products. **Solr** makes the catalog queryable.
+**OPSUI** and the **CLI** are how you operate the stack.
+
 ## Why the name
 
 Mnemosyne is the Titaness of memory and the mother of the Muses. Stripped to
