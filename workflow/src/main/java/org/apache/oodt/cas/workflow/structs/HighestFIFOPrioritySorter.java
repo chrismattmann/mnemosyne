@@ -50,6 +50,33 @@ public class HighestFIFOPrioritySorter implements PrioritySorter {
   private static final Logger LOG = Logger
       .getLogger(HighestFIFOPrioritySorter.class.getName());
 
+  /** Seconds between boosts when none is configured. */
+  public static final int DEFAULT_SECONDS_BETWEEN_BOOSTS = 1;
+
+  /** Boost applied to a waiting instance when none is configured. */
+  public static final double DEFAULT_BOOST_AMOUNT = 50.0;
+
+  /** Ceiling a boosted priority will not pass when none is configured. */
+  public static final double DEFAULT_BOOST_CAP = 1.0;
+
+  /**
+   * Constructs a sorter with default boost settings.
+   *
+   * <p>
+   * GenericWorkflowObjectFactory resolves the
+   * org.apache.oodt.cas.workflow.wengine.prioritizer property with
+   * Class.newInstance(), which needs a no-arg constructor. Without one this
+   * class -- the only sorter that ages a waiting instance up, and so the only
+   * one that stops a low-priority instance starving -- could not be named in
+   * workflow.properties at all: it threw InstantiationException, the engine
+   * was left null, and the workflow manager failed to start.
+   * </p>
+   */
+  public HighestFIFOPrioritySorter() {
+    this(DEFAULT_SECONDS_BETWEEN_BOOSTS, DEFAULT_BOOST_AMOUNT,
+        DEFAULT_BOOST_CAP);
+  }
+
   public HighestFIFOPrioritySorter(int secondsBetweenBoosts,
       double boostAmount, double boostCap) {
     this.secondsBetweenBoosts = secondsBetweenBoosts;
