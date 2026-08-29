@@ -45,8 +45,13 @@ public class EndsWithComparator extends PreConditionComparator<String> {
   @Override
   protected int performCheck(File file, String ext)
       throws PreconditionComparatorException {
-    return file.getName().substring(file.getName().lastIndexOf(".") + 1)
-        .compareTo(ext);
+    // lastIndexOf returns -1 when there is no dot, and -1 + 1 == 0 compared
+    // the whole file name, so a precondition configured for ".nc" also fired
+    // on a file named exactly "nc". A file with no dot has no extension.
+    String name = file.getName();
+    int dot = name.lastIndexOf('.');
+    String extension = dot < 0 ? "" : name.substring(dot + 1);
+    return extension.compareTo(ext);
   }
 
 }

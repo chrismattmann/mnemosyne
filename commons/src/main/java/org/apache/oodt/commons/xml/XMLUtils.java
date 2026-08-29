@@ -102,16 +102,21 @@ public class XMLUtils {
             Element valElem = (Element) valueNodes.item(i);
             String value;
 
+            String rawValue = DOMUtil.getSimpleElementText(valElem);
             try {
-                value = URLDecoder.decode(
-                        DOMUtil.getSimpleElementText(valElem), encoding);
-                values.add(value);
+                value = URLDecoder.decode(rawValue, encoding);
             } catch (Exception e) {
-                LOG.log(Level.SEVERE, e.getMessage());
-                LOG.log(Level.WARNING, "Error decoding tag: [" + elt
-                        + "]: val: [" + DOMUtil.getSimpleElementText(valElem)
-                        + "] from metadata. Message: " + e.getMessage());
+                // Dropping the element made a supplied-but-unreadable value
+                // indistinguishable from one that was never supplied, and
+                // silently shortened the list. URLDecoder raises on a
+                // malformed escape such as a bare '%', and for such a value
+                // the undecoded text is the best reading available.
+                LOG.log(Level.WARNING, "Could not URL-decode tag: [" + elt
+                        + "]: val: [" + rawValue + "]; keeping it undecoded. "
+                        + "Message: " + e.getMessage());
+                value = rawValue;
             }
+            values.add(value);
         }
 
         return values;
@@ -123,15 +128,27 @@ public class XMLUtils {
 
     public static String read(Element root, String elt, String encoding) {
 
-        String value = null;
+        String rawValue;
         try {
-            value = URLDecoder.decode(DOMUtil.getSimpleElementText(root, elt),
-                    encoding);
+            rawValue = DOMUtil.getSimpleElementText(root, elt);
         } catch (Exception e) {
-            LOG.log(Level.WARNING, "Error decoding " + elt + "from metadata. "
+            // Genuinely absent or unreadable as XML: null is the right answer.
+            LOG.log(Level.WARNING, "Error reading " + elt + " from metadata. "
                     + "Message: " + e.getMessage());
+            return null;
         }
-        return value;
+
+        try {
+            return URLDecoder.decode(rawValue, encoding);
+        } catch (Exception e) {
+            // Returning null here reported the element as absent when it was
+            // present but undecodable, so a caller could not tell the two
+            // apart. See the note in readMany above.
+            LOG.log(Level.WARNING, "Could not URL-decode " + elt
+                    + " from metadata; keeping it undecoded. Message: "
+                    + e.getMessage());
+            return rawValue;
+        }
     }
 
     public static Element getFirstElement(String name, Element root) {

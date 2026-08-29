@@ -38,10 +38,13 @@ public class RegExExcludeComparator extends PreConditionComparator<String> {
 	
 	protected int performCheck(File file, String compareItem)
 			throws PreconditionComparatorException {
+		// Lower-casing the pattern rewrote \D to \d, inverting it, and broke
+		// \W, \S, \B, \Q...\E and \p{...} the same way. The intent is
+		// case-insensitive matching, which is what CASE_INSENSITIVE is for.
 		if (compareItem != null
 				&& !compareItem.trim().equals("")
-				&& Pattern.matches(compareItem.toLowerCase(), file
-						.getAbsolutePath().toLowerCase())) {
+				&& Pattern.compile(compareItem, Pattern.CASE_INSENSITIVE)
+						.matcher(file.getAbsolutePath()).matches()) {
 		  return 0;
 		}
 		return 1;
