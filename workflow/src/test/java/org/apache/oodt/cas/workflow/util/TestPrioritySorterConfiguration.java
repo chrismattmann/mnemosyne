@@ -52,9 +52,17 @@ public class TestPrioritySorterConfiguration {
 
   private Handler capture;
 
+  private Level priorLevel;
+
   @Before
   public void captureFactoryLogging() {
     factoryLog = Logger.getLogger(GenericWorkflowObjectFactory.class.getName());
+    // Give this logger a level of its own. Several tests in this module set the
+    // root logger to OFF and never put it back, and a logger with no level of
+    // its own inherits that -- so the record under test would be filtered
+    // before it ever reached the handler below, depending on what ran first.
+    priorLevel = factoryLog.getLevel();
+    factoryLog.setLevel(Level.ALL);
     capture = new Handler() {
       public void publish(LogRecord record) { records.add(record); }
       public void flush() { }
@@ -66,6 +74,7 @@ public class TestPrioritySorterConfiguration {
   @After
   public void releaseFactoryLogging() {
     factoryLog.removeHandler(capture);
+    factoryLog.setLevel(priorLevel);
   }
 
   /** #239: this is the one that ages a waiting instance up, and it was the one that could not be selected. */
