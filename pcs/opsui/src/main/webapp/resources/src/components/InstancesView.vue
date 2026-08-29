@@ -17,7 +17,10 @@
 <template>
   <section>
     <div class="head">
-      <h2>Workflow instances</h2>
+      <div>
+        <h2>Workflow instances</h2>
+        <RefreshNote :refreshed-at="refreshedAt" :stale="stale"/>
+      </div>
       <div class="filters">
         <label>
           Status
@@ -96,8 +99,9 @@
 </template>
 
 <script>
-import { computed, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import Pager from './Pager.vue'
+import RefreshNote from './RefreshNote.vue'
 import SortHead from './SortHead.vue'
 import { formatWallClock, parseStamp, sortRows, toggleSort, wallClockMs } from '../sort.js'
 import { instanceMatches, workflowFilterOptions } from '../instanceFilter.js'
@@ -110,21 +114,34 @@ const STATUSES = [
 
 export default {
   name: 'InstancesView',
-  components: { Pager, SortHead },
+  components: { Pager, RefreshNote, SortHead },
   props: {
     payload: { type: Object, default: null },
     status: { type: String, default: 'ALL' },
     workflow: { type: String, default: '' },
     since: { type: String, default: '' },
     workflows: { type: Array, default: () => [] },
-    loading: { type: Boolean, default: false }
+    loading: { type: Boolean, default: false },
+    refreshedAt: { type: Number, default: 0 },
+    stale: { type: Boolean, default: false }
   },
   emits: ['status', 'page', 'filter-workflow', 'filter-since', 'open-workflow', 'open-task', 'open-instance', 'open-product'],
   setup(props) {
     const pageBody = computed(() => (props.payload && props.payload.page) || {})
     const sort = ref('')
     const dir = ref('asc')
-    const now = computed(() => Date.now())
+    const now = ref(Date.now())
+    let tick = null
+    onMounted(() => {
+      tick = setInterval(() => {
+        now.value = Date.now()
+      }, 1000)
+    })
+    onUnmounted(() => {
+      if (tick) {
+        clearInterval(tick)
+      }
+    })
     const instances = computed(() => {
       return (pageBody.value.instances || []).map((inst) => Object.assign({}, inst, {
         wallMs: wallClockMs(inst.startDateTime, inst.endDateTime, now.value)

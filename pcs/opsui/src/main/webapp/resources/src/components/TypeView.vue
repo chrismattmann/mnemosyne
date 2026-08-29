@@ -19,6 +19,7 @@
     <p><a href="#" @click.prevent="$emit('back')">← Catalog</a></p>
     <h2>{{ name }}</h2>
     <p class="muted">{{ description }} · {{ numProducts }} products</p>
+    <RefreshNote :refreshed-at="refreshedAt" :stale="stale"/>
     <p v-if="loading && !products.length" class="empty">Loading products…</p>
     <p v-else-if="!products.length" class="empty">No products of this type.</p>
     <table v-else>
@@ -41,40 +42,43 @@
         </tr>
       </tbody>
     </table>
-    <p v-if="rows.length" class="muted shown">
-      Showing {{ rows.length }} of {{ numProducts }} products.
-    </p>
-    <p v-if="hasMore" ref="moreEl" class="more">
-      <button class="ghost" type="button" :disabled="loading" @click="loadMore">
-        {{ loading ? 'Loading…' : 'Load more' }}
+    <div v-if="rows.length" class="more">
+      <p class="muted shown">
+        Showing {{ rows.length }} of {{ numProducts }} products.
+      </p>
+      <button v-if="hasMore" type="button" :disabled="loading" @click="loadMore">
+        {{ loading ? 'Loading…' : moreLabel }}
       </button>
-    </p>
+    </div>
   </section>
 </template>
 
 <script>
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
+import RefreshNote from './RefreshNote.vue'
 import SortHead from './SortHead.vue'
+import { typeHasMore } from '../catalogPages.js'
 import { parseStamp, sortRows, toggleSort } from '../sort.js'
 
 export default {
   name: 'TypeView',
-  components: { SortHead },
+  components: { RefreshNote, SortHead },
   props: {
     payload: { type: Object, default: null },
-    loading: { type: Boolean, default: false }
+    loading: { type: Boolean, default: false },
+    refreshedAt: { type: Number, default: 0 },
+    stale: { type: Boolean, default: false }
   },
-  emits: ['more', 'open', 'back'],
+  emits: ['more', 'refresh', 'open', 'back'],
   setup(props, { emit }) {
     const catalog = computed(() => (props.payload && props.payload.catalog) || {})
     const type = computed(() => catalog.value.type || {})
     const page = computed(() => catalog.value.page || 1)
     const totalPages = computed(() => catalog.value.totalPages || 1)
-    const hasMore = computed(() => page.value < totalPages.value)
-    const moreEl = ref(null)
+    const products = computed(() => catalog.value.products || [])
+    const hasMore = computed(() => typeHasMore(catalog.value, products.value.length))
     const sort = ref('')
     const dir = ref('asc')
-    const products = computed(() => catalog.value.products || [])
     const rows = computed(() => {
       if (!sort.value) {
         return products.value
@@ -84,7 +88,16 @@ export default {
         : (row) => row.name || ''
       return sortRows(products.value, getter, dir.value)
     })
-    let observer = null
+    const remaining = computed(() => {
+      const total = catalog.value.numProducts != null ? catalog.value.numProducts : 0
+      return Math.max(0, total - products.value.length)
+    })
+    const moreLabel = computed(() => {
+      if (!remaining.value) {
+        return 'Load more'
+      }
+      return 'Load more · ' + remaining.value + ' remaining'
+    })
 
     function onSort(field) {
       const next = toggleSort(field, sort.value, dir.value)
@@ -96,32 +109,12 @@ export default {
       if (props.loading || !hasMore.value) {
         return
       }
-      emit('more', page.value + 1)
-    }
-
-    function attach() {
-      if (observer) {
-        observer.disconnect()
-        observer = null
-      }
-      if (typeof IntersectionObserver === 'undefined' || !moreEl.value) {
+      if (page.value < totalPages.value) {
+        emit('more', page.value + 1)
         return
       }
-      observer = new IntersectionObserver((entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
-          loadMore()
-        }
-      })
-      observer.observe(moreEl.value)
+      emit('refresh')
     }
-
-    onMounted(attach)
-    watch([hasMore, moreEl], attach)
-    onUnmounted(() => {
-      if (observer) {
-        observer.disconnect()
-      }
-    })
 
     return {
       name: computed(() => type.value.name || ''),
@@ -133,7 +126,7 @@ export default {
       dir,
       onSort,
       hasMore,
-      moreEl,
+      moreLabel,
       loadMore
     }
   }
@@ -146,11 +139,15 @@ h2 {
 }
 
 .shown {
-  margin-top: 0.8rem;
+  margin: 0;
   font-size: 0.85rem;
 }
 
 .more {
-  margin: 0.8rem 0 1.4rem;
+  margin: 0.9rem 0 1.6rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
 }
 </style>

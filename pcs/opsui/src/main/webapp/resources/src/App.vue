@@ -38,11 +38,11 @@
 
     <StatusView v-if="route.view === 'status'" :report="health" :loading="loading" :refreshed-at="refreshedAt" :stale="stale" @open-product="openLatestFile" @open-instances="openInstances" @open-config="openConfig"/>
     <ConfigView v-else-if="route.view === 'config'" :payload="configPayload" :loading="loading" @back="go({ view: 'status' })"/>
-    <CatalogView v-else-if="route.view === 'catalog'" :types="types" :loading="loading" @open="openType" @query="openSearch" @find="openProduct"/>
+    <CatalogView v-else-if="route.view === 'catalog'" :types="types" :loading="loading" :refreshed-at="refreshedAt" :stale="stale" @open="openType" @query="openSearch" @find="openProduct"/>
     <SearchView v-else-if="route.view === 'search'" :payload="searchPayload" :loading="loading" @query="openSearch" @open="openProduct" @open-type="openType" @back="go({ view: 'catalog' })"/>
-    <TypeView v-else-if="route.view === 'type'" :payload="typePayload" :loading="loading" @more="openTypeMore" @open="openProduct" @back="go({ view: 'catalog' })"/>
+    <TypeView v-else-if="route.view === 'type'" :payload="typePayload" :loading="loading" :refreshed-at="refreshedAt" :stale="stale" @more="openTypeMore" @refresh="refreshType" @open="openProduct" @back="go({ view: 'catalog' })"/>
     <ProductView v-else-if="route.view === 'product'" :payload="productPayload" :pedigree="pedigree" :loading="loading" @open-type="openType" @open-instance="openInstance" @open-workflow="openWorkflow" @open-task="openTask" @open-product="openProduct" @back="go({ view: 'catalog' })"/>
-    <InstancesView v-else-if="route.view === 'instances'" :payload="instancePayload" :workflows="workflows" :status="route.status || 'ALL'" :workflow="route.workflow || ''" :since="route.since || ''" :loading="loading" @status="openInstances" @page="openInstancesPage" @filter-workflow="setInstanceWorkflow" @filter-since="setInstanceSince" @open-workflow="openWorkflow" @open-task="openTaskFromInstanceRow" @open-instance="openInstance" @open-product="openProduct"/>
+    <InstancesView v-else-if="route.view === 'instances'" :payload="instancePayload" :workflows="workflows" :status="route.status || 'ALL'" :workflow="route.workflow || ''" :since="route.since || ''" :loading="loading" :refreshed-at="refreshedAt" :stale="stale" @status="openInstances" @page="openInstancesPage" @filter-workflow="setInstanceWorkflow" @filter-since="setInstanceSince" @open-workflow="openWorkflow" @open-task="openTaskFromInstanceRow" @open-instance="openInstance" @open-product="openProduct"/>
     <InstanceView v-else-if="route.view === 'instance'" :payload="instanceDetail" :loading="loading" @open-workflow="openWorkflow" @open-task="openTaskFromInstance" @open-instance="openInstance" @open-type="openType" @open-product="openProduct" @back="backFromInstance"/>
     <ResourcesView v-else-if="route.view === 'resources'" :payload="resourcePayload" :stubs="resourceStubs" :loading="loading"/>
     <WorkflowsView v-else-if="route.view === 'workflows'" :workflows="workflows" :loading="loading" @open="openWorkflow"/>
@@ -74,8 +74,9 @@ import {
   getResources, getTask, getTypeProducts, getTypes, getWorkflow, getWorkflows, queryCatalog
 } from './api.js'
 import { catalogSqlError } from './sqlQuery.js'
-import { mergeTypeCatalog } from './catalogPages.js'
+import { loadTypePages } from './catalogPages.js'
 import { instancesQuery, splitHash } from './instanceHash.js'
+import { POLL_MS, shouldPoll } from './pollViews.js'
 
 export default {
   name: 'App',
@@ -104,6 +105,7 @@ export default {
     const refreshedAt = ref(0)
     const stale = ref(false)
     let timer = null
+    let loadSeq = 0
 
     function parseHash() {
       const split = splitHash(window.location.hash || '')
@@ -241,6 +243,35 @@ export default {
         return
       }
       go({ view: 'type', name: route.value.name, page: next })
+    }
+
+    function refreshType() {
+      load({ quiet: true, refreshType: true })
+    }
+
+    function hasExistingData(view) {
+      if (view === 'status') {
+        return Boolean(health.value)
+      }
+      if (view === 'catalog') {
+        return types.value.length > 0
+      }
+      if (view === 'type') {
+        return Boolean(typePayload.value)
+      }
+      if (view === 'instances') {
+        return Boolean(instancePayload.value)
+      }
+      if (view === 'instance') {
+        return Boolean(instanceDetail.value)
+      }
+      if (view === 'resources') {
+        return Boolean(resourcePayload.value)
+      }
+      if (view === 'workflow') {
+        return Boolean(workflowPayload.value)
+      }
+      return false
     }
 
     function openProduct(id) {
@@ -381,15 +412,20 @@ export default {
       go({ view: 'search', sql: trimmed })
     }
 
-    async function load() {
-      loading.value = true
+    async function load(options) {
+      const r = route.value
+      const quiet = Boolean(options && options.quiet && hasExistingData(r.view))
+      if (quiet && loading.value) {
+        return
+      }
+      const seq = ++loadSeq
+      if (!quiet) {
+        loading.value = true
+      }
       try {
-        const r = route.value
         if (r.view === 'status') {
           const body = await getHealth()
           health.value = body.report || body
-          refreshedAt.value = Date.now()
-          stale.value = false
         } else if (r.view === 'catalog') {
           const body = await getTypes()
           types.value = body.types || []
@@ -406,23 +442,16 @@ export default {
           resourcePayload.value = res
           health.value = healthBody.report || healthBody
         } else if (r.view === 'type') {
-          const through = r.page || 1
-          const current = typePayload.value && typePayload.value.catalog
-          const currentName = current && current.type && current.type.name
-          let havePage = 0
-          if (currentName === r.name) {
-            havePage = Number(current.page) || 0
-          } else {
-            typePayload.value = null
-          }
-          for (let p = havePage + 1; p <= through; p++) {
-            const body = await getTypeProducts(r.name, p)
-            typePayload.value = mergeTypeCatalog(typePayload.value, body)
-            const total = (body.catalog && body.catalog.totalPages) || 1
-            if (p >= total) {
-              break
-            }
-          }
+          const loaded = Number(
+            typePayload.value && typePayload.value.catalog && typePayload.value.catalog.page
+          ) || 0
+          typePayload.value = await loadTypePages({
+            name: r.name,
+            through: Math.max(r.page || 1, loaded),
+            previous: typePayload.value,
+            refresh: Boolean(options && options.refreshType) || quiet,
+            getPage: getTypeProducts
+          })
         } else if (r.view === 'product') {
           const body = await getProduct(r.id)
           if (body && body.missing) {
@@ -466,16 +495,28 @@ export default {
         } else if (r.view === 'config') {
           configPayload.value = await getConfig(r.id)
         }
+        if (seq !== loadSeq) {
+          return
+        }
         error.value = ''
+        if (shouldPoll(r.view)) {
+          refreshedAt.value = Date.now()
+          stale.value = false
+        }
       } catch (e) {
-        if (route.value.view === 'status' && health.value) {
+        if (seq !== loadSeq) {
+          return
+        }
+        if (hasExistingData(r.view)) {
           stale.value = true
           error.value = ''
         } else {
           error.value = e.message || String(e)
         }
       } finally {
-        loading.value = false
+        if (seq === loadSeq && !quiet) {
+          loading.value = false
+        }
       }
     }
 
@@ -491,10 +532,10 @@ export default {
       writeHash()
       load()
       timer = setInterval(() => {
-        if (route.value.view === 'status' || route.value.view === 'instances' || route.value.view === 'instance' || route.value.view === 'resources' || route.value.view === 'workflow') {
-          load()
+        if (shouldPoll(route.value.view)) {
+          load({ quiet: true })
         }
-      }, 8000)
+      }, POLL_MS)
     })
 
     onUnmounted(() => {
@@ -511,7 +552,7 @@ export default {
     return {
       route, loading, error, health, refreshedAt, stale, types, typePayload, productPayload,
       pedigree, instancePayload, instanceDetail, workflows, workflowPayload, taskPayload,
-      conditionPayload, configPayload, searchPayload, resourcePayload, resourceStubs, go, openType, openTypePage, openTypeMore, openProduct,
+      conditionPayload, configPayload, searchPayload, resourcePayload, resourceStubs, go, openType, openTypePage, openTypeMore, refreshType, openProduct,
       openProductByPath, openLatestFile, openInstances, openInstancesPage, setInstanceWorkflow, setInstanceSince, backFromInstance, openInstance, openWorkflow, openTask, openTaskFromWorkflow, openTaskFromInstance, openTaskFromInstanceRow, openCondition, openConditionFromTask, backFromTask, backFromCondition, openConfig, openSearch
     }
   }
