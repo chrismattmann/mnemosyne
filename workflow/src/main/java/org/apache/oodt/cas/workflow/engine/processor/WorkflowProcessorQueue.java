@@ -32,6 +32,7 @@ import org.apache.oodt.cas.workflow.structs.exceptions.RepositoryException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Collections;
 import java.util.Vector;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -316,6 +317,19 @@ public class WorkflowProcessorQueue {
           this.addToModelRepo(workflow);
           persist(instance);
           WorkflowProcessor subProcessor = fromWorkflowInstance(instance);
+          // Every condition is persisted as an instance of its own and the
+          // querier offers each non-done instance independently, so conditions
+          // have always been evaluated all at once no matter what their block
+          // asked for. A block that asked to be sequential gets each condition
+          // gated on the one before it, using the same prerequisite mechanism
+          // that gates a task on its conditions. A block that said nothing is
+          // left exactly as it was.
+          if (Workflow.SEQUENTIAL_CONDITIONS.equalsIgnoreCase(inst
+              .getParentChildWorkflow().getPreConditionExecutionType())
+              && !gatingConditions.isEmpty()) {
+            subProcessor.setPrerequisites(Collections
+                .singletonList(gatingConditions.get(gatingConditions.size() - 1)));
+          }
           processor.getSubProcessors().add(subProcessor);
           gatingConditions.add(subProcessor);
           // The parent listens to the child, so a child finishing is acted on
@@ -391,11 +405,24 @@ public class WorkflowProcessorQueue {
         // Gated on the tasks, so they run after the work rather than beside
         // it. A post-condition exists to judge what the tasks produced, so one
         // evaluated while they are still running is judging nothing.
+        List<WorkflowProcessor> postConditions =
+            new Vector<WorkflowProcessor>();
+        boolean postSequential = Workflow.SEQUENTIAL_CONDITIONS
+            .equalsIgnoreCase(inst.getParentChildWorkflow()
+                .getPostConditionExecutionType());
         for (WorkflowCondition cond : inst.getParentChildWorkflow()
             .getPostConditions()) {
           WorkflowProcessor condProcessor = buildConditionProcessor(inst, cond,
               "post-cond-workflow-");
-          condProcessor.setPrerequisites(taskProcessors);
+          // The tasks, plus -- when the block asked to be sequential -- the
+          // post-condition before this one. See the note on the pre-conditions.
+          List<WorkflowProcessor> gates =
+              new Vector<WorkflowProcessor>(taskProcessors);
+          if (postSequential && !postConditions.isEmpty()) {
+            gates.add(postConditions.get(postConditions.size() - 1));
+          }
+          condProcessor.setPrerequisites(gates);
+          postConditions.add(condProcessor);
           processor.getSubProcessors().add(condProcessor);
           condProcessor.getListeners().add(processor);
         }

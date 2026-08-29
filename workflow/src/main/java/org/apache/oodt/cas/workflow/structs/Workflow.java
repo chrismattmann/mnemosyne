@@ -60,6 +60,18 @@ public class Workflow {
 
   private List<WorkflowCondition> postConditions;
 
+  /* how the pre-conditions are evaluated; null when the model does not say */
+  private String preConditionExecutionType;
+
+  /* how the post-conditions are evaluated; null when the model does not say */
+  private String postConditionExecutionType;
+
+  /** Conditions are evaluated one after another, each waiting for the last. */
+  public static final String SEQUENTIAL_CONDITIONS = "sequential";
+
+  /** Conditions are all offered for evaluation at once. */
+  public static final String PARALLEL_CONDITIONS = "parallel";
+
   /**
    * Default Constructor
    * 
@@ -210,6 +222,36 @@ public class Workflow {
   /**
    * @param postConditions the postConditions to set
    */
+  /**
+   * How the pre-conditions are to be evaluated: "sequential", one after
+   * another, or "parallel", all at once. Declared by the execution attribute
+   * on the conditions block that carries them.
+   *
+   * <p>
+   * Held here, on the workflow, rather than on the conditions themselves. A
+   * condition written once and referenced by id-ref is a single shared object
+   * -- which is how the shipped GranuleMaps.xml uses them -- so a strategy
+   * recorded on the condition would leak into every other workflow that
+   * references it.
+   * </p>
+   */
+  public String getPreConditionExecutionType() {
+    return preConditionExecutionType;
+  }
+
+  public void setPreConditionExecutionType(String preConditionExecutionType) {
+    this.preConditionExecutionType = preConditionExecutionType;
+  }
+
+  /** As {@link #getPreConditionExecutionType()}, for the post-conditions. */
+  public String getPostConditionExecutionType() {
+    return postConditionExecutionType;
+  }
+
+  public void setPostConditionExecutionType(String postConditionExecutionType) {
+    this.postConditionExecutionType = postConditionExecutionType;
+  }
+
   public void setPostConditions(List<WorkflowCondition> postConditions) {
     this.postConditions = postConditions;
   }

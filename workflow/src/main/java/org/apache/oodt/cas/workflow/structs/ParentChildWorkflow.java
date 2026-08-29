@@ -40,6 +40,10 @@ public class ParentChildWorkflow extends Workflow {
     // WorkflowInstance.getParentChildWorkflow wraps this way on demand.
     super(workflow.getName(), workflow.getId(), workflow.getTasks(),
         workflow.getPreConditions(), workflow.getPostConditions());
+    // As with the post-conditions above: wrapping must not quietly drop how
+    // those conditions are meant to be evaluated.
+    setPreConditionExecutionType(workflow.getPreConditionExecutionType());
+    setPostConditionExecutionType(workflow.getPostConditionExecutionType());
     this.graph = new Graph();
   }
 

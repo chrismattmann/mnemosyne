@@ -672,12 +672,17 @@ public class PackagedWorkflowRepository implements WorkflowRepository {
           for (Element conditionsElem : this.getChildrenByTagName(graphElem,
               "conditions")) {
             String condType = conditionsElem.getAttribute("type");
+            // The execution attribute has been in the dialect and in the
+            // shipped examples all along, and nothing read it, so a block
+            // asking for its conditions in parallel got them one at a time.
+            String condExecution = conditionsElem.getAttribute("execution");
             List<Element> procTypeBlockNodes = this.getChildrenByTagName(
                 conditionsElem, "condition");
             if (procTypeBlockNodes != null && procTypeBlockNodes.size() > 0) {
               LOG.log(Level.FINE, "Found: [" + procTypeBlockNodes.size()
                   + "] linked [" + (condType == null || condType.equals("")
                       ? "pre" : condType) + "] condition definitions");
+              recordConditionExecutionType(graph, condType, condExecution);
               for (Element procTypeBlockNode : procTypeBlockNodes) {
                 loadGraphs(rootElements, procTypeBlockNode, graph,
                     staticMetadata, condType);
@@ -928,6 +933,44 @@ public class PackagedWorkflowRepository implements WorkflowRepository {
    * Taken from: http://stackoverflow.com/questions/1241525/java-element-
    * getelementsbytagname-restrict-to-top-level
    */
+  /**
+   * Records how a conditions block asked for its conditions to be evaluated.
+   *
+   * <p>
+   * The block itself never becomes a {@link Graph} -- this class reads its
+   * attributes and descends straight to the condition children -- so the
+   * strategy is kept on the workflow that owns the conditions. It cannot be
+   * kept on the conditions: one written with an id and referenced by id-ref is
+   * a single shared object, so a strategy set there would follow it into every
+   * other workflow that references it.
+   * </p>
+   *
+   * <p>
+   * The graph passed here is the enclosing element's, whose workflow is set by
+   * expandWorkflowTasksAndConditions before the children are visited.
+   * </p>
+   */
+  private void recordConditionExecutionType(Graph graph, String conditionType,
+      String executionType) {
+    if (executionType == null || executionType.trim().equals("")
+        || graph.getWorkflow() == null) {
+      return;
+    }
+
+    if (!Graph.processorIds.contains(executionType)) {
+      LOG.log(Level.WARNING, "Ignoring unsupported execution type '"
+          + executionType + "' on a conditions block of workflow: ["
+          + graph.getWorkflow().getId() + "]");
+      return;
+    }
+
+    if ("post".equalsIgnoreCase(conditionType)) {
+      graph.getWorkflow().setPostConditionExecutionType(executionType);
+    } else {
+      graph.getWorkflow().setPreConditionExecutionType(executionType);
+    }
+  }
+
   private List<Element> getChildrenByTagName(Element parent, String name) {
     List<Element> nodeList = new Vector<Element>();
     for (Node child = parent.getFirstChild(); child != null; child = child
