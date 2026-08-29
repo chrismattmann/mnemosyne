@@ -77,6 +77,7 @@ import { catalogSqlError } from './sqlQuery.js'
 import { loadTypePages } from './catalogPages.js'
 import { instancesQuery, splitHash } from './instanceHash.js'
 import { POLL_MS, shouldPoll } from './pollViews.js'
+import { shouldResetTypeVisit, typeFromParts, typeHash } from './typeVisit.js'
 
 export default {
   name: 'App',
@@ -106,6 +107,7 @@ export default {
     const stale = ref(false)
     let timer = null
     let loadSeq = 0
+    const typePage = ref(1)
 
     function parseHash() {
       const split = splitHash(window.location.hash || '')
@@ -121,7 +123,7 @@ export default {
       }
       const head = parts[0]
       if (head === 'catalog' && parts[1]) {
-        return { view: 'type', name: parts[1], page: Number(parts[2] || 1) }
+        return typeFromParts(parts)
       }
       if (head === 'catalog') {
         return { view: 'catalog' }
@@ -179,8 +181,7 @@ export default {
         return 'resources'
       }
       if (next.view === 'type') {
-        const page = next.page && next.page !== 1 ? '/' + next.page : ''
-        return 'catalog/' + encodeURIComponent(next.name) + page
+        return typeHash(next.name)
       }
       if (next.view === 'product') {
         return 'product/' + encodeURIComponent(next.id)
@@ -227,22 +228,24 @@ export default {
     }
 
     function openType(name) {
-      go({ view: 'type', name, page: 1 })
+      go({ view: 'type', name })
     }
 
     function openTypePage(page) {
-      go({ view: 'type', name: route.value.name, page })
+      typePage.value = page || 1
+      load()
     }
 
     function openTypeMore(page) {
       const catalog = typePayload.value && typePayload.value.catalog
-      const current = catalog && catalog.page ? catalog.page : (route.value.page || 1)
+      const current = catalog && catalog.page ? catalog.page : typePage.value
       const total = catalog && catalog.totalPages ? catalog.totalPages : 1
       const next = page || current + 1
       if (next > total || loading.value) {
         return
       }
-      go({ view: 'type', name: route.value.name, page: next })
+      typePage.value = next
+      load()
     }
 
     function refreshType() {
@@ -442,12 +445,9 @@ export default {
           resourcePayload.value = res
           health.value = healthBody.report || healthBody
         } else if (r.view === 'type') {
-          const loaded = Number(
-            typePayload.value && typePayload.value.catalog && typePayload.value.catalog.page
-          ) || 0
           typePayload.value = await loadTypePages({
             name: r.name,
-            through: Math.max(r.page || 1, loaded),
+            through: typePage.value,
             previous: typePayload.value,
             refresh: Boolean(options && options.refreshType) || quiet,
             getPage: getTypeProducts
@@ -520,7 +520,11 @@ export default {
       }
     }
 
-    watch(route, () => {
+    watch(route, (next, prev) => {
+      if (shouldResetTypeVisit(prev, next)) {
+        typePayload.value = null
+        typePage.value = 1
+      }
       writeHash()
       load()
     })
