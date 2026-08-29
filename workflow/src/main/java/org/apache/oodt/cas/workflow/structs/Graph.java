@@ -73,8 +73,31 @@ public class Graph {
 
   private List<Graph> children;
 
+  /**
+   * The legal values of a graph's execution type: the strategies a processor
+   * can actually run. Note that "workflow" is deliberately absent -- it names a
+   * container element, not a strategy, and a container says how it runs through
+   * its execution attribute.
+   */
   public static final List<String> processorIds = Arrays.asList(new String[] {
       "sequential", "parallel", "condition", "task" });
+
+  /**
+   * The element names that define a node of the graph, and so the names a
+   * repository descends into when reading a model.
+   *
+   * <p>
+   * This is a different question from {@link #processorIds} above, which the
+   * two shared until they disagreed. A sub-workflow may be written either as
+   * &lt;sequential&gt; or &lt;parallel&gt;, naming its strategy in the tag, or
+   * as &lt;workflow execution="sequential"&gt;, naming it in an attribute. Both
+   * produce a ParentChildWorkflow. Only the second needs an element name that
+   * is not itself a strategy, which is why one list could not answer both.
+   * </p>
+   */
+  public static final List<String> graphElementNames = Arrays
+      .asList(new String[] { "sequential", "parallel", "condition", "task",
+          "workflow" });
 
   public Graph(Element graphElem, Metadata staticMetadata) throws WorkflowException {
     this();

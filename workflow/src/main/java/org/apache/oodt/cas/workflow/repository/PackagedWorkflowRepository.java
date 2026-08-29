@@ -80,19 +80,32 @@ import javax.xml.parsers.DocumentBuilderFactory;
  *
  * <h2>The dialect</h2>
  *
- * Each file is rooted at <code>cas:workflows</code> and holds four kinds of
- * element, listed in {@link Graph#processorIds}: <code>sequential</code>,
- * <code>parallel</code>, <code>task</code> and <code>condition</code>. An
+ * Each file is rooted at <code>cas:workflows</code> and holds the elements
+ * listed in {@link Graph#graphElementNames}: <code>sequential</code>,
+ * <code>parallel</code>, <code>task</code>, <code>condition</code> and
+ * <code>workflow</code>. An
  * element carrying an <code>id</code> is a definition; one carrying an
  * <code>id-ref</code> is a reference to a definition, which may live in any of
  * the parsed files. Definitions can therefore be written once and reused, which
  * is most of the point of the dialect.
  *
  * <p>
- * Note that the element <em>name</em> determines how a node executes.
- * {@link Graph} reads an <code>execution</code> attribute and then overwrites
- * it with the node name, so <code>&lt;conditions execution="parallel"&gt;</code>
- * documents intent to a reader without changing what runs.
+ * A sub-workflow may be written either way round. <code>&lt;sequential&gt;</code>
+ * and <code>&lt;parallel&gt;</code> name the execution strategy in the tag;
+ * <code>&lt;workflow execution="sequential"&gt;</code> names it in an attribute.
+ * Both produce a {@link org.apache.oodt.cas.workflow.structs.ParentChildWorkflow},
+ * and either may nest inside another. Only the generic form needs an element
+ * name that is not itself a strategy, which is why the names this class scans
+ * for and the strategies {@link Graph} accepts are two separate lists.
+ * </p>
+ *
+ * <p>
+ * One attribute is <em>not</em> honoured: the <code>execution</code> on a
+ * <code>&lt;conditions&gt;</code> block. That element never becomes a
+ * {@link Graph} -- this class reads its <code>type</code> directly and descends
+ * to the <code>condition</code> children -- so
+ * <code>&lt;conditions execution="parallel"&gt;</code> documents intent to a
+ * reader without changing what runs.
  * </p>
  *
  * <h2>How a file becomes a model</h2>
@@ -654,7 +667,11 @@ public class PackagedWorkflowRepository implements WorkflowRepository {
       expandWorkflowTasksAndConditions(graph, staticMetadata, conditionType);
     }
 
-    for (String processorType : Graph.processorIds) {
+    // Scanning by processorIds meant <workflow> was never looked for, so a
+    // sub-workflow written in the generic form could not be reached at all --
+    // and expandWorkflowTasksAndConditions below, which has always handled
+    // "workflow" alongside "sequential" and "parallel", was unreachable with it.
+    for (String processorType : Graph.graphElementNames) {
       LOG.log(Level.FINE, "Scanning for: [" + processorType + "] nodes");
       List<Element> procTypeBlocks = this.getChildrenByTagName(graphElem,
           processorType);
