@@ -912,11 +912,33 @@ public class PackagedWorkflowRepository implements WorkflowRepository {
     return workflow;
   }
 
+  /**
+   * Builds the task a parent workflow uses to reach a nested sub-workflow.
+   *
+   * <p>
+   * The id is derived from the event it redirects to rather than generated
+   * randomly, because it has to be the same in every repository that reads the
+   * same files. A workflow manager builds this repository twice -- once for
+   * itself and once for the engine's processor queue -- and with a random id
+   * the two disagreed: the manager created instances referencing its own
+   * redirector ids, and the engine's repository rejected the generated
+   * sub-workflow with "undefined task" because it had minted different ones.
+   * The redirector then ran without its configuration, so the event name it
+   * was meant to send was null.
+   * </p>
+   *
+   * <p>
+   * Deriving the id also means it survives a restart, so an instance persisted
+   * against a redirector still resolves afterwards. Two parents redirecting to
+   * the same child produce the same task, which is correct: the task carries
+   * nothing but the event name, and each parent still gets its own instance.
+   * </p>
+   */
   private WorkflowTask generateRedirector(String eventName) {
     WorkflowTask task = new WorkflowTask();
     WorkflowTaskConfiguration config = new WorkflowTaskConfiguration();
     config.addConfigProperty("eventName", eventName);
-    task.setTaskId("redirector-" + UUID.randomUUID().toString());
+    task.setTaskId("redirector-" + eventName);
     task.setTaskName("Redirector Task");
     task.setTaskInstanceClassName(BranchRedirector.class.getName());
     this.tasks.put(task.getTaskId(), task);

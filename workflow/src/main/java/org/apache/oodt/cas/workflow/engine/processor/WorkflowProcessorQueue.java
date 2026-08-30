@@ -100,6 +100,121 @@ public class WorkflowProcessorQueue {
    * are structural markers this engine creates itself, but a user's workflow
    * is no longer classified by the shape of its id.
    */
+  /**
+   * Fills in the workflow model when the instance came back from its
+   * repository without one.
+   *
+   * <p>
+   * An instance repository stores instance state -- status, dates, priority,
+   * the current task. The model belongs to the model repository, and this
+   * queue already holds it. DataSourceWorkflowInstanceRepository reconstructs
+   * an instance with a Workflow carrying nothing but its id, so the graph was
+   * empty, no execution type matched a processor class, and instances sat in
+   * their initial state for ever. Lucene and the in-memory repository happen
+   * to retain more, which is why the engine appeared to work with those two
+   * and not with JDBC.
+   * </p>
+   *
+   * <p>
+   * Looking the model up here fixes every instance repository at once, rather
+   * than asking each of them to persist a copy of something the model
+   * repository already holds -- two copies being free to drift apart.
+   * </p>
+   */
+  private void resolveModelFromRepository(WorkflowInstance instance) {
+    if (modelRepo == null || instance.getWorkflow() == null) {
+      return;
+    }
+
+    ParentChildWorkflow current = instance.getParentChildWorkflow();
+    boolean alreadyModelled = current != null && current.getGraph() != null
+        && current.getGraph().getExecutionType() != null
+        && !current.getGraph().getExecutionType().equals("");
+    if (alreadyModelled) {
+      return;
+    }
+
+    String modelId = instance.getWorkflow().getId();
+    if (modelId == null || modelId.equals("")) {
+      return;
+    }
+
+    try {
+      Workflow model = modelRepo.getWorkflowById(modelId);
+      if (model == null) {
+        LOG.log(Level.FINE, "Instance: [" + instance.getId()
+            + "] refers to workflow: [" + modelId
+            + "], which the model repository does not hold");
+        return;
+      }
+      if (model instanceof ParentChildWorkflow) {
+        instance.setParentChildWorkflow((ParentChildWorkflow) model);
+      } else {
+        instance.setWorkflow(model);
+      }
+      LOG.log(Level.FINE, "Instance: [" + instance.getId()
+          + "] carried no model; resolved [" + modelId
+          + "] from the model repository");
+    } catch (Exception e) {
+      LOG.log(Level.SEVERE, "Unable to resolve workflow model [" + modelId
+          + "] for instance: [" + instance.getId() + "]", e);
+    }
+  }
+
+  /**
+   * Fills in a state's lifecycle category when the instance came back carrying
+   * only the state's name.
+   *
+   * <p>
+   * Which category a state belongs to is defined by the lifecycle, not by the
+   * instance, so an instance repository has no reason to store it. But
+   * getProcessors skips any instance whose state has no category, and
+   * WorkflowInstance.setStatus -- which is all
+   * DataSourceWorkflowInstanceRepository has to work with, since the schema
+   * holds workflow_instance_status as a string -- builds a state with a name
+   * and nothing else. Such instances were therefore invisible to the querier
+   * and never ran.
+   * </p>
+   *
+   * <p>
+   * Resolved here for the same reason the model is: the lifecycle is already
+   * held by this queue, and doing it once at the boundary fixes every
+   * repository rather than asking each to persist something it does not own.
+   * </p>
+   */
+  private void resolveStateCategory(WorkflowInstance instance) {
+    WorkflowState state = instance.getState();
+    if (state == null || state.getCategory() != null || state.getName() == null) {
+      return;
+    }
+
+    try {
+      WorkflowLifecycle cycle = instance.getParentChildWorkflow() != null
+          ? lifecycle.getLifecycleForWorkflow(instance.getParentChildWorkflow())
+          : null;
+      if (cycle == null) {
+        cycle = lifecycle.getDefaultLifecycle();
+      }
+      if (cycle == null) {
+        return;
+      }
+
+      WorkflowState known = cycle.getStateByName(state.getName());
+      if (known != null && known.getCategory() != null) {
+        state.setCategory(known.getCategory());
+        LOG.log(Level.FINE, "Instance: [" + instance.getId() + "] state ["
+            + state.getName() + "] carried no category; resolved ["
+            + known.getCategory().getName() + "] from the lifecycle");
+      } else {
+        LOG.log(Level.FINE, "Instance: [" + instance.getId() + "] is in state ["
+            + state.getName() + "], which the lifecycle does not define");
+      }
+    } catch (Exception e) {
+      LOG.log(Level.SEVERE, "Unable to resolve the lifecycle category for state ["
+          + state.getName() + "] on instance: [" + instance.getId() + "]", e);
+    }
+  }
+
   private void ensureExecutionType(WorkflowInstance instance) {
     ParentChildWorkflow workflow = instance.getParentChildWorkflow();
     if (workflow == null || workflow.getGraph() == null) {
@@ -213,6 +328,14 @@ public class WorkflowProcessorQueue {
     List<WorkflowProcessor> processors = new Vector<WorkflowProcessor>(
         instances != null ? instances.size() : 0);
     for (WorkflowInstance inst : instances) {
+      // Before the test below, not after it. A repository may return an
+      // instance whose state carries only a name -- the JDBC one always does,
+      // since the schema stores the status as a string -- and the category is
+      // the lifecycle's to supply, not the repository's. Resolving it after
+      // the test would never run, because the test is what rejects it.
+      resolveModelFromRepository(inst);
+      resolveStateCategory(inst);
+
       // Retained as a guard: an instance with no state cannot be categorised,
       // and repositories are free to return those from the excluding query.
       if (inst.getState() != null && inst.getState().getCategory() != null
@@ -263,6 +386,8 @@ public class WorkflowProcessorQueue {
     } else {
       // Convert here, at this engine's boundary, rather than requiring the
       // repository to have produced a graph.
+      resolveModelFromRepository(inst);
+      resolveStateCategory(inst);
       ensureExecutionType(inst);
       if (inst.getParentChildWorkflow().getGraph() == null) {
         LOG.log(Level.SEVERE,
