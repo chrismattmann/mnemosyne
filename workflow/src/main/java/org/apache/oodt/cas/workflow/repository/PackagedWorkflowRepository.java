@@ -659,13 +659,29 @@ public class PackagedWorkflowRepository implements WorkflowRepository {
       throws CommonsException, CasMetadataException, WorkflowException, ParseException {
 
     LOG.log(Level.FINEST, "Visiting node: [" + graphElem.getNodeName() + "]");
-    loadConfiguration(rootElements, graphElem, staticMetadata);
+    // Scope the accumulated configuration to this node and its children.
+    //
+    // A single Metadata was threaded through the whole walk and mutated at
+    // every node, so a <configuration> block did not stop at the element that
+    // wrote it: it stayed in the accumulator and every element visited
+    // afterwards inherited it. Siblings leaked into one another, and each
+    // task and condition ended up snapshotting the union of everything parsed
+    // before it -- a partitioner task carrying an aggregator's script path, a
+    // condition that declares no configuration at all carrying both.
+    //
+    // Copying here keeps the inheritance that is intended, parent to child,
+    // and drops the part that never was: a child adds to its own copy, so a
+    // sibling starts from the parent's again rather than from whatever the
+    // previous sibling happened to leave behind.
+    Metadata scopedMetadata = new Metadata();
+    scopedMetadata.addMetadata(staticMetadata);
+    loadConfiguration(rootElements, graphElem, scopedMetadata);
     Graph graph = !graphElem.getNodeName().equals("cas:workflows") ? new Graph(
-        graphElem, staticMetadata) : new Graph();
+        graphElem, scopedMetadata) : new Graph();
     parent.getChildren().add(graph);
     graph.setParent(parent);
     if (!graphElem.getNodeName().equals("cas:workflows")) {
-      expandWorkflowTasksAndConditions(graph, staticMetadata, conditionType);
+      expandWorkflowTasksAndConditions(graph, scopedMetadata, conditionType);
     }
 
     // Scanning by processorIds meant <workflow> was never looked for, so a
@@ -680,7 +696,7 @@ public class PackagedWorkflowRepository implements WorkflowRepository {
         LOG.log(Level.FINE, "Found: [" + procTypeBlocks.size() + "] ["
             + processorType + "] processor types");
         for (Element procTypeBlock : procTypeBlocks) {
-          loadGraphs(rootElements, procTypeBlock, graph, staticMetadata, null);
+          loadGraphs(rootElements, procTypeBlock, graph, scopedMetadata, null);
         }
       } else {
         if (processorType.equals("condition")) {
@@ -703,7 +719,7 @@ public class PackagedWorkflowRepository implements WorkflowRepository {
               recordConditionExecutionType(graph, condType, condExecution);
               for (Element procTypeBlockNode : procTypeBlockNodes) {
                 loadGraphs(rootElements, procTypeBlockNode, graph,
-                    staticMetadata, condType);
+                    scopedMetadata, condType);
               }
             }
           }
@@ -797,7 +813,13 @@ public class PackagedWorkflowRepository implements WorkflowRepository {
       WorkflowCondition cond;
 
       if (graph.getModelIdRef() != null && !graph.getModelIdRef().equals("")) {
-        cond = this.conditions.get(graph.getModelIdRef());
+        // A referenced condition is copied, not shared. The same definition
+        // can be referenced from more than one place, and order is a property
+        // of the reference -- first in this block -- not of the definition.
+        // Handing out the definition itself would let the last workflow to
+        // reference it decide what order every other workflow sees.
+        // XmlStructFactory copies for the same reason.
+        cond = copyOf(this.conditions.get(graph.getModelIdRef()));
       } else {
         cond = new WorkflowCondition();
         cond.setConditionId(graph.getModelId());
@@ -824,11 +846,15 @@ public class PackagedWorkflowRepository implements WorkflowRepository {
           // The type attribute has been in the dialect and in the shipped
           // examples all along; nothing read it, so every condition became a
           // precondition and a post-condition could not be expressed.
-          if (post) {
-            graph.getParent().getWorkflow().getPostConditions().add(cond);
-          } else {
-            graph.getParent().getWorkflow().getPreConditions().add(cond);
-          }
+          List<WorkflowCondition> target = post
+              ? graph.getParent().getWorkflow().getPostConditions()
+              : graph.getParent().getWorkflow().getPreConditions();
+          // Position in the block is the order, counting from 1, as the XML
+          // dialect numbers them. Nothing set this, so every condition
+          // reported order -1 -- and order is the whole content of a
+          // sequential block, which runs them in the order written.
+          cond.setOrder(target.size() + 1);
+          target.add(cond);
         } else if (graph.getParent().getTask() != null) {
           // getPreConditions, not getConditions. WorkflowTask.getConditions
           // builds a fresh list from the pre and post lists and returns it, so
@@ -836,11 +862,11 @@ public class PackagedWorkflowRepository implements WorkflowRepository {
           // line: no task has ever carried the conditions written on it.
           // Workflow.getConditions returns its real list, which is why a
           // condition on a workflow attached and one on a task did not.
-          if (post) {
-            graph.getParent().getTask().getPostConditions().add(cond);
-          } else {
-            graph.getParent().getTask().getPreConditions().add(cond);
-          }
+          List<WorkflowCondition> target = post
+              ? graph.getParent().getTask().getPostConditions()
+              : graph.getParent().getTask().getPreConditions();
+          cond.setOrder(target.size() + 1);
+          target.add(cond);
         } else {
           LOG.log(Level.FINEST, "Condition: [" + graph.getModelId()
               + "] has not parent: it's a condition definition");
@@ -961,6 +987,31 @@ public class PackagedWorkflowRepository implements WorkflowRepository {
       config.addConfigProperty(key, met.getMetadata(key));
     }
     return config;
+  }
+
+  /**
+   * A copy of a condition definition, so a reference can carry its own order
+   * without editing the definition every other reference shares.
+   *
+   * @param cond the definition to copy; null yields null
+   * @return an independent condition with the same settings
+   */
+  private WorkflowCondition copyOf(WorkflowCondition cond) {
+    if (cond == null) {
+      return null;
+    }
+    WorkflowCondition copy = new WorkflowCondition();
+    copy.setConditionId(cond.getConditionId());
+    copy.setConditionName(cond.getConditionName());
+    copy.setConditionInstanceClassName(cond.getConditionInstanceClassName());
+    copy.setTimeoutSeconds(cond.getTimeoutSeconds());
+    copy.setOptional(cond.isOptional());
+    copy.setOrder(cond.getOrder());
+    // The configuration is shared rather than deep-copied: it is read-only
+    // once parsing is done, and the definition's is exactly what a reference
+    // should see.
+    copy.setCondConfig(cond.getCondConfig());
+    return copy;
   }
 
   private WorkflowConditionConfiguration convertToConditionConfiguration(
