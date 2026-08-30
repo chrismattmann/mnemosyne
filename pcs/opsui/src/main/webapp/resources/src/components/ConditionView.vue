@@ -23,7 +23,29 @@
       <table>
         <tbody>
           <tr><th>Name</th><td>{{ condition.name }}</td></tr>
+          <tr><th>ID</th><td class="mono">{{ condition.id }}</td></tr>
           <tr><th>Class</th><td class="mono">{{ condition.className }}</td></tr>
+          <tr><th>Order</th><td>{{ condition.order }}</td></tr>
+          <tr>
+            <th>Timeout</th>
+            <td>{{ condition.timeoutSeconds > 0 ? condition.timeoutSeconds + 's' : 'none' }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </article>
+
+    <article v-if="!loading" class="card">
+      <h3>Properties</h3>
+      <p v-if="!propertyRows.length" class="empty">This condition has no configured properties.</p>
+      <table v-else>
+        <thead>
+          <tr><th>Name</th><th>Value</th></tr>
+        </thead>
+        <tbody>
+          <tr v-for="row in propertyRows" :key="row.name">
+            <td class="mono">{{ row.name }}</td>
+            <td class="mono">{{ row.value }}</td>
+          </tr>
         </tbody>
       </table>
     </article>
@@ -42,7 +64,12 @@ export default {
   },
   emits: ['back'],
   setup(props) {
+    const propertyRows = computed(() => {
+      const props_ = (props.payload && props.payload.condition && props.payload.condition.properties) || {}
+      return Object.keys(props_).map(name => ({ name, value: props_[name] }))
+    })
     return {
+      propertyRows,
       condition: computed(() => (props.payload && props.payload.condition) || {})
     }
   }

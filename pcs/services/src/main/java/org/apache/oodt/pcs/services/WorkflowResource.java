@@ -41,6 +41,7 @@ import org.apache.oodt.cas.metadata.Metadata;
 import org.apache.oodt.cas.workflow.structs.Priority;
 import org.apache.oodt.cas.workflow.structs.Workflow;
 import org.apache.oodt.cas.workflow.structs.WorkflowCondition;
+import org.apache.oodt.cas.workflow.structs.WorkflowConditionConfiguration;
 import org.apache.oodt.cas.workflow.structs.WorkflowInstance;
 import org.apache.oodt.cas.workflow.structs.WorkflowInstancePage;
 import org.apache.oodt.cas.workflow.structs.WorkflowTask;
@@ -465,7 +466,30 @@ public class WorkflowResource extends PCSService {
     row.put("id", nullToEmpty(cond.getConditionId()));
     row.put("name", nullToEmpty(cond.getConditionName()));
     row.put("className", nullToEmpty(cond.getConditionInstanceClassName()));
+    // A condition is configured, ordered and timed out, exactly as a task is
+    // configured. Reporting only its class name says what code runs but not
+    // what it was told to do -- and two conditions of the same class differ
+    // only by their properties, so without these they read as duplicates.
+    row.put("properties", encodeConditionProperties(cond.getCondConfig()));
+    row.put("order", Integer.valueOf(cond.getOrder()));
+    row.put("timeoutSeconds", Long.valueOf(cond.getTimeoutSeconds()));
     return row;
+  }
+
+  static Map<String, String> encodeConditionProperties(
+      WorkflowConditionConfiguration config) {
+    Map<String, String> out = new LinkedHashMap<String, String>();
+    if (config == null || config.getProperties() == null) {
+      return out;
+    }
+    Properties props = config.getProperties();
+    List<String> names = new ArrayList<String>(props.stringPropertyNames());
+    Collections.sort(names, String.CASE_INSENSITIVE_ORDER);
+    for (int i = 0; i < names.size(); i++) {
+      String name = names.get(i);
+      out.put(name, nullToEmpty(props.getProperty(name)));
+    }
+    return out;
   }
 
   static Map<String, String> encodeTaskProperties(WorkflowTaskConfiguration config) {

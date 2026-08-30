@@ -62,6 +62,8 @@
             <th>Name</th>
             <th>ID</th>
             <th>Class</th>
+            <th>Timeout</th>
+            <th>Properties</th>
           </tr>
         </thead>
         <tbody>
@@ -74,6 +76,8 @@
             </td>
             <td class="mono">{{ row.cond.id }}</td>
             <td class="mono">{{ row.cond.className }}</td>
+            <td>{{ row.cond.timeoutSeconds > 0 ? row.cond.timeoutSeconds + 's' : '—' }}</td>
+            <td>{{ propertyCount(row.cond) }}</td>
           </tr>
         </tbody>
       </table>
@@ -148,6 +152,14 @@ export default {
       // Pre- then post-, numbered in declaration order: a sequential block
       // runs them in the order the workflow declared, so the order shown is
       // part of what the gate means.
+      // Two conditions of the same class are told apart by their properties,
+      // so the count is worth showing next to the class name; the detail view
+      // lists them.
+      propertyCount(cond) {
+        const props = (cond && cond.properties) || {}
+        const n = Object.keys(props).length
+        return n === 0 ? '—' : String(n)
+      },
       workflowConditions: computed(() => {
         const pre = (workflow.value.preConditions || []).map((cond, i) => ({ when: 'pre', cond, index: i + 1 }))
         const post = (workflow.value.postConditions || []).map((cond, i) => ({ when: 'post', cond, index: i + 1 }))
