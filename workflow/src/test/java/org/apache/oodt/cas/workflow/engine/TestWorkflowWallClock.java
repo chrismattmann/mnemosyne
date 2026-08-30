@@ -103,6 +103,13 @@ public class TestWorkflowWallClock extends TestCase {
         DELTA);
   }
 
+  public void testQueuedIsNotTerminalButErrorAndFinishedAre() {
+    assertFalse(ThreadPoolWorkflowEngine.isTerminalStatus("QUEUED"));
+    assertFalse(ThreadPoolWorkflowEngine.isTerminalStatus("PGE EXEC"));
+    assertTrue(ThreadPoolWorkflowEngine.isTerminalStatus("ERROR"));
+    assertTrue(ThreadPoolWorkflowEngine.isTerminalStatus("FINISHED"));
+  }
+
   public void testNullInstanceIsZero() {
     // Cast required: both methods are overloaded on String and WorkflowInstance.
     assertEquals(0.0, ThreadPoolWorkflowEngine

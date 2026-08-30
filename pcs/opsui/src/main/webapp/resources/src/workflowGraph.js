@@ -17,6 +17,16 @@
 
 const FINISHED = { FINISHED: true, SUCCESS: true, EXECUTIONCOMPLETE: true }
 const FAILED = { FAILURE: true, RESULTSFAILURE: true, STOPPED: true, ERROR: true }
+const LIVE = {
+  'PGE EXEC': true,
+  CRAWLING: true,
+  'BUILDING CONFIG FILE': true,
+  'STAGING INPUT': true,
+  EXECUTING: true,
+  STARTED: true,
+  PAUSED: true
+}
+const WAITING = { QUEUED: true, CREATED: true, RSUBMIT: true, LOADED: true, METMISS: true }
 
 export function instanceFinished(status) {
   return Boolean(FINISHED[String(status || '').toUpperCase()])
@@ -28,6 +38,38 @@ export function instanceFailed(status) {
 
 export function instanceTerminal(status) {
   return instanceFinished(status) || instanceFailed(status)
+}
+
+export function instanceLive(status) {
+  return Boolean(LIVE[String(status || '').toUpperCase()])
+}
+
+export function instanceWaiting(status) {
+  return Boolean(WAITING[String(status || '').toUpperCase()])
+}
+
+/** QUEUED that never left the repo after a WM restart. 2 min grace for a real queue. */
+export const ABANDONED_AFTER_MS = 2 * 60 * 1000
+
+export function instanceAbandoned(status, startIso, endIso, now, graceMs) {
+  if (endIso) {
+    const end = Date.parse(endIso)
+    if (Number.isFinite(end)) {
+      return false
+    }
+  }
+  if (instanceTerminal(status) || instanceLive(status)) {
+    return false
+  }
+  if (!instanceWaiting(status)) {
+    return false
+  }
+  const start = Date.parse(startIso || '')
+  if (!Number.isFinite(start)) {
+    return false
+  }
+  const grace = graceMs == null ? ABANDONED_AFTER_MS : graceMs
+  return (now || Date.now()) - start >= grace
 }
 
 /**

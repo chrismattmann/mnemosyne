@@ -36,7 +36,7 @@
           </tr>
           <tr>
             <th>Status</th>
-            <td><span class="pill" :class="pillClass(inst.status)">{{ inst.status || '—' }}</span></td>
+            <td><span class="pill" :class="pillClass(inst.status)" :title="abandoned ? 'Abandoned: WM restarted while this was still ' + inst.status + '; no end stamp' : ''">{{ inst.status || '—' }}</span></td>
           </tr>
           <tr>
             <th>{{ finished ? 'Last task' : 'Current task' }}</th>
@@ -116,7 +116,7 @@ import { computed } from 'vue'
 import MetadataTable from './MetadataTable.vue'
 import WorkflowGraph from './WorkflowGraph.vue'
 import { formatWallClock, wallClockMs } from '../sort.js'
-import { instanceFinished } from '../workflowGraph.js'
+import { instanceAbandoned, instanceFinished } from '../workflowGraph.js'
 
 export default {
   name: 'InstanceView',
@@ -139,14 +139,18 @@ export default {
       },
       title: computed(() => inst.value.workflowName || 'Workflow instance'),
       finished: computed(() => instanceFinished(inst.value.status)),
+      abandoned: computed(() => instanceAbandoned(inst.value.status, inst.value.startDateTime, inst.value.endDateTime, Date.now())),
       wallMs: computed(() => wallClockMs(inst.value.startDateTime, inst.value.endDateTime, Date.now(), inst.value.status)),
       formatWallClock,
       pillClass(status) {
+        if (instanceAbandoned(inst.value.status, inst.value.startDateTime, inst.value.endDateTime, Date.now())) {
+          return 'down'
+        }
         const value = String(status || '').toUpperCase()
         if (value === 'FINISHED' || value === 'SUCCESS' || value === 'EXECUTIONCOMPLETE') {
           return 'up'
         }
-        if (value === 'FAILURE' || value === 'RESULTSFAILURE' || value === 'STOPPED') {
+        if (value === 'FAILURE' || value === 'RESULTSFAILURE' || value === 'STOPPED' || value === 'ERROR') {
           return 'down'
         }
         if (value === 'PGE EXEC' || value === 'EXECUTING' || value === 'CRAWLING') {
