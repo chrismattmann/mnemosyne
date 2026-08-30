@@ -21,10 +21,12 @@ import java.net.MalformedURLException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.logging.Logger;
 
 import javax.ws.rs.DefaultValue;
@@ -129,13 +131,14 @@ public class WorkflowResource extends PCSService {
       body.put("page", Integer.valueOf(page == null ? pageNum : page.getPageNum()));
       body.put("totalPages", Integer.valueOf(page == null ? 0 : page.getTotalPages()));
       body.put("pageSize", Integer.valueOf(page == null ? 0 : page.getPageSize()));
+      Set executing = executingIds(client);
       List<Map<String, Object>> insts = new ArrayList<Map<String, Object>>();
       if (page != null && page.getPageWorkflows() != null) {
         List list = page.getPageWorkflows();
         for (int i = 0; i < list.size(); i++) {
           Object item = list.get(i);
           if (item instanceof WorkflowInstance) {
-            insts.add(encodeInstance((WorkflowInstance) item));
+            insts.add(encodeInstance((WorkflowInstance) item, executing));
           }
         }
       }
@@ -180,9 +183,10 @@ public class WorkflowResource extends PCSService {
     if (truncated) {
       matched = matched.subList(0, RECENT_INSTANCE_LIMIT);
     }
+    Set executing = executingIds(client);
     List<Map<String, Object>> insts = new ArrayList<Map<String, Object>>();
     for (int i = 0; i < matched.size(); i++) {
-      insts.add(encodeInstance(matched.get(i)));
+      insts.add(encodeInstance(matched.get(i), executing));
     }
     Map<String, Object> body = new LinkedHashMap<String, Object>();
     body.put("status", status);
@@ -235,7 +239,7 @@ public class WorkflowResource extends PCSService {
           LOG.fine("No instance metadata for " + id + ": " + e.getLocalizedMessage());
         }
       }
-      Map<String, Object> row = encodeInstanceDetail(inst, met);
+      Map<String, Object> row = encodeInstanceDetail(inst, met, executingIds(client));
       if ((!row.containsKey("tasks") || ((List) row.get("tasks")).isEmpty())
           && inst.getWorkflow() != null && inst.getWorkflow().getId() != null
           && inst.getWorkflow().getId().length() > 0) {
@@ -307,7 +311,50 @@ public class WorkflowResource extends PCSService {
     }
   }
 
+  static Set executingIds(WorkflowManagerClient client) {
+    if (client == null) {
+      return null;
+    }
+    try {
+      List ids = client.getExecutingWorkflowInstanceIds();
+      Set out = new HashSet();
+      if (ids != null) {
+        for (int i = 0; i < ids.size(); i++) {
+          Object id = ids.get(i);
+          if (id != null && String.valueOf(id).length() > 0) {
+            out.add(String.valueOf(id));
+          }
+        }
+      }
+      return out;
+    } catch (Exception e) {
+      LOG.fine("No executing-instance list from the engine: " + e.getLocalizedMessage());
+      return null;
+    }
+  }
+
+  static boolean instanceLooksDone(WorkflowInstance inst) {
+    if (inst == null) {
+      return false;
+    }
+    String status = inst.getStatus();
+    if (status != null) {
+      String s = status.toUpperCase();
+      if (s.equals("FINISHED") || s.equals("ERROR") || s.equals("FAILURE")
+          || s.equals("RESULTSFAILURE") || s.equals("STOPPED")
+          || s.equals("SUCCESS") || s.equals("EXECUTIONCOMPLETE")) {
+        return true;
+      }
+    }
+    String end = inst.getEndDateTimeIsoStr();
+    return end != null && end.length() > 0 && !end.equals("null");
+  }
+
   static Map<String, Object> encodeInstance(WorkflowInstance inst) {
+    return encodeInstance(inst, null);
+  }
+
+  static Map<String, Object> encodeInstance(WorkflowInstance inst, Set executing) {
     Map<String, Object> row = new LinkedHashMap<String, Object>();
     if (inst == null) {
       return row;
@@ -336,6 +383,11 @@ public class WorkflowResource extends PCSService {
         "Filename", "ProductName", "CAS.ProductName");
     if (productName.length() > 0) {
       row.put("productName", productName);
+    }
+    if (executing != null && inst.getId() != null && inst.getId().length() > 0) {
+      boolean running = executing.contains(inst.getId());
+      row.put("running", Boolean.valueOf(running));
+      row.put("abandoned", Boolean.valueOf(!running && !instanceLooksDone(inst)));
     }
     return row;
   }
@@ -388,7 +440,11 @@ public class WorkflowResource extends PCSService {
   }
 
   static Map<String, Object> encodeInstanceDetail(WorkflowInstance inst, Metadata met) {
-    Map<String, Object> row = encodeInstance(inst);
+    return encodeInstanceDetail(inst, met, null);
+  }
+
+  static Map<String, Object> encodeInstanceDetail(WorkflowInstance inst, Metadata met, Set executing) {
+    Map<String, Object> row = encodeInstance(inst, executing);
     if (inst != null) {
       row.put("timesBlocked", Integer.valueOf(inst.getTimesBlocked()));
       Priority priority = inst.getPriority();

@@ -80,7 +80,7 @@
             <span v-else>—</span>
           </td>
           <td>
-            <span class="pill" :class="pillClass(inst.status, inst.abandoned)" :title="inst.abandoned ? 'Abandoned: WM restarted while this was still ' + inst.status + '; no end stamp' : ''">{{ inst.status }}</span>
+            <span class="pill" :class="pillClass(inst.status, inst.abandoned)" :title="inst.abandoned ? 'Not in the workflow engine (likely a WM restart while ' + inst.status + ')' : ''">{{ inst.status }}</span>
           </td>
           <td>
             <a v-if="inst.currentTaskId" href="#" @click.prevent="$emit('open-task', inst.currentTaskId, inst.workflowId)">
@@ -136,7 +136,7 @@ export default {
     onMounted(() => {
       tick = setInterval(() => {
         const list = pageBody.value.instances || []
-        if (list.some((inst) => instanceLive(inst.status) && !inst.endDateTime)) {
+        if (list.some((inst) => shouldTick(inst))) {
           now.value = Date.now()
         }
       }, 1000)
@@ -148,8 +148,8 @@ export default {
     })
     const instances = computed(() => {
       return (pageBody.value.instances || []).map((inst) => Object.assign({}, inst, {
-        wallMs: wallClockMs(inst.startDateTime, inst.endDateTime, now.value, inst.status),
-        abandoned: instanceAbandoned(inst.status, inst.startDateTime, inst.endDateTime, now.value)
+        wallMs: wallClockMs(inst.startDateTime, inst.endDateTime, now.value, inst.status, inst.running),
+        abandoned: instanceAbandoned(inst)
       }))
     })
     const getters = {
@@ -178,6 +178,19 @@ export default {
       }
       return STATUSES
     })
+
+    function shouldTick(inst) {
+      if (!inst || inst.endDateTime || instanceAbandoned(inst)) {
+        return false
+      }
+      if (inst.running === true) {
+        return true
+      }
+      if (inst.running === false) {
+        return false
+      }
+      return instanceLive(inst.status)
+    }
 
     function onSort(field) {
       const next = toggleSort(field, sort.value, dir.value)

@@ -48,28 +48,33 @@ export function instanceWaiting(status) {
   return Boolean(WAITING[String(status || '').toUpperCase()])
 }
 
-/** QUEUED that never left the repo after a WM restart. 2 min grace for a real queue. */
-export const ABANDONED_AFTER_MS = 2 * 60 * 1000
+/**
+ * Ghost in the instance repo: the engine is not executing this id.
+ * `running` comes from GET /workflow/instances (worker map). Missing
+ * `running` means an older WM — do not guess.
+ */
+export function instanceAbandoned(inst) {
+  if (!inst) {
+    return false
+  }
+  if (inst.abandoned === true) {
+    return true
+  }
+  if (inst.abandoned === false) {
+    return false
+  }
+  if (parseEnd(inst.endDateTime) || instanceTerminal(inst.status)) {
+    return false
+  }
+  return inst.running === false
+}
 
-export function instanceAbandoned(status, startIso, endIso, now, graceMs) {
-  if (endIso) {
-    const end = Date.parse(endIso)
-    if (Number.isFinite(end)) {
-      return false
-    }
-  }
-  if (instanceTerminal(status) || instanceLive(status)) {
+function parseEnd(endIso) {
+  if (!endIso) {
     return false
   }
-  if (!instanceWaiting(status)) {
-    return false
-  }
-  const start = Date.parse(startIso || '')
-  if (!Number.isFinite(start)) {
-    return false
-  }
-  const grace = graceMs == null ? ABANDONED_AFTER_MS : graceMs
-  return (now || Date.now()) - start >= grace
+  const end = Date.parse(endIso)
+  return Number.isFinite(end)
 }
 
 /**

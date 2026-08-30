@@ -17,8 +17,10 @@
 package org.apache.oodt.pcs.services;
 
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import junit.framework.TestCase;
 
@@ -106,6 +108,26 @@ public class TestCatalogAndWorkflowJson extends TestCase {
     inst.setSharedContext(met);
     row = WorkflowResource.encodeInstance(inst);
     assertEquals("jobs.tsv.aaaa", row.get("productName"));
+  }
+
+  public void testEncodeInstanceAbandonedWhenEngineDoesNotKnowId() {
+    WorkflowInstance inst = new WorkflowInstance();
+    inst.setId("ghost");
+    inst.setStatus("QUEUED");
+    Set executing = new HashSet(Arrays.asList("live-1"));
+    Map<String, Object> row = WorkflowResource.encodeInstance(inst, executing);
+    assertEquals(Boolean.FALSE, row.get("running"));
+    assertEquals(Boolean.TRUE, row.get("abandoned"));
+    inst.setId("live-1");
+    inst.setStatus("QUEUED");
+    row = WorkflowResource.encodeInstance(inst, executing);
+    assertEquals(Boolean.TRUE, row.get("running"));
+    assertEquals(Boolean.FALSE, row.get("abandoned"));
+    inst.setId("done");
+    inst.setStatus("FINISHED");
+    row = WorkflowResource.encodeInstance(inst, executing);
+    assertEquals(Boolean.FALSE, row.get("running"));
+    assertEquals(Boolean.FALSE, row.get("abandoned"));
   }
 
   public void testEncodeInstanceProductsSkipsNulls() {

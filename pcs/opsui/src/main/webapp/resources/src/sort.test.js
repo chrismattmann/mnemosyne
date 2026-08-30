@@ -23,14 +23,13 @@ test('finished instance with no end stamp does not keep counting', () => {
   assert.equal(wallClockMs('2026-08-30T12:00:00Z', '', now, 'STOPPED'), null)
 })
 
-test('QUEUED past the grace window is abandoned and does not keep counting', () => {
+test('QUEUED not in the engine is abandoned and does not keep counting', () => {
   const start = '2026-08-30T11:28:58.488-07:00'
   const now = Date.parse('2026-08-30T14:22:00-07:00')
-  assert.equal(wallClockMs(start, '', now, 'QUEUED'), null)
+  assert.equal(wallClockMs(start, '', now, 'QUEUED', false), null)
 })
 
-test('a freshly QUEUED instance still counts during the grace window', () => {
-  const start = Date.parse('2026-08-30T12:00:00Z')
-  const now = start + 30 * 1000
-  assert.equal(wallClockMs('2026-08-30T12:00:00Z', '', now, 'QUEUED'), 30000)
+test('QUEUED the engine is still running keeps counting', () => {
+  const now = Date.parse('2026-08-30T12:00:30Z')
+  assert.equal(wallClockMs('2026-08-30T12:00:00Z', '', now, 'QUEUED', true), 30000)
 })

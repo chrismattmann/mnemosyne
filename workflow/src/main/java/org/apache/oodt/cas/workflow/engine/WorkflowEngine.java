@@ -177,4 +177,13 @@ public interface WorkflowEngine {
     default void shutdown() {
     }
 
+    /**
+     * Instance ids this engine is currently executing (the worker map),
+     * not the full instance repository. Empty after a restart until
+     * something is started again.
+     */
+    default java.util.Collection<String> getExecutingInstanceIds() {
+        return java.util.Collections.emptyList();
+    }
+
 }
