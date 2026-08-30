@@ -139,7 +139,7 @@ export default {
       },
       title: computed(() => inst.value.workflowName || 'Workflow instance'),
       finished: computed(() => instanceFinished(inst.value.status)),
-      wallMs: computed(() => wallClockMs(inst.value.startDateTime, inst.value.endDateTime, Date.now())),
+      wallMs: computed(() => wallClockMs(inst.value.startDateTime, inst.value.endDateTime, Date.now(), inst.value.status)),
       formatWallClock,
       pillClass(status) {
         const value = String(status || '').toUpperCase()

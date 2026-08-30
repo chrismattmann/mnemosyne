@@ -16,7 +16,7 @@
  */
 
 const FINISHED = { FINISHED: true, SUCCESS: true, EXECUTIONCOMPLETE: true }
-const FAILED = { FAILURE: true, RESULTSFAILURE: true, STOPPED: true }
+const FAILED = { FAILURE: true, RESULTSFAILURE: true, STOPPED: true, ERROR: true }
 
 export function instanceFinished(status) {
   return Boolean(FINISHED[String(status || '').toUpperCase()])
@@ -24,6 +24,10 @@ export function instanceFinished(status) {
 
 export function instanceFailed(status) {
   return Boolean(FAILED[String(status || '').toUpperCase()])
+}
+
+export function instanceTerminal(status) {
+  return instanceFinished(status) || instanceFailed(status)
 }
 
 /**

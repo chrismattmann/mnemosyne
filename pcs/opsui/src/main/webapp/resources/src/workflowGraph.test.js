@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { taskBubbleState } from './workflowGraph.js'
+import { instanceTerminal, taskBubbleState } from './workflowGraph.js'
 
 const tasks = [
   { id: 'urn:opsui:SplitTsv', name: 'Split TSV' },
@@ -19,6 +19,13 @@ test('an in-flight Translate start is current, Split is done', () => {
   const translate = taskBubbleState(tasks[1], tasks, 'urn:opsui:TranslateJobs', 'PGE EXEC')
   assert.deepEqual(split, { current: false, done: true, failed: false })
   assert.deepEqual(translate, { current: true, done: false, failed: false })
+})
+
+test('FINISHED and FAILURE are terminal so the wall clock can freeze', () => {
+  assert.equal(instanceTerminal('FINISHED'), true)
+  assert.equal(instanceTerminal('FAILURE'), true)
+  assert.equal(instanceTerminal('PGE EXEC'), false)
+  assert.equal(instanceTerminal('CRAWLING'), false)
 })
 
 test('a one-task BigTranslate FINISHED is done, not current', () => {

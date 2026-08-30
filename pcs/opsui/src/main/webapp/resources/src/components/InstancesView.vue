@@ -105,6 +105,7 @@ import RefreshNote from './RefreshNote.vue'
 import SortHead from './SortHead.vue'
 import { formatWallClock, parseStamp, sortRows, toggleSort, wallClockMs } from '../sort.js'
 import { instanceMatches, workflowFilterOptions } from '../instanceFilter.js'
+import { instanceTerminal } from '../workflowGraph.js'
 
 const STATUSES = [
   'ALL', 'QUEUED', 'RSUBMIT', 'BUILDING CONFIG FILE', 'PGE EXEC', 'CRAWLING',
@@ -134,7 +135,10 @@ export default {
     let tick = null
     onMounted(() => {
       tick = setInterval(() => {
-        now.value = Date.now()
+        const list = pageBody.value.instances || []
+        if (list.some((inst) => !instanceTerminal(inst.status))) {
+          now.value = Date.now()
+        }
       }, 1000)
     })
     onUnmounted(() => {
@@ -144,7 +148,7 @@ export default {
     })
     const instances = computed(() => {
       return (pageBody.value.instances || []).map((inst) => Object.assign({}, inst, {
-        wallMs: wallClockMs(inst.startDateTime, inst.endDateTime, now.value)
+        wallMs: wallClockMs(inst.startDateTime, inst.endDateTime, now.value, inst.status)
       }))
     })
     const getters = {
