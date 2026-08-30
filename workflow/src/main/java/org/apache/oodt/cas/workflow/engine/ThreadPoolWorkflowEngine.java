@@ -245,6 +245,17 @@ public class ThreadPoolWorkflowEngine implements WorkflowEngine, WorkflowStatus 
    * @see
    * org.apache.oodt.cas.workflow.engine.WorkflowEngine#getInstanceRepository()
    */
+  /**
+   * This engine resolves models through the caller that hands it a workflow,
+   * rather than holding a repository of its own.
+   *
+   * @return null
+   */
+  public org.apache.oodt.cas.workflow.repository.WorkflowRepository
+      getWorkflowRepository() {
+    return null;
+  }
+
   public WorkflowInstanceRepository getInstanceRepository() {
     return this.instRep;
   }

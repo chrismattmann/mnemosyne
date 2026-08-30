@@ -210,6 +210,22 @@ public class AvroRpcWorkflowManager implements WorkflowManager,org.apache.oodt.c
             dynamicWorkflow.setId(this.repo.addWorkflow(dynamicWorkflow));
             dynamicWorkflow.setName("Dynamic Workflow-" + dynamicWorkflow.getId());
 
+            // Register it where the engine resolves models, too.
+            //
+            // The manager and the engine each build a repository from the
+            // same property, which looks equivalent and is not: the factory
+            // returns a new object per call, so the two hold separate sets of
+            // workflows. Adding here and starting an instance below meant the
+            // engine looked for the model in its own repository, did not find
+            // it, and left the instance in Queued forever -- created, given a
+            // valid id, and never run. Anything that fans out through dynamic
+            // workflows produced instances that did nothing, which is how
+            // DRAT runs one RAT audit per MIME type.
+            WorkflowRepository engineRepo = this.engine.getWorkflowRepository();
+            if (engineRepo != null && engineRepo != this.repo) {
+                engineRepo.addWorkflow(dynamicWorkflow);
+            }
+
             Metadata met = new Metadata();
             met.addMetadata(AvroTypeFactory.getMetadata(metadata));
 
