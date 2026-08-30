@@ -149,7 +149,14 @@ public class WorkflowResource extends PCSService {
 
   private String instancesForWorkflow(WorkflowManagerClient client, String status,
       String workflow) throws Exception {
-    List all = client.getWorkflowInstances();
+    List all;
+    try {
+      all = client.getWorkflowInstances();
+    } catch (Exception e) {
+      LOG.warning("getWorkflowInstances failed (empty repo used to return null over Avro): "
+          + e.getMessage());
+      all = Collections.emptyList();
+    }
     List<WorkflowInstance> matched = new ArrayList<WorkflowInstance>();
     if (all != null) {
       for (int i = 0; i < all.size(); i++) {

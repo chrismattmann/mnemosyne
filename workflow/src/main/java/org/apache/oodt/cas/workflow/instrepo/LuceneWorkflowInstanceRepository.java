@@ -351,7 +351,7 @@ public class LuceneWorkflowInstanceRepository extends
             }
         }
 
-        return wInsts;
+        return wInsts != null ? wInsts : new Vector();
     }
     
     @Override
