@@ -129,6 +129,12 @@ public interface WorkflowManagerClient extends Closeable, Serializable {
     Vector getWorkflowInstances()
             throws Exception;
 
+    /**
+     * Instance ids the engine is executing right now (not the repo).
+     */
+    java.util.List getExecutingWorkflowInstanceIds()
+            throws Exception;
+
     URL getWorkflowManagerUrl();
 
     boolean isAlive();

@@ -249,6 +249,22 @@ public class ThreadPoolWorkflowEngine implements WorkflowEngine, WorkflowStatus 
     return this.instRep;
   }
 
+  @Override
+  public java.util.Collection<String> getExecutingInstanceIds() {
+    if (workerMap == null || workerMap.isEmpty()) {
+      return java.util.Collections.emptyList();
+    }
+    java.util.List<String> ids = new java.util.ArrayList<String>(workerMap.size());
+    java.util.Iterator it = workerMap.keySet().iterator();
+    while (it.hasNext()) {
+      Object key = it.next();
+      if (key != null) {
+        ids.add(String.valueOf(key));
+      }
+    }
+    return ids;
+  }
+
   /*
    * (non-Javadoc)
    * 

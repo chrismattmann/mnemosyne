@@ -61,7 +61,7 @@ export function parseStamp(iso) {
   return Number.isFinite(t) ? t : null
 }
 
-export function wallClockMs(startIso, endIso, now, status) {
+export function wallClockMs(startIso, endIso, now, status, running) {
   const start = parseStamp(startIso)
   if (start == null) {
     return null
@@ -71,16 +71,13 @@ export function wallClockMs(startIso, endIso, now, status) {
     const ms = end - start
     return ms < 0 ? 0 : ms
   }
-  // Finished / failed / stopped with no end stamp: freeze.
   if (instanceTerminal(status)) {
     return null
   }
-  const clock = now || Date.now()
-  // QUEUED / CREATED / RSUBMIT after a WM restart never get an end stamp.
-  // Count them for a short grace window, then freeze (show —).
-  if (instanceAbandoned(status, startIso, endIso, clock)) {
+  if (instanceAbandoned({ status, endDateTime: endIso, running })) {
     return null
   }
+  const clock = now || Date.now()
   const ms = clock - start
   return ms < 0 ? 0 : ms
 }

@@ -36,7 +36,7 @@
           </tr>
           <tr>
             <th>Status</th>
-            <td><span class="pill" :class="pillClass(inst.status)" :title="abandoned ? 'Abandoned: WM restarted while this was still ' + inst.status + '; no end stamp' : ''">{{ inst.status || '—' }}</span></td>
+            <td><span class="pill" :class="pillClass(inst.status)" :title="abandoned ? 'Not in the workflow engine (likely a WM restart while ' + inst.status + ')' : ''">{{ inst.status || '—' }}</span></td>
           </tr>
           <tr>
             <th>{{ finished ? 'Last task' : 'Current task' }}</th>
@@ -139,11 +139,11 @@ export default {
       },
       title: computed(() => inst.value.workflowName || 'Workflow instance'),
       finished: computed(() => instanceFinished(inst.value.status)),
-      abandoned: computed(() => instanceAbandoned(inst.value.status, inst.value.startDateTime, inst.value.endDateTime, Date.now())),
-      wallMs: computed(() => wallClockMs(inst.value.startDateTime, inst.value.endDateTime, Date.now(), inst.value.status)),
+      abandoned: computed(() => instanceAbandoned(inst.value)),
+      wallMs: computed(() => wallClockMs(inst.value.startDateTime, inst.value.endDateTime, Date.now(), inst.value.status, inst.value.running)),
       formatWallClock,
       pillClass(status) {
-        if (instanceAbandoned(inst.value.status, inst.value.startDateTime, inst.value.endDateTime, Date.now())) {
+        if (instanceAbandoned(inst.value)) {
           return 'down'
         }
         const value = String(status || '').toUpperCase()

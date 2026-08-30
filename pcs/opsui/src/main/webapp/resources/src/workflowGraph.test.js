@@ -28,14 +28,14 @@ test('FINISHED and FAILURE are terminal so the wall clock can freeze', () => {
   assert.equal(instanceTerminal('CRAWLING'), false)
 })
 
-test('PGE EXEC is live; QUEUED is waiting and becomes abandoned after 2 minutes', () => {
+test('PGE EXEC is live; QUEUED is abandoned only when the engine does not know it', () => {
   assert.equal(instanceLive('PGE EXEC'), true)
   assert.equal(instanceLive('QUEUED'), false)
-  const start = '2026-08-30T11:28:58.488-07:00'
-  const now = Date.parse('2026-08-30T14:22:00-07:00')
-  assert.equal(instanceAbandoned('QUEUED', start, '', now), true)
-  assert.equal(instanceAbandoned('PGE EXEC', start, '', now), false)
-  assert.equal(instanceAbandoned('QUEUED', start, '2026-08-30T11:29:00-07:00', now), false)
+  assert.equal(instanceAbandoned({ status: 'QUEUED', running: false }), true)
+  assert.equal(instanceAbandoned({ status: 'QUEUED', running: true }), false)
+  assert.equal(instanceAbandoned({ status: 'QUEUED', endDateTime: '2026-08-30T11:29:00-07:00', running: false }), false)
+  assert.equal(instanceAbandoned({ status: 'FINISHED', running: false }), false)
+  assert.equal(instanceAbandoned({ status: 'QUEUED' }), false)
 })
 
 test('a one-task BigTranslate FINISHED is done, not current', () => {

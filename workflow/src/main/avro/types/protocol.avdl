@@ -75,6 +75,7 @@ import schema "AvroWorkflowInstancePage.avsc";
     int getNumWorkflowInstances() throws OodtError;
     array<AvroWorkflowInstance> getWorkflowInstancesByStatus(string status) throws OodtError;
     array<AvroWorkflowInstance> getWorkflowInstances() throws OodtError;
+    array<string> getExecutingWorkflowInstanceIds() throws OodtError;
     array<AvroWorkflow> getWorkflows() throws OodtError;
     AvroWorkflowTask getTaskById(string taskId) throws OodtError;
     AvroWorkflowCondition getConditionById(string conditionId) throws OodtError;

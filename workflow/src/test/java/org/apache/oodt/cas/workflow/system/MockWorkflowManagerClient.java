@@ -67,6 +67,12 @@ public class MockWorkflowManagerClient extends
       return workflowRepo.getRegisteredEvents();
    }
 
+   public List getExecutingWorkflowInstanceIds() throws Exception {
+      lastMethodCallDetails = new MethodCallDetails(
+            "getExecutingWorkflowInstanceIds", Lists.newArrayList());
+      return Lists.newArrayList();
+   }
+
    public WorkflowInstancePage getFirstPage() throws Exception {
       lastMethodCallDetails = new MethodCallDetails("getFirstPage",
             Lists.newArrayList());
