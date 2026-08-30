@@ -15,6 +15,8 @@
  * limitations under the License.
  */
 
+import { instanceTerminal } from './workflowGraph.js'
+
 export function compareValues(a, b, dir) {
   const mul = dir === 'desc' ? -1 : 1
   const emptyA = a == null || a === ''
@@ -59,13 +61,22 @@ export function parseStamp(iso) {
   return Number.isFinite(t) ? t : null
 }
 
-export function wallClockMs(startIso, endIso, now) {
+export function wallClockMs(startIso, endIso, now, status) {
   const start = parseStamp(startIso)
   if (start == null) {
     return null
   }
   const end = parseStamp(endIso)
-  const stop = end == null ? (now || Date.now()) : end
+  if (end != null) {
+    const ms = end - start
+    return ms < 0 ? 0 : ms
+  }
+  // Finished / failed / stopped with no end stamp: freeze. Do not keep
+  // counting from start to Date.now() (the instances table ticks every 1s).
+  if (instanceTerminal(status)) {
+    return null
+  }
+  const stop = now || Date.now()
   const ms = stop - start
   return ms < 0 ? 0 : ms
 }
