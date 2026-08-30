@@ -515,4 +515,26 @@ public class SolrCatalog implements Catalog {
 
 	}
 
+	/**
+	 * Releases the Solr client.
+	 *
+	 * <p>
+	 * Catalog.close defaults to doing nothing, which was right while this
+	 * class built a fresh DefaultHttpClient for each call and held nothing
+	 * between them. It stops being right now that the client is an
+	 * HttpJdkSolrClient created once in the constructor and kept for the life
+	 * of the catalog, with its own connection pool and executor behind it.
+	 * </p>
+	 *
+	 * <p>
+	 * FileManager shuts a catalog down through closeQuietly(catalog), so
+	 * without this a File Manager restart releases a Lucene catalog -- which
+	 * does override close -- and leaks a Solr one.
+	 * </p>
+	 */
+	@Override
+	public void close() throws CatalogException {
+		solrClient.close();
+	}
+
 }
