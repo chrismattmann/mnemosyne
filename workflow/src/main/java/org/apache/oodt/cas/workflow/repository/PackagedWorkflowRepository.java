@@ -941,6 +941,12 @@ public class PackagedWorkflowRepository implements WorkflowRepository {
     task.setTaskId("redirector-" + eventName);
     task.setTaskName("Redirector Task");
     task.setTaskInstanceClassName(BranchRedirector.class.getName());
+    // The configuration was built above and then never attached, so every
+    // redirector reached BranchRedirector with an empty config and sent
+    // sendEvent(null, ...), which Avro refuses with "datum is null of string".
+    // The event name is the only thing this task carries; without it the task
+    // does nothing but fail.
+    task.setTaskConfig(config);
     this.tasks.put(task.getTaskId(), task);
     return task;
   }
