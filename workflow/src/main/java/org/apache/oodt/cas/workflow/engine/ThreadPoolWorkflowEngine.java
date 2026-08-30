@@ -122,6 +122,7 @@ public class ThreadPoolWorkflowEngine implements WorkflowEngine, WorkflowStatus 
     if (resUrl != null) {
       rClient = ResourceManagerFactory.getResourceManagerClient(resUrl);
     }
+    reapOrphans();
   }
 
   /**
@@ -301,18 +302,33 @@ public class ThreadPoolWorkflowEngine implements WorkflowEngine, WorkflowStatus 
    * .String)
    */
   public synchronized void stopWorkflow(String workflowInstId) {
-    // okay, try and look up that worker thread in our hash map
     IterativeWorkflowProcessorThread worker = (IterativeWorkflowProcessorThread) workerMap
         .get(workflowInstId);
-    if (worker == null) {
+    if (worker != null) {
+      worker.stop();
+      return;
+    }
+    // WM restart drops workerMap. Stamp an end time so wall clock stops.
+    WorkflowInstance inst = safeGetWorkflowInstanceById(workflowInstId);
+    if (inst == null) {
       LOG.log(Level.WARNING,
           "WorkflowEngine: Attempt to stop workflow instance id: "
               + workflowInstId + ", however, this engine is "
               + "not tracking its execution");
       return;
     }
-
-    worker.stop();
+    if (isTerminalStatus(inst.getStatus()) && !isAbsent(inst.getEndDateTimeIsoStr())) {
+      return;
+    }
+    inst.setStatus(ERROR);
+    inst.setEndDateTimeIsoStr(DateConvert.isoFormat(new Date()));
+    try {
+      persistWorkflowInstance(inst);
+      LOG.log(Level.INFO, "Stopped orphan workflow instance " + workflowInstId);
+    } catch (EngineException e) {
+      LOG.log(Level.WARNING, "Could not stop orphan " + workflowInstId + ": "
+          + e.getMessage());
+    }
   }
 
   /*
@@ -449,6 +465,69 @@ public class ThreadPoolWorkflowEngine implements WorkflowEngine, WorkflowStatus 
    */
   private static boolean isAbsent(String isoStr) {
     return isoStr == null || isoStr.equals("") || isoStr.equals("null");
+  }
+
+  static boolean isTerminalStatus(String status) {
+    if (status == null || status.equals("")) {
+      return false;
+    }
+    String s = status.toUpperCase();
+    return s.equals(FINISHED) || s.equals(ERROR) || s.equals("FAILURE")
+        || s.equals("RESULTSFAILURE") || s.equals("STOPPED")
+        || s.equals("SUCCESS") || s.equals("EXECUTIONCOMPLETE");
+  }
+
+  /**
+   * After a WM restart the thread pool is empty. Any CREATED / QUEUED /
+   * PGE EXEC still in the instance repo is a ghost: stamp ERROR and an end
+   * time so wall clock stops. Only instances in workerMap are live.
+   */
+  void reapOrphans() {
+    if (instRep == null) {
+      return;
+    }
+    java.util.List insts;
+    try {
+      insts = instRep.getWorkflowInstances();
+    } catch (Exception e) {
+      LOG.log(Level.WARNING, "Could not list instances to reap orphans: "
+          + e.getMessage());
+      return;
+    }
+    if (insts == null) {
+      return;
+    }
+    String end = DateConvert.isoFormat(new Date());
+    int n = 0;
+    for (int i = 0; i < insts.size(); i++) {
+      Object item = insts.get(i);
+      if (!(item instanceof WorkflowInstance)) {
+        continue;
+      }
+      WorkflowInstance inst = (WorkflowInstance) item;
+      if (inst.getId() != null && workerMap.containsKey(inst.getId())) {
+        continue;
+      }
+      if (isTerminalStatus(inst.getStatus())) {
+        continue;
+      }
+      String was = inst.getStatus();
+      inst.setStatus(ERROR);
+      inst.setEndDateTimeIsoStr(end);
+      try {
+        persistWorkflowInstance(inst);
+        n++;
+        LOG.log(Level.INFO, "Reaped orphan workflow instance " + inst.getId()
+            + " (was " + was + ")");
+      } catch (EngineException e) {
+        LOG.log(Level.WARNING, "Could not reap orphan " + inst.getId() + ": "
+            + e.getMessage());
+      }
+    }
+    if (n > 0) {
+      LOG.log(Level.INFO, "Reaped " + n
+          + " orphan workflow instance(s) left from a prior WM process");
+    }
   }
 
 

@@ -80,7 +80,7 @@
             <span v-else>—</span>
           </td>
           <td>
-            <span class="pill" :class="pillClass(inst.status)">{{ inst.status }}</span>
+            <span class="pill" :class="pillClass(inst.status, inst.abandoned)" :title="inst.abandoned ? 'Abandoned: WM restarted while this was still ' + inst.status + '; no end stamp' : ''">{{ inst.status }}</span>
           </td>
           <td>
             <a v-if="inst.currentTaskId" href="#" @click.prevent="$emit('open-task', inst.currentTaskId, inst.workflowId)">
@@ -105,7 +105,7 @@ import RefreshNote from './RefreshNote.vue'
 import SortHead from './SortHead.vue'
 import { formatWallClock, parseStamp, sortRows, toggleSort, wallClockMs } from '../sort.js'
 import { instanceMatches, workflowFilterOptions } from '../instanceFilter.js'
-import { instanceTerminal } from '../workflowGraph.js'
+import { instanceAbandoned, instanceLive } from '../workflowGraph.js'
 
 const STATUSES = [
   'ALL', 'QUEUED', 'RSUBMIT', 'BUILDING CONFIG FILE', 'PGE EXEC', 'CRAWLING',
@@ -136,7 +136,7 @@ export default {
     onMounted(() => {
       tick = setInterval(() => {
         const list = pageBody.value.instances || []
-        if (list.some((inst) => !instanceTerminal(inst.status))) {
+        if (list.some((inst) => instanceLive(inst.status) && !inst.endDateTime)) {
           now.value = Date.now()
         }
       }, 1000)
@@ -148,7 +148,8 @@ export default {
     })
     const instances = computed(() => {
       return (pageBody.value.instances || []).map((inst) => Object.assign({}, inst, {
-        wallMs: wallClockMs(inst.startDateTime, inst.endDateTime, now.value, inst.status)
+        wallMs: wallClockMs(inst.startDateTime, inst.endDateTime, now.value, inst.status),
+        abandoned: instanceAbandoned(inst.status, inst.startDateTime, inst.endDateTime, now.value)
       }))
     })
     const getters = {
@@ -184,12 +185,15 @@ export default {
       dir.value = next.dir
     }
 
-    function pillClass(status) {
+    function pillClass(status, abandoned) {
+      if (abandoned) {
+        return 'down'
+      }
       const value = String(status || '').toUpperCase()
       if (value === 'FINISHED' || value === 'SUCCESS' || value === 'EXECUTIONCOMPLETE') {
         return 'up'
       }
-      if (value === 'FAILURE' || value === 'RESULTSFAILURE' || value === 'STOPPED') {
+      if (value === 'FAILURE' || value === 'RESULTSFAILURE' || value === 'STOPPED' || value === 'ERROR') {
         return 'down'
       }
       if (value === 'PGE EXEC' || value === 'EXECUTING' || value === 'CRAWLING') {

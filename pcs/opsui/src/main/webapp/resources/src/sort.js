@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-import { instanceTerminal } from './workflowGraph.js'
+import { instanceAbandoned, instanceTerminal } from './workflowGraph.js'
 
 export function compareValues(a, b, dir) {
   const mul = dir === 'desc' ? -1 : 1
@@ -71,13 +71,17 @@ export function wallClockMs(startIso, endIso, now, status) {
     const ms = end - start
     return ms < 0 ? 0 : ms
   }
-  // Finished / failed / stopped with no end stamp: freeze. Do not keep
-  // counting from start to Date.now() (the instances table ticks every 1s).
+  // Finished / failed / stopped with no end stamp: freeze.
   if (instanceTerminal(status)) {
     return null
   }
-  const stop = now || Date.now()
-  const ms = stop - start
+  const clock = now || Date.now()
+  // QUEUED / CREATED / RSUBMIT after a WM restart never get an end stamp.
+  // Count them for a short grace window, then freeze (show —).
+  if (instanceAbandoned(status, startIso, endIso, clock)) {
+    return null
+  }
+  const ms = clock - start
   return ms < 0 ? 0 : ms
 }
 
