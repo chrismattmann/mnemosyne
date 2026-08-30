@@ -541,8 +541,10 @@ public class AvroRpcWorkflowManager implements WorkflowManager,org.apache.oodt.c
                 throw oodtError(e, "Exception getting workflow instances from workflow engine: Message: "
                                 + e.getMessage());
             }
-        } else
-            return null;
+        }
+        // Empty repo used to return null. Avro cannot write a null array
+        // ("array is null"), so OPSUI's workflow-filtered instances call 500s.
+        return avroWorkflowInstances;
 
     }
 

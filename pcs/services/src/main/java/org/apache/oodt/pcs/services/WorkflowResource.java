@@ -149,6 +149,11 @@ public class WorkflowResource extends PCSService {
 
   private String instancesForWorkflow(WorkflowManagerClient client, String status,
       String workflow) throws Exception {
+    // Not wrapped in a catch that yields an empty list. The repository and the
+    // RPC layer both return an empty list for an empty repository now, so
+    // nothing here has to paper over a null -- and treating any failure as
+    // "no instances" would render an unreachable workflow manager exactly like
+    // a healthy one with nothing in it. This method already declares throws.
     List all = client.getWorkflowInstances();
     List<WorkflowInstance> matched = new ArrayList<WorkflowInstance>();
     if (all != null) {

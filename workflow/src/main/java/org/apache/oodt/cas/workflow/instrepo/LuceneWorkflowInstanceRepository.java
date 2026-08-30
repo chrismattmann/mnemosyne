@@ -304,7 +304,11 @@ public class LuceneWorkflowInstanceRepository extends
      */
     public List getWorkflowInstances() throws InstanceRepositoryException {
         IndexSearcher searcher = null;
-        List wInsts = null;
+        // Empty rather than null, as every other query in this class declares
+        // it. An empty index left this null and the null went out over Avro,
+        // which cannot write a null array, so the workflow-filtered instances
+        // call failed where the unfiltered one returned an empty page.
+        List wInsts = new Vector();
         try {
             reader = DirectoryReader.open(indexDir);
         } catch (IOException e) {
