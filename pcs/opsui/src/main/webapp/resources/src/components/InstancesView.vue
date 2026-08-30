@@ -80,7 +80,7 @@
             <span v-else>—</span>
           </td>
           <td>
-            <span class="pill" :class="pillClass(inst.status)">{{ inst.status }}</span>
+            <span class="pill" :class="pillClass(inst.status, inst.abandoned)" :title="inst.abandoned ? 'Not in the workflow engine (likely a WM restart while ' + inst.status + ')' : ''">{{ inst.status }}</span>
           </td>
           <td>
             <a v-if="inst.currentTaskId" href="#" @click.prevent="$emit('open-task', inst.currentTaskId, inst.workflowId)">
@@ -105,7 +105,7 @@ import RefreshNote from './RefreshNote.vue'
 import SortHead from './SortHead.vue'
 import { formatWallClock, parseStamp, sortRows, toggleSort, wallClockMs } from '../sort.js'
 import { instanceMatches, workflowFilterOptions } from '../instanceFilter.js'
-import { instanceTerminal } from '../workflowGraph.js'
+import { instanceAbandoned, instanceLive } from '../workflowGraph.js'
 
 const STATUSES = [
   'ALL', 'QUEUED', 'RSUBMIT', 'BUILDING CONFIG FILE', 'PGE EXEC', 'CRAWLING',
@@ -136,7 +136,7 @@ export default {
     onMounted(() => {
       tick = setInterval(() => {
         const list = pageBody.value.instances || []
-        if (list.some((inst) => !instanceTerminal(inst.status))) {
+        if (list.some((inst) => shouldTick(inst))) {
           now.value = Date.now()
         }
       }, 1000)
@@ -148,7 +148,8 @@ export default {
     })
     const instances = computed(() => {
       return (pageBody.value.instances || []).map((inst) => Object.assign({}, inst, {
-        wallMs: wallClockMs(inst.startDateTime, inst.endDateTime, now.value, inst.status)
+        wallMs: wallClockMs(inst.startDateTime, inst.endDateTime, now.value, inst.status, inst.running),
+        abandoned: instanceAbandoned(inst)
       }))
     })
     const getters = {
@@ -178,18 +179,34 @@ export default {
       return STATUSES
     })
 
+    function shouldTick(inst) {
+      if (!inst || inst.endDateTime || instanceAbandoned(inst)) {
+        return false
+      }
+      if (inst.running === true) {
+        return true
+      }
+      if (inst.running === false) {
+        return false
+      }
+      return instanceLive(inst.status)
+    }
+
     function onSort(field) {
       const next = toggleSort(field, sort.value, dir.value)
       sort.value = next.field
       dir.value = next.dir
     }
 
-    function pillClass(status) {
+    function pillClass(status, abandoned) {
+      if (abandoned) {
+        return 'down'
+      }
       const value = String(status || '').toUpperCase()
       if (value === 'FINISHED' || value === 'SUCCESS' || value === 'EXECUTIONCOMPLETE') {
         return 'up'
       }
-      if (value === 'FAILURE' || value === 'RESULTSFAILURE' || value === 'STOPPED') {
+      if (value === 'FAILURE' || value === 'RESULTSFAILURE' || value === 'STOPPED' || value === 'ERROR') {
         return 'down'
       }
       if (value === 'PGE EXEC' || value === 'EXECUTING' || value === 'CRAWLING') {

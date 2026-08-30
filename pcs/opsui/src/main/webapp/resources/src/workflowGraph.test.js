@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { instanceTerminal, taskBubbleState } from './workflowGraph.js'
+import { instanceAbandoned, instanceLive, instanceTerminal, taskBubbleState } from './workflowGraph.js'
 
 const tasks = [
   { id: 'urn:opsui:SplitTsv', name: 'Split TSV' },
@@ -26,6 +26,16 @@ test('FINISHED and FAILURE are terminal so the wall clock can freeze', () => {
   assert.equal(instanceTerminal('FAILURE'), true)
   assert.equal(instanceTerminal('PGE EXEC'), false)
   assert.equal(instanceTerminal('CRAWLING'), false)
+})
+
+test('PGE EXEC is live; QUEUED is abandoned only when the engine does not know it', () => {
+  assert.equal(instanceLive('PGE EXEC'), true)
+  assert.equal(instanceLive('QUEUED'), false)
+  assert.equal(instanceAbandoned({ status: 'QUEUED', running: false }), true)
+  assert.equal(instanceAbandoned({ status: 'QUEUED', running: true }), false)
+  assert.equal(instanceAbandoned({ status: 'QUEUED', endDateTime: '2026-08-30T11:29:00-07:00', running: false }), false)
+  assert.equal(instanceAbandoned({ status: 'FINISHED', running: false }), false)
+  assert.equal(instanceAbandoned({ status: 'QUEUED' }), false)
 })
 
 test('a one-task BigTranslate FINISHED is done, not current', () => {

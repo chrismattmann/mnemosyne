@@ -493,6 +493,15 @@ public class AvroRpcWorkflowManager implements WorkflowManager,org.apache.oodt.c
     }
 
     @Override
+    public List<String> getExecutingWorkflowInstanceIds() throws AvroRemoteException {
+        java.util.Collection executing = engine.getExecutingInstanceIds();
+        if (executing == null || executing.isEmpty()) {
+            return new ArrayList<String>();
+        }
+        return new ArrayList<String>(executing);
+    }
+
+    @Override
     public List<AvroWorkflowInstance> getWorkflowInstances() throws AvroRemoteException {
         List workflowInsts = null;
         List<AvroWorkflowInstance> avroWorkflowInstances = new ArrayList<AvroWorkflowInstance>();

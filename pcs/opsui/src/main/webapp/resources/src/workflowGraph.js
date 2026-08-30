@@ -17,6 +17,16 @@
 
 const FINISHED = { FINISHED: true, SUCCESS: true, EXECUTIONCOMPLETE: true }
 const FAILED = { FAILURE: true, RESULTSFAILURE: true, STOPPED: true, ERROR: true }
+const LIVE = {
+  'PGE EXEC': true,
+  CRAWLING: true,
+  'BUILDING CONFIG FILE': true,
+  'STAGING INPUT': true,
+  EXECUTING: true,
+  STARTED: true,
+  PAUSED: true
+}
+const WAITING = { QUEUED: true, CREATED: true, RSUBMIT: true, LOADED: true, METMISS: true }
 
 export function instanceFinished(status) {
   return Boolean(FINISHED[String(status || '').toUpperCase()])
@@ -28,6 +38,43 @@ export function instanceFailed(status) {
 
 export function instanceTerminal(status) {
   return instanceFinished(status) || instanceFailed(status)
+}
+
+export function instanceLive(status) {
+  return Boolean(LIVE[String(status || '').toUpperCase()])
+}
+
+export function instanceWaiting(status) {
+  return Boolean(WAITING[String(status || '').toUpperCase()])
+}
+
+/**
+ * Ghost in the instance repo: the engine is not executing this id.
+ * `running` comes from GET /workflow/instances (worker map). Missing
+ * `running` means an older WM — do not guess.
+ */
+export function instanceAbandoned(inst) {
+  if (!inst) {
+    return false
+  }
+  if (inst.abandoned === true) {
+    return true
+  }
+  if (inst.abandoned === false) {
+    return false
+  }
+  if (parseEnd(inst.endDateTime) || instanceTerminal(inst.status)) {
+    return false
+  }
+  return inst.running === false
+}
+
+function parseEnd(endIso) {
+  if (!endIso) {
+    return false
+  }
+  const end = Date.parse(endIso)
+  return Number.isFinite(end)
 }
 
 /**
