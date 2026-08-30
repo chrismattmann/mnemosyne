@@ -418,6 +418,17 @@ public class WorkflowResource extends PCSService {
     }
     row.put("id", nullToEmpty(workflow.getId()));
     row.put("name", nullToEmpty(workflow.getName()));
+    // A workflow can carry conditions of its own, not just its tasks. The
+    // packaged (wengine) dialect writes them straight onto the workflow --
+    // PackagedWorkflowRepository does
+    // graph.getParent().getWorkflow().getPreConditions().add(cond) -- so a
+    // <conditions> block on a <workflow> lived only in the model and never
+    // reached a caller. Reporting only task conditions was an assumption
+    // carried over from the XML dialect, where tasks are the only place a
+    // condition can hang. Both dialects report the same shape now; for a
+    // workflow that declares none, these are simply empty.
+    row.put("preConditions", encodeConditionList(workflow.getPreConditions()));
+    row.put("postConditions", encodeConditionList(workflow.getPostConditions()));
     if (withTasks && workflow.getTasks() != null) {
       List<Map<String, Object>> tasks = new ArrayList<Map<String, Object>>();
       List<WorkflowTask> list = workflow.getTasks();

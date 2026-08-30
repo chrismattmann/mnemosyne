@@ -46,9 +46,9 @@
     <InstanceView v-else-if="route.view === 'instance'" :payload="instanceDetail" :loading="loading" @open-workflow="openWorkflow" @open-task="openTaskFromInstance" @open-instance="openInstance" @open-type="openType" @open-product="openProduct" @back="backFromInstance"/>
     <ResourcesView v-else-if="route.view === 'resources'" :payload="resourcePayload" :stubs="resourceStubs" :loading="loading"/>
     <WorkflowsView v-else-if="route.view === 'workflows'" :workflows="workflows" :loading="loading" @open="openWorkflow"/>
-    <WorkflowView v-else-if="route.view === 'workflow'" :payload="workflowPayload" :loading="loading" @open-task="openTaskFromWorkflow" @open-instance="openInstance" @open-product="openProduct" @back="go({ view: 'workflows' })"/>
+    <WorkflowView v-else-if="route.view === 'workflow'" :payload="workflowPayload" :loading="loading" @open-task="openTaskFromWorkflow" @open-condition="openConditionFromWorkflow" @open-instance="openInstance" @open-product="openProduct" @back="go({ view: 'workflows' })"/>
     <TaskView v-else-if="route.view === 'task'" :payload="taskPayload" :back-label="route.workflowId ? 'Workflow' : 'Workflows'" :loading="loading" @open-condition="openConditionFromTask" @back="backFromTask"/>
-    <ConditionView v-else-if="route.view === 'condition'" :payload="conditionPayload" :back-label="route.taskId ? 'Task' : 'Workflows'" :loading="loading" @back="backFromCondition"/>
+    <ConditionView v-else-if="route.view === 'condition'" :payload="conditionPayload" :back-label="route.taskId ? 'Task' : (route.workflowId ? 'Workflow' : 'Workflows')" :loading="loading" @back="backFromCondition"/>
 
     <p v-if="error" class="banner">{{ error }}</p>
   </div>
@@ -377,6 +377,18 @@ export default {
       })
     }
 
+    // A condition can now be reached from a workflow as well as from a task,
+    // because a workflow carries conditions of its own. Remember which one we
+    // came from so "back" returns there rather than to the workflow list.
+    function openConditionFromWorkflow(id) {
+      go({
+        view: 'condition',
+        id,
+        taskId: '',
+        workflowId: route.value.id
+      })
+    }
+
     function openConditionFromTask(id) {
       go({
         view: 'condition',
@@ -397,6 +409,8 @@ export default {
     function backFromCondition() {
       if (route.value.taskId) {
         openTask(route.value.taskId, route.value.workflowId)
+      } else if (route.value.workflowId) {
+        openWorkflow(route.value.workflowId)
       } else {
         go({ view: 'workflows' })
       }
@@ -557,7 +571,7 @@ export default {
       route, loading, error, health, refreshedAt, stale, types, typePayload, productPayload,
       pedigree, instancePayload, instanceDetail, workflows, workflowPayload, taskPayload,
       conditionPayload, configPayload, searchPayload, resourcePayload, resourceStubs, go, openType, openTypePage, openTypeMore, refreshType, openProduct,
-      openProductByPath, openLatestFile, openInstances, openInstancesPage, setInstanceWorkflow, setInstanceSince, backFromInstance, openInstance, openWorkflow, openTask, openTaskFromWorkflow, openTaskFromInstance, openTaskFromInstanceRow, openCondition, openConditionFromTask, backFromTask, backFromCondition, openConfig, openSearch
+      openProductByPath, openLatestFile, openInstances, openInstancesPage, setInstanceWorkflow, setInstanceSince, backFromInstance, openInstance, openWorkflow, openTask, openTaskFromWorkflow, openTaskFromInstance, openTaskFromInstanceRow, openCondition, openConditionFromTask, openConditionFromWorkflow, backFromTask, backFromCondition, openConfig, openSearch
     }
   }
 }

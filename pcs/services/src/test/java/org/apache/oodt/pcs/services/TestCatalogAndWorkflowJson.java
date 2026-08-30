@@ -202,6 +202,88 @@ public class TestCatalogAndWorkflowJson extends TestCase {
     assertEquals(1, ((List<?>) full.get("tasks")).size());
   }
 
+  /**
+   * A workflow can carry conditions of its own. The packaged (wengine) dialect
+   * writes a workflow's <conditions> block onto the workflow, not onto any of
+   * its tasks, and the encoder used to drop them -- so an operations view
+   * showed a gated workflow as if nothing gated it.
+   */
+  public void testEncodeWorkflowIncludesItsOwnConditions() {
+    WorkflowCondition settling = new WorkflowCondition();
+    settling.setConditionId("urn:drat:MapsSettling");
+    settling.setConditionName("Maps Settling");
+    settling.setConditionInstanceClassName("org.example.LongCondition");
+    WorkflowCondition done = new WorkflowCondition();
+    done.setConditionId("urn:drat:MapsDone");
+    done.setConditionName("Maps Done");
+    done.setConditionInstanceClassName("org.example.LongCondition");
+
+    WorkflowTask task = new WorkflowTask();
+    task.setTaskId("urn:drat:RatAggregator");
+    task.setTaskName("RatAggregator");
+
+    Workflow workflow = new Workflow();
+    workflow.setId("urn:drat:AggregatePhase");
+    workflow.setName("Aggregate Phase");
+    workflow.setTasks(Arrays.asList(task));
+    workflow.setPreConditions(Arrays.asList(settling, done));
+
+    Map<String, Object> row = WorkflowResource.encodeWorkflow(workflow, true);
+
+    assertTrue(row.get("preConditions") instanceof List);
+    List<?> pre = (List<?>) row.get("preConditions");
+    assertEquals("both conditions should be reported", 2, pre.size());
+    Map<?, ?> first = (Map<?, ?>) pre.get(0);
+    assertEquals("urn:drat:MapsSettling", first.get("id"));
+    assertEquals("Maps Settling", first.get("name"));
+    // Order is what the workflow declared: a sequential block runs them in
+    // that order, so reporting them out of order would misdescribe the gate.
+    assertEquals("urn:drat:MapsDone",
+        ((Map<?, ?>) pre.get(1)).get("id"));
+  }
+
+  /** Post-conditions on a workflow are reported the same way. */
+  public void testEncodeWorkflowIncludesPostConditions() {
+    WorkflowCondition cond = new WorkflowCondition();
+    cond.setConditionId("urn:drat:Verified");
+    cond.setConditionName("Verified");
+    Workflow workflow = new Workflow();
+    workflow.setId("w1");
+    workflow.setName("Flow");
+    workflow.setPostConditions(Arrays.asList(cond));
+
+    Map<String, Object> row = WorkflowResource.encodeWorkflow(workflow, true);
+
+    List<?> post = (List<?>) row.get("postConditions");
+    assertEquals(1, post.size());
+    assertEquals("urn:drat:Verified", ((Map<?, ?>) post.get(0)).get("id"));
+  }
+
+  /**
+   * The XML dialect hangs conditions only on tasks, so its workflows report
+   * empty lists rather than a missing key. One shape for both dialects means
+   * a reader never has to ask which one produced the workflow.
+   */
+  public void testAworkflowWithoutItsOwnConditionsStillReportsTheKeys() {
+    WorkflowTask task = new WorkflowTask();
+    task.setTaskId("t1");
+    task.setTaskName("Split");
+    Workflow workflow = new Workflow();
+    workflow.setId("w1");
+    workflow.setName("Flow");
+    workflow.setTasks(Arrays.asList(task));
+
+    Map<String, Object> full = WorkflowResource.encodeWorkflow(workflow, true);
+    Map<String, Object> summary = WorkflowResource.encodeWorkflow(workflow, false);
+
+    assertTrue(full.containsKey("preConditions"));
+    assertTrue(full.containsKey("postConditions"));
+    assertEquals(0, ((List<?>) full.get("preConditions")).size());
+    // Also present on the summary form the workflow list uses, so the list
+    // and the detail view agree about the shape.
+    assertTrue(summary.containsKey("preConditions"));
+  }
+
   public void testEncodeTaskIncludesConfiguration() {
     WorkflowTaskConfiguration config = new WorkflowTaskConfiguration();
     config.addConfigProperty("PGETask_Name", "BigTranslate_Task");

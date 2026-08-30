@@ -156,17 +156,18 @@ import javax.xml.parsers.DocumentBuilderFactory;
  * <code>parallel-&lt;uuid&gt;</code>. Asking for a parallel workflow by id
  * returns nothing; asking for the workflows of its event returns its
  * children.</li>
- * <li><b>Workflow-level conditions are hoisted into a task.</b>
- * {@link #computeWorkflowConditions()} inserts a generated no-op task at
- * position 0 carrying them, since the engine only enforces conditions attached
- * to a task.</li>
+ * <li><b>Workflow-level conditions stay on the workflow.</b> A
+ * <code>&lt;conditions&gt;</code> block on a <code>workflow</code> is added to
+ * that workflow's own pre- or post-condition list, not to any of its tasks, so
+ * a caller reading a workflow must look at the workflow for them as well as at
+ * each task.</li>
  * </ul>
  *
  * <p>
  * All four rewrites happen during construction, so a model is fully expanded
- * before any caller sees it, and the generated ids (<code>redirector-</code>,
- * <code>parallel-</code>, and the conditions task) appear in anything that
- * reports on a running workflow.
+ * before any caller sees it, and the generated ids (<code>redirector-</code>
+ * and <code>parallel-</code>) appear in anything that reports on a running
+ * workflow.
  * </p>
  *
  * @see XMLWorkflowRepository
