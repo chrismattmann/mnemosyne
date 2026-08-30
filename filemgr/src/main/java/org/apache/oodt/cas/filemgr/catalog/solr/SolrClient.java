@@ -260,9 +260,13 @@ public class SolrClient {
 				nvps.add(new BasicNameValuePair(key.getKey(), value));
 			}
 		}
-		// request results in JSON format
+		// Solr 4 defaulted to XML. Solr 10 defaults to JSON, so the XML
+		// serializer must ask for wt=xml or DefaultProductSerializer dies
+		// with "Content is not allowed in prolog" and getNumProducts returns -1.
 		if (mimeType.equals(Parameters.MIME_TYPE_JSON)) {
 			nvps.add(new BasicNameValuePair("wt", "json"));
+		} else if (mimeType.equals(Parameters.MIME_TYPE_XML)) {
+			nvps.add(new BasicNameValuePair("wt", "xml"));
 		}
 
 		String paramString = URLEncodedUtils.format(nvps, "utf-8");
