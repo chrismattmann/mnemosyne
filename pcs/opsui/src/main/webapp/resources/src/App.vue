@@ -38,7 +38,7 @@
 
     <StatusView v-if="route.view === 'status'" :report="health" :loading="loading" :refreshed-at="refreshedAt" :stale="stale" @open-product="openLatestFile" @open-instances="openInstances" @open-config="openConfig"/>
     <ConfigView v-else-if="route.view === 'config'" :payload="configPayload" :loading="loading" @back="go({ view: 'status' })"/>
-    <CatalogView v-else-if="route.view === 'catalog'" :types="types" :loading="loading" :refreshed-at="refreshedAt" :stale="stale" @open="openType" @query="openSearch" @find="openProduct"/>
+    <CatalogView v-else-if="route.view === 'catalog'" :types="types" :unavailable="catalogUnavailable" :loading="loading" :refreshed-at="refreshedAt" :stale="stale" @open="openType" @query="openSearch" @find="openProduct"/>
     <SearchView v-else-if="route.view === 'search'" :payload="searchPayload" :loading="loading" @query="openSearch" @open="openProduct" @open-type="openType" @back="go({ view: 'catalog' })"/>
     <TypeView v-else-if="route.view === 'type'" :payload="typePayload" :loading="loading" :refreshed-at="refreshedAt" :stale="stale" @more="openTypeMore" @refresh="refreshType" @open="openProduct" @back="go({ view: 'catalog' })"/>
     <ProductView v-else-if="route.view === 'product'" :payload="productPayload" :pedigree="pedigree" :loading="loading" @open-type="openType" @open-instance="openInstance" @open-workflow="openWorkflow" @open-task="openTask" @open-product="openProduct" @back="go({ view: 'catalog' })"/>
@@ -91,6 +91,7 @@ export default {
     const error = ref('')
     const health = ref(null)
     const types = ref([])
+    const catalogUnavailable = ref(null)
     const typePayload = ref(null)
     const productPayload = ref(null)
     const pedigree = ref(null)
@@ -432,6 +433,13 @@ export default {
         } else if (r.view === 'catalog') {
           const body = await getTypes()
           types.value = body.types || []
+          // available is false only when the File Manager could not be
+          // reached. An empty catalog and an unreachable one both arrive as
+          // an empty list, and they mean opposite things to whoever is
+          // looking at the page.
+          catalogUnavailable.value = body.available === false
+            ? { error: body.error, fileManagerUrl: body.fileManagerUrl }
+            : null
         } else if (r.view === 'search') {
           const sql = r.sql || ''
           const sqlError = catalogSqlError(sql)
@@ -554,7 +562,7 @@ export default {
     })
 
     return {
-      route, loading, error, health, refreshedAt, stale, types, typePayload, productPayload,
+      route, loading, error, health, refreshedAt, stale, types, catalogUnavailable, typePayload, productPayload,
       pedigree, instancePayload, instanceDetail, workflows, workflowPayload, taskPayload,
       conditionPayload, configPayload, searchPayload, resourcePayload, resourceStubs, go, openType, openTypePage, openTypeMore, refreshType, openProduct,
       openProductByPath, openLatestFile, openInstances, openInstancesPage, setInstanceWorkflow, setInstanceSince, backFromInstance, openInstance, openWorkflow, openTask, openTaskFromWorkflow, openTaskFromInstance, openTaskFromInstanceRow, openCondition, openConditionFromTask, backFromTask, backFromCondition, openConfig, openSearch

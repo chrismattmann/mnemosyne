@@ -546,7 +546,29 @@ public class FileManagerUtils implements PCSConfigMetadata, Serializable, AutoCl
     }
   }
 
-  private boolean isConnected() {
+  /**
+   * Whether this wrapper actually has a File Manager to talk to.
+   *
+   * <p>
+   * The safe* methods above never throw: when there is no client they hand
+   * back an empty list, a null, or a blank object, and log a warning. That is
+   * useful for a caller that wants to keep rendering, and misleading for one
+   * that reports what it found -- a blank product type and a page of -1
+   * products read as "the catalog is empty", not "the File Manager is down".
+   * Those are different facts and a caller has to be able to tell them apart,
+   * so this is part of the contract rather than an internal detail.
+   * </p>
+   *
+   * <p>
+   * This reports whether a client was built, which is what fails when the
+   * File Manager is not running: the constructor catches the
+   * ConnectionException and leaves the client null. It does not probe a live
+   * connection on each call.
+   * </p>
+   *
+   * @return true if a File Manager client is present
+   */
+  public boolean isConnected() {
     if (this.fmgrClient == null) {
       LOG.warning(
           "Not connected to File Manager: Default Products, References, Metadata and other objects will be returned.");
