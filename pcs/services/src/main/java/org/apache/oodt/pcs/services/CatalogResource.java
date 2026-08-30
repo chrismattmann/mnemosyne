@@ -69,6 +69,13 @@ public class CatalogResource extends PCSService {
   public String types() throws MalformedURLException, IOException {
     FileManagerUtils fm = fm();
     try {
+      // An unreachable File Manager and a catalog with no product types are
+      // different facts, and the safe* methods report them identically -- an
+      // empty list either way. Saying which one this is keeps a reader from
+      // concluding the catalog is empty when the service is simply down.
+      if (!fm.isConnected()) {
+        return unavailableTypes(fm);
+      }
       List<ProductType> types = fm.safeGetProductTypes();
       if (types == null) {
         types = Collections.emptyList();
@@ -101,6 +108,9 @@ public class CatalogResource extends PCSService {
       throws MalformedURLException, IOException {
     FileManagerUtils fm = fm();
     try {
+      if (!fm.isConnected()) {
+        return unavailableCatalog(fm);
+      }
       ProductType type = fm.safeGetProductTypeByName(name);
       if (type == null || type.getName() == null) {
         throw new ResourceNotFoundException("No product type named [" + name + "]");
@@ -318,6 +328,60 @@ public class CatalogResource extends PCSService {
           + e.getLocalizedMessage());
     }
     return page;
+  }
+
+  /**
+   * Reports that the File Manager could not be reached.
+   *
+   * <p>
+   * The alternative is what this code used to do: hand back
+   * {@link org.apache.oodt.cas.filemgr.structs.ProductType#blankProductType()}
+   * and a page of -1 products, which renders as a product type literally
+   * named "blank" holding an impossible number of products. That looks like
+   * data. This says what happened, and names the address it tried, so the
+   * reader knows where to look.
+   * </p>
+   */
+  private static String unavailableTypes(FileManagerUtils fm) {
+    JSONObject response = new JSONObject();
+    // types stays an array. A reader that only knows about types gets an
+    // empty one, exactly as before; a reader that checks availability can
+    // tell that empty apart from a catalog with nothing in it.
+    response.put("types", new ArrayList<Map<String, Object>>());
+    addUnavailability(response, fm);
+    return response.toString();
+  }
+
+  private static String unavailableCatalog(FileManagerUtils fm) {
+    Map<String, Object> body = new LinkedHashMap<String, Object>();
+    body.put("products", new ArrayList<Map<String, Object>>());
+    body.put("numProducts", Integer.valueOf(0));
+    JSONObject catalog = new JSONObject();
+    catalog.putAll(body);
+    addUnavailability(catalog, fm);
+    JSONObject response = new JSONObject();
+    response.put("catalog", catalog);
+    return response.toString();
+  }
+
+  /**
+   * Marks a response as one the File Manager could not answer.
+   *
+   * <p>
+   * The alternative is what this used to return:
+   * {@link org.apache.oodt.cas.filemgr.structs.ProductType#blankProductType()}
+   * and a page of -1 products, which reads as a product type named "blank"
+   * holding an impossible number of them. That looks like data. This says
+   * what happened, and names the address it tried, so a reader knows where
+   * to look.
+   * </p>
+   */
+  private static void addUnavailability(JSONObject target,
+      FileManagerUtils fm) {
+    target.put("available", Boolean.FALSE);
+    target.put("error", "The File Manager could not be reached.");
+    target.put("fileManagerUrl", fm.getFmUrl() == null ? "unavailable"
+        : fm.getFmUrl().toString());
   }
 
   private static String json(String key, Object value) {

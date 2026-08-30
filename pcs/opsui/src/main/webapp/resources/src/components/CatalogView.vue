@@ -32,7 +32,13 @@
     </form>
     <p class="muted cap-note">Open a cataloged file without writing SQL.</p>
     <p v-if="queryError" class="banner">{{ queryError }}</p>
-    <p v-if="loading && !types.length" class="empty">Loading types…</p>
+    <p v-if="unavailable" class="banner">
+      {{ unavailable.error || 'The File Manager could not be reached.' }}
+      <span v-if="unavailable.fileManagerUrl" class="mono">
+        ({{ unavailable.fileManagerUrl }})
+      </span>
+    </p>
+    <p v-else-if="loading && !types.length" class="empty">Loading types…</p>
     <p v-else-if="!types.length" class="empty">No product types yet.</p>
     <template v-else>
       <p v-if="populated.length" class="muted">
@@ -80,6 +86,9 @@ export default {
   components: { RefreshNote, SortHead },
   props: {
     types: { type: Array, default: () => [] },
+    // Set only when the File Manager could not be reached. Without it a down
+    // service and an empty catalog both render as "No product types yet."
+    unavailable: { type: Object, default: null },
     loading: { type: Boolean, default: false },
     refreshedAt: { type: Number, default: 0 },
     stale: { type: Boolean, default: false }
