@@ -21,6 +21,7 @@ package org.apache.oodt.cas.workflow.engine;
 
 import org.apache.oodt.cas.metadata.Metadata;
 import org.apache.oodt.cas.workflow.engine.processor.WorkflowProcessorQueue;
+import org.apache.oodt.cas.workflow.engine.runner.AbstractEngineRunnerBase;
 import org.apache.oodt.cas.workflow.engine.runner.EngineRunner;
 import org.apache.oodt.cas.workflow.instrepo.WorkflowInstanceRepository;
 import org.apache.oodt.cas.workflow.lifecycle.WorkflowLifecycle;
@@ -229,7 +230,11 @@ public class PrioritizedQueueBasedWorkflowEngine implements WorkflowEngine {
   @Override
   public void setWorkflowManagerUrl(URL url) {
     this.wmgrUrl = url;
-
+    // Passed on rather than only kept. A task reads the manager's URL out of
+    // its shared context, and the runner is what puts it there.
+    if (this.runner instanceof AbstractEngineRunnerBase) {
+      ((AbstractEngineRunnerBase) this.runner).setWorkflowManagerUrl(url);
+    }
   }
 
   /*
