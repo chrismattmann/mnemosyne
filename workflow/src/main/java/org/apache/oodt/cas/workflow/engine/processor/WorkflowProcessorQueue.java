@@ -121,6 +121,106 @@ public class WorkflowProcessorQueue {
    * repository already holds -- two copies being free to drift apart.
    * </p>
    */
+
+  /** Kinds of workflow this queue builds while running. */
+  static final String TASK_WORKFLOW = "task-workflow";
+
+  static final String PRE_COND_WORKFLOW = "pre-cond-workflow";
+
+  static final String POST_COND_WORKFLOW = "post-cond-workflow";
+
+  /**
+   * Separates the parts of a generated workflow id. Not a character that
+   * appears in a URN, so an id can be taken apart again unambiguously.
+   */
+  static final String ID_SEPARATOR = "|";
+
+  /**
+   * Builds the id of a workflow this queue generates during a run.
+   *
+   * <p>
+   * The id names both ends -- what it was generated for, and which task or
+   * condition of it -- for two reasons. It has to be unique: every task of a
+   * composite workflow used to be given the id "task-workflow-" plus the
+   * parent's id, so all of them collided and none could be told from another.
+   * And it has to be reversible, so the model can be built again from the
+   * workflow files by anything that did not watch the run: see
+   * {@link #regenerateModel(String)}.
+   * </p>
+   */
+  static String generatedId(String kind, String ownerId, String childId) {
+    String prefix = kind.endsWith("-") ? kind.substring(0, kind.length() - 1)
+        : kind;
+    return prefix + ID_SEPARATOR + ownerId + ID_SEPARATOR + childId;
+  }
+
+  /**
+   * Rebuilds a workflow this queue generates during a run, from its id alone.
+   *
+   * <p>
+   * These models used to exist only in the repository instance the engine
+   * happened to hold, and only in memory, so nothing else could describe an
+   * instance of one and a restart lost them entirely. Generating them on demand
+   * from the declared model keeps them out of storage while making them
+   * available to anyone holding the workflow files.
+   * </p>
+   *
+   * @return the regenerated model, or null if the id is not one of ours or the
+   *         declared parts it refers to are not in the model repository
+   */
+  ParentChildWorkflow regenerateModel(String id) {
+    if (id == null || modelRepo == null || !id.contains(ID_SEPARATOR)) {
+      return null;
+    }
+
+    String[] parts = id.split(java.util.regex.Pattern.quote(ID_SEPARATOR));
+    if (parts.length != 3) {
+      return null;
+    }
+    String kind = parts[0];
+    String ownerId = parts[1];
+    String childId = parts[2];
+
+    try {
+      if (TASK_WORKFLOW.equals(kind)) {
+        WorkflowTask task = safeGetTaskById(childId);
+        if (task == null) {
+          return null;
+        }
+        Graph taskGraph = new Graph();
+        taskGraph.setExecutionType("task");
+        taskGraph.setTask(task);
+        ParentChildWorkflow workflow = new ParentChildWorkflow(taskGraph);
+        workflow.setId(id);
+        workflow.setName("Task Workflow-" + task.getTaskName());
+        workflow.getTasks().add(task);
+        return workflow;
+      }
+
+      if (PRE_COND_WORKFLOW.equals(kind) || POST_COND_WORKFLOW.equals(kind)
+          || kind.endsWith("cond-workflow")) {
+        WorkflowCondition cond = modelRepo.getWorkflowConditionById(childId);
+        if (cond == null) {
+          return null;
+        }
+        WorkflowTask conditionTask = toConditionTask(cond);
+        Graph condGraph = new Graph();
+        condGraph.setExecutionType("condition");
+        condGraph.setCond(cond);
+        condGraph.setTask(conditionTask);
+        ParentChildWorkflow workflow = new ParentChildWorkflow(condGraph);
+        workflow.setId(id);
+        workflow.setName("Condition Workflow-" + cond.getConditionName());
+        workflow.getTasks().add(conditionTask);
+        return workflow;
+      }
+    } catch (Exception e) {
+      LOG.log(Level.SEVERE, "Unable to regenerate the model for id [" + id
+          + "] owned by [" + ownerId + "]", e);
+    }
+    return null;
+  }
+
   private void resolveModelFromRepository(WorkflowInstance instance) {
     if (modelRepo == null || instance.getWorkflow() == null) {
       return;
@@ -141,6 +241,11 @@ public class WorkflowProcessorQueue {
 
     try {
       Workflow model = modelRepo.getWorkflowById(modelId);
+      if (model == null) {
+        // Generated during a run rather than declared in a file, so it is not
+        // in the repository; build it again from the declared parts.
+        model = regenerateModel(modelId);
+      }
       if (model == null) {
         LOG.log(Level.FINE, "Instance: [" + instance.getId()
             + "] refers to workflow: [" + modelId
@@ -262,8 +367,8 @@ public class WorkflowProcessorQueue {
     condGraph.setCond(cond);
     condGraph.setTask(conditionTask);
     ParentChildWorkflow workflow = new ParentChildWorkflow(condGraph);
-    workflow.setId(idPrefix + cond.getConditionId() + "-"
-        + parent.getParentChildWorkflow().getId());
+    workflow.setId(generatedId(idPrefix,
+        parent.getParentChildWorkflow().getId(), cond.getConditionId()));
     workflow.setName("Condition Workflow-" + cond.getConditionName());
     workflow.getTasks().add(conditionTask);
     instance.setParentChildWorkflow(workflow);
@@ -434,8 +539,8 @@ public class WorkflowProcessorQueue {
           condGraph.setCond(cond);
           condGraph.setTask(conditionTask);
           ParentChildWorkflow workflow = new ParentChildWorkflow(condGraph);
-          workflow.setId("pre-cond-workflow-"
-              + inst.getParentChildWorkflow().getId());
+          workflow.setId(generatedId(PRE_COND_WORKFLOW,
+              inst.getParentChildWorkflow().getId(), cond.getConditionId()));
           workflow.setName("Pre Condition Workflow-" + cond.getConditionName());
           workflow.getTasks().add(conditionTask);
           instance.setParentChildWorkflow(workflow);
@@ -486,8 +591,8 @@ public class WorkflowProcessorQueue {
           taskGraph.setExecutionType("task");
           taskGraph.setTask(task);
           ParentChildWorkflow workflow = new ParentChildWorkflow(taskGraph);
-          workflow.setId("task-workflow-"
-              + inst.getParentChildWorkflow().getId());
+          workflow.setId(generatedId(TASK_WORKFLOW,
+              inst.getParentChildWorkflow().getId(), task.getTaskId()));
           workflow.setName("Task Workflow-" + task.getTaskName());
           workflow.getTasks().add(task);
           workflow.getGraph().setTask(task);
@@ -586,9 +691,9 @@ public class WorkflowProcessorQueue {
             condGraph.setCond(cond);
             condGraph.setTask(conditionTask);
             ParentChildWorkflow workflow = new ParentChildWorkflow(condGraph);
-            workflow.setId("pre-cond-workflow-"
-                + inst.getParentChildWorkflow().getGraph().getTask()
-                    .getTaskId());
+            workflow.setId(generatedId(PRE_COND_WORKFLOW,
+                inst.getParentChildWorkflow().getGraph().getTask().getTaskId(),
+                cond.getConditionId()));
             workflow.setName("Task Pre Condition Workflow-"
                 + cond.getConditionName());
             workflow.getTasks().add(conditionTask);
@@ -622,9 +727,9 @@ public class WorkflowProcessorQueue {
             condGraph.setCond(cond);
             condGraph.setTask(conditionTask);
             ParentChildWorkflow workflow = new ParentChildWorkflow(condGraph);
-            workflow.setId("post-cond-workflow-"
-                + inst.getParentChildWorkflow().getGraph().getTask()
-                    .getTaskId());
+            workflow.setId(generatedId(POST_COND_WORKFLOW,
+                inst.getParentChildWorkflow().getGraph().getTask().getTaskId(),
+                cond.getConditionId()));
             workflow.setName("Task Post Condition Workflow-"
                 + cond.getConditionName());
             workflow.getTasks().add(conditionTask);
