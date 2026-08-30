@@ -196,6 +196,16 @@ public class HealthResource extends PCSService {
     return response.toString();
   }
 
+  /**
+   * Builds the health monitor, once.
+   *
+   * <p>
+   * Cheap now: PCSHealthMonitor records the three service addresses and
+   * connects to none of them, so this cannot block on a service that is down.
+   * A subsystem that cannot be reached is reported as down by the report
+   * itself, which is what a health view is for.
+   * </p>
+   */
   private static synchronized PCSHealthMonitor getMonitor() {
     if (mon == null) {
       try {

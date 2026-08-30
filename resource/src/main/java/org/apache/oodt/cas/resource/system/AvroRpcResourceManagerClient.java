@@ -21,6 +21,7 @@ import org.apache.avro.AvroRemoteException;
 import org.apache.oodt.cas.resource.structs.avrotypes.OodtError;
 import org.apache.avro.ipc.NettyTransceiver;
 import org.apache.oodt.commons.rpc.AvroTransceivers;
+import org.apache.oodt.commons.rpc.ConnectPolicy;
 import org.apache.oodt.commons.rpc.RequestTimeout;
 import org.apache.avro.ipc.Transceiver;
 import org.apache.avro.ipc.specific.SpecificRequestor;
@@ -45,6 +46,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.URL;
+import java.util.concurrent.Callable;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -75,10 +77,35 @@ public class AvroRpcResourceManagerClient implements ResourceManagerClient {
 
     transient Transceiver client;
     transient ResourceManager proxy;
-    private static final int CONNECT_ATTEMPTS = 30;
-    private static final long CONNECT_RETRY_MILLIS = 1000L;
+    /**
+     * How hard to try, when the caller does not say.
+     *
+     * <p>
+     * This was thirty attempts at one second intervals, hard-coded, with no
+     * way out -- a policy that suits a daemon waiting for a peer at boot and
+     * nothing else. Every other caller paid for it: a health report that could
+     * not reach this service took thirty seconds to say so, which is what made
+     * an OPSUI status view hang instead of reporting. Waiting is the caller's
+     * decision now, and the default is to fail fast. A deployment that needs
+     * the old behaviour can ask for it through
+     * ConnectPolicy.ATTEMPTS_PROPERTY.
+     * </p>
+     */
+    private static ConnectPolicy defaultPolicy() {
+        return ConnectPolicy.configured();
+    }
 
     public AvroRpcResourceManagerClient(URL url) {
+        this(url, defaultPolicy());
+    }
+
+    /**
+     * Connects using the given policy.
+     *
+     * @param url    where the Resource Manager is
+     * @param policy how hard to try before giving up; see {@link ConnectPolicy}
+     */
+    public AvroRpcResourceManagerClient(final URL url, ConnectPolicy policy) {
         this.resMgrUrl = url;
         // set up the configuration, if there is any
         if (System.getProperty("org.apache.oodt.cas.resource.properties") != null) {
@@ -97,30 +124,22 @@ public class AvroRpcResourceManagerClient implements ResourceManagerClient {
             }
         }
 
-        IOException lastException = null;
-        for (int attempt = 1; attempt <= CONNECT_ATTEMPTS; attempt++) {
-            try {
-                this.client = new NettyTransceiver(new InetSocketAddress(url.getHost(), url.getPort()), CHANNEL_FACTORY);
-                // Bounded: the transceiver above is given no request
-                // timeout, so a lost response parked the caller forever.
-                proxy = RequestTimeout.bound(ResourceManager.class,
-                    (ResourceManager) SpecificRequestor.getClient(ResourceManager.class, client));
-                return;
-            } catch (IOException e) {
-                lastException = e;
-                LOG.log(Level.WARNING,
-                    "Unable to connect to Resource Manager at [{0}] attempt [{1}/{2}]: {3}",
-                    new Object[] { url, attempt, CONNECT_ATTEMPTS, e.getMessage() });
-                try {
-                    Thread.sleep(CONNECT_RETRY_MILLIS);
-                } catch (InterruptedException interruptedException) {
-                    Thread.currentThread().interrupt();
-                    throw new IllegalStateException("Interrupted connecting to Resource Manager at: " + url,
-                        interruptedException);
-                }
-            }
+        try {
+            policy.connect("the Resource Manager at [" + url + "]",
+                new Callable<Void>() {
+                    public Void call() throws IOException {
+                        client = new NettyTransceiver(
+                            new InetSocketAddress(url.getHost(), url.getPort()), CHANNEL_FACTORY);
+                        // Bounded: the transceiver above is given no request
+                        // timeout, so a lost response parked the caller forever.
+                        proxy = RequestTimeout.bound(ResourceManager.class,
+                            (ResourceManager) SpecificRequestor.getClient(ResourceManager.class, client));
+                        return null;
+                    }
+                });
+        } catch (IOException e) {
+            throw new IllegalStateException("Unable to connect to Resource Manager at: " + url, e);
         }
-        throw new IllegalStateException("Unable to connect to Resource Manager at: " + url, lastException);
 
     }
 
