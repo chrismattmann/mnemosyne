@@ -91,6 +91,12 @@ public final class PCSHealthMonitor implements CoreMetKeys,
 
   private FileManagerUtils fm;
 
+  private final String fmUrlStr;
+
+  private final String wmUrlStr;
+
+  private final String rmUrlStr;
+
   private WorkflowManagerUtils wm;
 
   private ResourceManagerUtils rm;
@@ -99,14 +105,80 @@ public final class PCSHealthMonitor implements CoreMetKeys,
 
   private WorkflowStatesFile statesFile;
 
+  /**
+   * Records where the three services are. It does not connect to them.
+   *
+   * <p>
+   * It used to build all three clients here, so one unreachable service made
+   * the monitor impossible to construct -- and with it the whole report,
+   * including the sections for the two services that were answering perfectly
+   * well. A health report that cannot be produced when something is unhealthy
+   * is the one case it exists for.
+   * </p>
+   *
+   * <p>
+   * Each client is built on first use instead, and a service that cannot be
+   * reached is reported as down rather than throwing. The report was always
+   * written to degrade -- the batch stub section already skips itself when the
+   * resource manager is down -- and only this constructor stood in the way.
+   * </p>
+   */
   public PCSHealthMonitor(String fmUrlStr, String wmUrlStr, String rmUrlStr,
       String crawlPropFilePath, String statesFilePath)
       throws InstantiationException {
-    this.fm = new FileManagerUtils(fmUrlStr);
-    this.wm = new WorkflowManagerUtils(wmUrlStr);
-    this.rm = new ResourceManagerUtils(rmUrlStr);
+    this.fmUrlStr = fmUrlStr;
+    this.wmUrlStr = wmUrlStr;
+    this.rmUrlStr = rmUrlStr;
     this.crawlProps = new CrawlPropertiesFile(crawlPropFilePath);
     this.statesFile = new WorkflowStatesFile(statesFilePath);
+  }
+
+  /**
+   * The configured URL, so a service that is down still says where it was
+   * looked for. A report that omits the address is harder to act on than one
+   * that shows it next to "DOWN".
+   */
+  private String safeUrl(Object url) {
+    return url != null ? url.toString() : "unavailable";
+  }
+
+  /** @return the file manager client, or null if it cannot be built */
+  private synchronized FileManagerUtils fm() {
+    if (fm == null && fmUrlStr != null) {
+      try {
+        fm = new FileManagerUtils(fmUrlStr);
+      } catch (Exception e) {
+        LOG.log(Level.WARNING, "File manager at [" + fmUrlStr
+            + "] is not reachable: " + e.getMessage());
+      }
+    }
+    return fm;
+  }
+
+  /** @return the workflow manager client, or null if it cannot be built */
+  private synchronized WorkflowManagerUtils wm() {
+    if (wm == null && wmUrlStr != null) {
+      try {
+        wm = new WorkflowManagerUtils(wmUrlStr);
+      } catch (Exception e) {
+        LOG.log(Level.WARNING, "Workflow manager at [" + wmUrlStr
+            + "] is not reachable: " + e.getMessage());
+      }
+    }
+    return wm;
+  }
+
+  /** @return the resource manager client, or null if it cannot be built */
+  private synchronized ResourceManagerUtils rm() {
+    if (rm == null && rmUrlStr != null) {
+      try {
+        rm = new ResourceManagerUtils(rmUrlStr);
+      } catch (Exception e) {
+        LOG.log(Level.WARNING, "Resource manager at [" + rmUrlStr
+            + "] is not reachable: " + e.getMessage());
+      }
+    }
+    return rm;
   }
 
   public synchronized PCSHealthMonitorReport getReport() {
@@ -135,13 +207,13 @@ public final class PCSHealthMonitor implements CoreMetKeys,
 
     System.out.println(FILE_MANAGER_DAEMON_NAME
         + getStrPadding(FILE_MANAGER_DAEMON_NAME, WORKFLOW_MANAGER_DAEMON_NAME)
-        + ":\t[" + this.fm.getFmUrl() + "]: " + printUp(getFmUp()));
+        + ":\t[" + safeUrl(fm() == null ? null : fm().getFmUrl()) + "]: " + printUp(getFmUp()));
 
     System.out.println(WORKFLOW_MANAGER_DAEMON_NAME + ":\t["
-        + this.wm.getWmUrl() + "]: " + printUp(getWmUp()));
+        + safeUrl(wm() == null ? null : wm().getWmUrl()) + "]: " + printUp(getWmUp()));
 
     System.out.println(RESOURCE_MANAGER_DAEMON_NAME + ":\t["
-        + this.rm.getResmgrUrl() + "]: " + printUp(getRmUp()));
+        + safeUrl(rm() == null ? null : rm().getResmgrUrl()) + "]: " + printUp(getRmUp()));
 
     quickPrintBatchStubs();
 
@@ -256,7 +328,7 @@ public final class PCSHealthMonitor implements CoreMetKeys,
 
     fmStatus.setDaemonName(FILE_MANAGER_DAEMON_NAME);
     fmStatus.setStatus(printUp(getFmUp()));
-    fmStatus.setUrlStr(this.fm.getFmUrl().toString());
+    fmStatus.setUrlStr(safeUrl(fm() == null ? null : fm().getFmUrl()));
 
     return fmStatus;
   }
@@ -266,7 +338,7 @@ public final class PCSHealthMonitor implements CoreMetKeys,
 
     wmStatus.setDaemonName(WORKFLOW_MANAGER_DAEMON_NAME);
     wmStatus.setStatus(printUp(getWmUp()));
-    wmStatus.setUrlStr(this.wm.getWmUrl().toString());
+    wmStatus.setUrlStr(safeUrl(wm() == null ? null : wm().getWmUrl()));
 
     return wmStatus;
   }
@@ -276,7 +348,7 @@ public final class PCSHealthMonitor implements CoreMetKeys,
 
     rmStatus.setDaemonName(RESOURCE_MANAGER_DAEMON_NAME);
     rmStatus.setStatus(printUp(getRmUp()));
-    rmStatus.setUrlStr(this.rm.getResmgrUrl().toString());
+    rmStatus.setUrlStr(safeUrl(rm() == null ? null : rm().getResmgrUrl()));
 
     return rmStatus;
   }
@@ -286,7 +358,7 @@ public final class PCSHealthMonitor implements CoreMetKeys,
 
     if (getRmUp()) {
       // only print if the resource manager is up
-      List resNodes = rm.safeGetResourceNodes();
+      List resNodes = rm() == null ? null : rm().safeGetResourceNodes();
 
       if (resNodes != null && resNodes.size() > 0) {
         for (Object resNode : resNodes) {
@@ -337,7 +409,7 @@ public final class PCSHealthMonitor implements CoreMetKeys,
 
   private List getProductHealth() {
     if (getFmUp()) {
-      return this.fm.safeGetTopNProducts(TOP_N_PRODUCTS);
+      return fm() == null ? null : fm().safeGetTopNProducts(TOP_N_PRODUCTS);
     } else {
       return new Vector();
     }
@@ -354,7 +426,7 @@ public final class PCSHealthMonitor implements CoreMetKeys,
     if (states != null && states.size() > 0) {
       for (Object state1 : states) {
         String state = (String) state1;
-        int numPipelines = this.wm.safeGetNumWorkflowInstancesByStatus(state);
+        int numPipelines = wm() == null ? -1 : wm().safeGetNumWorkflowInstancesByStatus(state);
         if (numPipelines == -1) {
           numPipelines = 0;
         }
@@ -530,7 +602,7 @@ public final class PCSHealthMonitor implements CoreMetKeys,
 
     if (getRmUp()) {
       // only print if the resource manager is up
-      resNodes = rm.safeGetResourceNodes();
+      resNodes = rm() == null ? null : rm().safeGetResourceNodes();
 
       if (resNodes != null && resNodes.size() > 0) {
         for (Object resNode : resNodes) {
@@ -552,7 +624,7 @@ public final class PCSHealthMonitor implements CoreMetKeys,
     if (states != null && states.size() > 0) {
       for (Object state1 : states) {
         String state = (String) state1;
-        int numPipelines = this.wm.safeGetNumWorkflowInstancesByStatus(state);
+        int numPipelines = wm() == null ? -1 : wm().safeGetNumWorkflowInstancesByStatus(state);
         if (numPipelines == -1) {
           numPipelines = 0;
         }
@@ -566,7 +638,7 @@ public final class PCSHealthMonitor implements CoreMetKeys,
     if (getFmUp()) {
       System.out.println("Latest " + TOP_N_PRODUCTS + " products ingested:");
 
-      List prods = this.fm.safeGetTopNProducts(TOP_N_PRODUCTS);
+      List prods = fm() == null ? null : fm().safeGetTopNProducts(TOP_N_PRODUCTS);
 
       if (prods != null && prods.size() > 0) {
         for (Object prod : prods) {
@@ -799,8 +871,14 @@ public final class PCSHealthMonitor implements CoreMetKeys,
   }
 
   private boolean getRmUp() {
+    ResourceManagerUtils client = rm();
+    if (client == null) {
+      // Never built, because the address is unusable or nothing answered
+      // there. That is what down means.
+      return false;
+    }
     try {
-      rm.getClient().getNodes();
+      client.getClient().getNodes();
       return true;
     } catch (Exception e) {
       return false;
