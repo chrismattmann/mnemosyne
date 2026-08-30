@@ -24,6 +24,8 @@ import org.apache.oodt.cas.filemgr.structs.exceptions.CatalogException;
 import org.apache.oodt.cas.metadata.Metadata;
 
 import org.apache.solr.client.solrj.util.ClientUtils;
+import org.apache.solr.common.SolrDocument;
+import org.apache.solr.common.SolrDocumentList;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -143,6 +145,25 @@ public class DefaultProductSerializer implements ProductSerializer {
 	/**
 	 * {@inheritDoc}
 	 */
+	@Override
+	public QueryResponse deserialize(
+			org.apache.solr.client.solrj.response.QueryResponse response)
+			throws CatalogException {
+		QueryResponse queryResponse = new QueryResponse();
+		if (response == null || response.getResults() == null) {
+			return queryResponse;
+		}
+		SolrDocumentList results = response.getResults();
+		queryResponse.setNumFound(results.getNumFound() > Integer.MAX_VALUE
+				? Integer.MAX_VALUE : (int) results.getNumFound());
+		queryResponse.setStart(results.getStart() > Integer.MAX_VALUE
+				? Integer.MAX_VALUE : (int) results.getStart());
+		for (SolrDocument doc : results) {
+			queryResponse.getCompleteProducts().add(deserialize(doc));
+		}
+		return queryResponse;
+	}
+
 	public QueryResponse deserialize(String xml) throws CatalogException {
 
 		try {
@@ -376,6 +397,103 @@ public class DefaultProductSerializer implements ProductSerializer {
 	}
 
 
+
+	CompleteProduct deserialize(SolrDocument doc) {
+		CompleteProduct cp = new CompleteProduct();
+		if (doc == null) {
+			return cp;
+		}
+		Product product = cp.getProduct();
+		ProductType productType = product.getProductType();
+		Metadata metadata = cp.getMetadata();
+		List<Reference> references = product.getProductReferences();
+		Reference rootReference = product.getRootRef();
+
+		for (String name : doc.getFieldNames()) {
+			java.util.Collection<Object> raw = doc.getFieldValues(name);
+			if (raw == null || raw.isEmpty()) {
+				continue;
+			}
+			List<String> vals = new ArrayList<String>();
+			for (Object value : raw) {
+				vals.add(value == null ? "" : value.toString());
+			}
+
+			boolean referenceField = name.equals(Parameters.REFERENCE_ORIGINAL)
+					|| name.equals(Parameters.REFERENCE_DATASTORE)
+					|| name.equals(Parameters.REFERENCE_FILESIZE)
+					|| name.equals(Parameters.REFERENCE_MIMETYPE);
+
+			if (referenceField) {
+				for (int k = 0; k < vals.size(); k++) {
+					if (references.size() <= k) {
+						references.add(new Reference());
+					}
+					if (name.equals(Parameters.REFERENCE_ORIGINAL)) {
+						references.get(k).setOrigReference(vals.get(k));
+					} else if (name.equals(Parameters.REFERENCE_DATASTORE)) {
+						references.get(k).setDataStoreReference(vals.get(k));
+					} else if (name.equals(Parameters.REFERENCE_FILESIZE)) {
+						references.get(k).setFileSize(Long.parseLong(vals.get(k)));
+					} else if (name.equals(Parameters.REFERENCE_MIMETYPE)) {
+						references.get(k).setMimeType(vals.get(k));
+					}
+				}
+			} else if (vals.size() > 1) {
+				this.deserializeMultiValueField(name, vals, metadata);
+			} else {
+				String value = vals.get(0);
+				if (name.equals(Parameters.PRODUCT_ID)) {
+					product.setProductId(value);
+					metadata.addMetadata(name, value);
+				} else if (name.equals(Parameters.PRODUCT_NAME)) {
+					product.setProductName(value);
+					metadata.addMetadata(name, value);
+				} else if (name.equals(Parameters.PRODUCT_STRUCTURE)) {
+					product.setProductStructure(value);
+					metadata.addMetadata(name, value);
+				} else if (name.equals(Parameters.PRODUCT_TRANSFER_STATUS)) {
+					product.setTransferStatus(value);
+					metadata.addMetadata(name, value);
+				} else if (name.equals(Parameters.PRODUCT_TYPE_NAME)) {
+					productType.setName(value);
+					metadata.addMetadata(name, value);
+				} else if (name.equals(Parameters.PRODUCT_TYPE_ID)) {
+					productType.setProductTypeId(value);
+					metadata.addMetadata(name, value);
+				} else if (name.equals(Parameters.PRODUCT_RECEIVED_TIME)) {
+					product.setProductRecievedTime(value);
+					metadata.addMetadata(name, value);
+				} else if (name.equals(Parameters.ROOT_REFERENCE_ORIGINAL)) {
+					if (rootReference == null) {
+						rootReference = new Reference();
+					}
+					rootReference.setOrigReference(value);
+				} else if (name.equals(Parameters.ROOT_REFERENCE_DATASTORE)) {
+					if (rootReference == null) {
+						rootReference = new Reference();
+					}
+					rootReference.setDataStoreReference(value);
+				} else if (name.equals(Parameters.ROOT_REFERENCE_FILESIZE)) {
+					if (rootReference == null) {
+						rootReference = new Reference();
+					}
+					rootReference.setFileSize(Long.parseLong(value));
+				} else if (name.equals(Parameters.ROOT_REFERENCE_MIMETYPE)) {
+					if (rootReference == null) {
+						rootReference = new Reference();
+					}
+					rootReference.setMimeType(value);
+				} else {
+					this.deserializeSingleValueField(name, value, metadata);
+				}
+			}
+		}
+		if (rootReference != null) {
+			product.setRootRef(rootReference);
+		}
+		return cp;
+	}
 
 	/**
 	 * Method that parses a single Solr document snippet

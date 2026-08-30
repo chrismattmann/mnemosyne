@@ -58,7 +58,7 @@ public class SolrCatalog implements Catalog {
 	public SolrCatalog(String solrUrl, ProductIdGenerator productIdGenerator, ProductSerializer productSerializer) {
 		this.productIdGenerator = productIdGenerator;
 		this.productSerializer = productSerializer;
-		this.solrClient = new SolrClient(solrUrl);
+		this.solrClient = new SolrClient(solrUrl, productSerializer);
 	}
 
 	@Override
@@ -290,8 +290,7 @@ public class SolrCatalog implements Catalog {
 		while (queryResponse.getCompleteProducts().size()<limit || limit<0) {
 
 			params.put("start", new String[] { ""+start } );
-			String response = solrClient.query(params, productSerializer.getMimeType());
-			QueryResponse qr = productSerializer.deserialize(response);
+			QueryResponse qr = solrClient.query(params);
 
 			for (CompleteProduct cp : qr.getCompleteProducts()) {
 				if (queryResponse.getCompleteProducts().size()<limit) {
@@ -347,11 +346,7 @@ public class SolrCatalog implements Catalog {
 		// request metadata elements explicitly
 		params.put("fl", elements.toArray(new String[elements.size()]) );
 
-		// execute request
-		String doc = solrClient.query(params, productSerializer.getMimeType());
-
-		// parse response
-		CompleteProduct cp = extractCompleteProduct(doc);
+		CompleteProduct cp = extractCompleteProduct(solrClient.query(params));
 		return cp.getMetadata();
 
 	}
@@ -378,13 +373,7 @@ public class SolrCatalog implements Catalog {
 
 	@Override
 	public List<Product> getTopNProducts(int n) throws CatalogException {
-
-		// retrieve most recent n products from Solr
-		String doc = solrClient.queryProductsByDate(n, productSerializer.getMimeType());
-
-		// parse Solr response into Product objects
-		return this.getProductsFromDocument(doc);
-
+		return solrClient.queryProductsByDate(n).getProducts();
 	}
 
 	@Override
@@ -465,30 +454,9 @@ public class SolrCatalog implements Catalog {
 
 	}
 
-	/**
-	 * Common functionality for extracting products from a Solr response document.
-	 * @param doc
-	 * @return
-	 */
-	private List<Product> getProductsFromDocument(String doc) throws CatalogException {
-
-		// extract full product information from Solr response
-		QueryResponse queryResponse = productSerializer.deserialize(doc);
-
-		// return products only
-		return queryResponse.getProducts();
-
-	}
-
 	@Override
 	public List<Product> getTopNProducts(int n, ProductType type) throws CatalogException {
-
-		// retrieve most recent n products from Solr
-		String doc = solrClient.queryProductsByDateAndType(n, type, productSerializer.getMimeType());
-
-		// parse Solr response into Product objects
-		return this.getProductsFromDocument(doc);
-
+		return solrClient.queryProductsByDateAndType(n, type).getProducts();
 	}
 
 	@Override
@@ -506,40 +474,19 @@ public class SolrCatalog implements Catalog {
 		params.put("q", new String[] { "CAS.ProductTypeName:"+type.getName() } );
 		params.put("rows", new String[] { "0" } ); // don't return any results
 
-		// execute query
-		String response = solrClient.query(params, productSerializer.getMimeType());
-
-		// parse response
-		QueryResponse queryResponse = productSerializer.deserialize(response);
-		return queryResponse.getNumFound();
+		return solrClient.query(params).getNumFound();
 
 	}
 
 	private CompleteProduct getCompleteProductById(String productId) throws CatalogException {
-
-		// request document with given id
-		String doc = solrClient.queryProductById(productId, productSerializer.getMimeType());
-
-		// parse document into complete product
-		return extractCompleteProduct(doc);
-
+		return extractCompleteProduct(solrClient.queryProductById(productId));
 	}
 
 	private CompleteProduct getCompleteProductByName(String productName) throws CatalogException {
-
-		// request document with given id
-		String doc = solrClient.queryProductByName(productName, productSerializer.getMimeType());
-
-		// parse document into complete product
-		return extractCompleteProduct(doc);
-
+		return extractCompleteProduct(solrClient.queryProductByName(productName));
 	}
 
-	private CompleteProduct extractCompleteProduct(String doc) throws CatalogException {
-
-		// deserialize document into Product
-		LOG.info("Parsing Solr document: "+doc);
-		QueryResponse queryResponse = productSerializer.deserialize(doc);
+	private CompleteProduct extractCompleteProduct(QueryResponse queryResponse) throws CatalogException {
 		int numFound = queryResponse.getNumFound();
 		if (numFound>1) {
 			throw new CatalogException("Product query returned "+numFound+" results instead of 1!");
