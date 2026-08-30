@@ -16,362 +16,182 @@
  */
 package org.apache.oodt.cas.filemgr.catalog.solr;
 
-import org.apache.commons.lang.StringEscapeUtils;
-import org.apache.http.HttpEntity;
-import org.apache.http.HttpResponse;
-import org.apache.http.HttpStatus;
-import org.apache.http.NameValuePair;
-import org.apache.http.client.HttpClient;
-import org.apache.http.client.ResponseHandler;
-import org.apache.http.client.entity.UrlEncodedFormEntity;
-import org.apache.http.client.methods.HttpGet;
-import org.apache.http.client.methods.HttpPost;
-import org.apache.http.client.methods.HttpRequestBase;
-import org.apache.http.client.utils.URIBuilder;
-import org.apache.http.client.utils.URLEncodedUtils;
-import org.apache.http.entity.StringEntity;
-import org.apache.http.impl.client.BasicResponseHandler;
-import org.apache.http.impl.client.DefaultHttpClient;
-import org.apache.http.message.BasicNameValuePair;
 import org.apache.oodt.cas.filemgr.structs.ProductType;
 import org.apache.oodt.cas.filemgr.structs.exceptions.CatalogException;
+import org.apache.solr.client.solrj.SolrServerException;
+import org.apache.solr.client.solrj.request.SolrQuery;
+import org.apache.solr.client.solrj.impl.HttpJdkSolrClient;
+import org.apache.solr.client.solrj.request.ContentStreamUpdateRequest;
 import org.apache.solr.client.solrj.util.ClientUtils;
+import org.apache.solr.common.util.ContentStreamBase;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.UnsupportedEncodingException;
+import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Class containing client-side functionality for interacting with a Solr server.
- * This class uses an {@link HttpClient} for all HTTP communication.
+ * Solr transport for {@link SolrCatalog}.
  *
- * @author Luca Cinquini
+ * Same client SolrIndexer uses: SolrJ 10 {@link HttpJdkSolrClient}. The
+ * previous implementation posted hand-built XML over Apache HttpClient and
+ * parsed XML responses. Solr 4 defaulted to XML; Solr 10 defaults to JSON,
+ * so getNumProducts failed with "Content is not allowed in prolog".
  *
+ * Updates still send the XML documents {@link DefaultProductSerializer}
+ * already produces (atomic set/add/null). Queries go through SolrJ and
+ * come back as SolrDocuments, not XML.
  */
 public class SolrClient {
 
-	// base URL of Solr server
-	private String solrUrl;
-
+	private final org.apache.solr.client.solrj.SolrClient server;
+	private final ProductSerializer productSerializer;
 	private final Logger LOG = Logger.getLogger(this.getClass().getName());
 
-	/**
-	 * Constructor initializes the Solr URL
-	 * @param url
-	 */
 	public SolrClient(final String url) {
-
-		solrUrl = url;
-
+		this(url, new DefaultProductSerializer());
 	}
 
-	/**
-	 * Method to send one or more documents to be indexed to Solr.
-	 *
-	 * @param docs
-	 * @param commit
-	 * @param mimeType : the mime-type format of the documents
-	 * @return
-	 * @throws CatalogException
-	 */
-	public String index(List<String> docs, boolean commit, String mimeType) throws CatalogException {
-
+	public SolrClient(final String url, ProductSerializer productSerializer) {
+		this.productSerializer = productSerializer;
 		try {
+			new URI(url).toURL();
+			this.server = new HttpJdkSolrClient.Builder(url).build();
+		} catch (MalformedURLException | URISyntaxException
+				| IllegalArgumentException e) {
+			throw new IllegalArgumentException(
+					"Could not connect to Solr server " + url, e);
+		}
+	}
 
-			final String url = this.buildUpdateUrl();
-
-			// build message
+	public String index(List<String> docs, boolean commit, String mimeType)
+			throws CatalogException {
+		try {
 			StringBuilder message = new StringBuilder("<add>");
 			for (String doc : docs) {
 				message.append(doc);
 			}
 			message.append("</add>");
-
-			// send POST request
-			LOG.info("Posting message:"+message+" to URL:"+url);
-			String response = doPost(url, message.toString(), mimeType);
-			LOG.info(response);
-
-			// commit changes ?
+			ContentStreamUpdateRequest req = new ContentStreamUpdateRequest(
+					"/update");
+			req.addContentStream(new ContentStreamBase.StringStream(
+					message.toString(), "application/xml"));
 			if (commit) {
-				this.commit();
+				req.setParam("commit", "true");
 			}
-
-			LOG.info(response);
-			return response;
-
-		} catch(Exception e) {
-			LOG.log(Level.SEVERE, e.getMessage());
-			throw new CatalogException(e.getMessage());
+			server.request(req);
+			return "";
+		} catch (SolrServerException | IOException e) {
+			LOG.log(Level.SEVERE, e.getMessage(), e);
+			throw new CatalogException(e.getMessage(), e);
 		}
-
 	}
 
-	/**
-	 * Method to send a message containing a 'delete' instruction to Solr.
-	 * @param id
-	 * @param commit
-	 * @return
-	 * @throws CatalogException
-	 */
 	public String delete(String id, boolean commit) throws CatalogException {
-
 		try {
-
-			// build POST request
-			String url = this.buildUpdateUrl();
+			server.deleteById(id);
 			if (commit) {
-				url += "?commit=true";
+				server.commit();
 			}
-			String message = "<delete><query>id:"+id+"</query></delete>";
-
-			// send POST request
-			LOG.info("Posting message:"+message+" to URL:"+url);
-
-			return doPost(url, message, Parameters.MIME_TYPE_XML);
-
-		} catch(Exception e) {
-			LOG.log(Level.SEVERE, e.getMessage());
-			throw new CatalogException(e.getMessage());
+			return "";
+		} catch (SolrServerException | IOException e) {
+			LOG.log(Level.SEVERE, e.getMessage(), e);
+			throw new CatalogException(e.getMessage(), e);
 		}
-
 	}
 
-	/**
-	 * Method to query the Solr index for a product with the specified id.
-	 * @param id
-	 * @return
-	 */
-	public String queryProductById(String id, String mimeType) throws CatalogException {
-
+	public QueryResponse queryProductById(String id) throws CatalogException {
 		ConcurrentHashMap<String, String[]> params = new ConcurrentHashMap<String, String[]>();
-		params.put("q", new String[]{Parameters.PRODUCT_ID+":"+id} );
-		return query(params, mimeType);
-
+		params.put("q", new String[] { Parameters.PRODUCT_ID + ":" + id });
+		return query(params);
 	}
 
-	/**
-	 * Method to query the Solr index for a product with the specified name.
-	 * @param name
-	 * @param mimeType
-	 * @return
-	 */
-	public String queryProductByName(String name, String mimeType) throws CatalogException {
-
+	public QueryResponse queryProductByName(String name) throws CatalogException {
 		ConcurrentHashMap<String, String[]> params = new ConcurrentHashMap<String, String[]>();
-		params.put("q", new String[]{Parameters.PRODUCT_NAME+":"+ ClientUtils.escapeQueryChars(name)} );
-		return query(params, mimeType);
-
+		params.put("q", new String[] {
+				Parameters.PRODUCT_NAME + ":" + ClientUtils.escapeQueryChars(name) });
+		return query(params);
 	}
 
-	/**
-	 * Method to query Solr for the most recent 'n' products.
-	 * @param n
-	 * @return
-	 * @throws CatalogException
-	 */
-	public String queryProductsByDate(int n, String mimeType) throws CatalogException {
-
+	public QueryResponse queryProductsByDate(int n) throws CatalogException {
 		ConcurrentHashMap<String, String[]> params = new ConcurrentHashMap<String, String[]>();
-		params.put("q", new String[]{ "*:*"} );
-		params.put("rows", new String[]{ ""+n} );
-		params.put("sort", new String[]{ Parameters.PRODUCT_RECEIVED_TIME+" desc"} );
-		return query(params, mimeType);
-
+		params.put("q", new String[] { "*:*" });
+		params.put("rows", new String[] { "" + n });
+		params.put("sort", new String[] {
+				Parameters.PRODUCT_RECEIVED_TIME + " desc" });
+		return query(params);
 	}
 
-	/**
-	 * Method to query Solr for the most recent 'n' products of a specified type.
-	 * @param n
-	 * @return
-	 * @throws CatalogException
-	 */
-	public String queryProductsByDateAndType(int n, ProductType type, String mimeType) throws CatalogException {
-
+	public QueryResponse queryProductsByDateAndType(int n, ProductType type)
+			throws CatalogException {
 		ConcurrentHashMap<String, String[]> params = new ConcurrentHashMap<String, String[]>();
-		params.put("q", new String[]{ Parameters.PRODUCT_TYPE_NAME+type.getName() } );
-		params.put("rows", new String[]{ ""+n} );
-		params.put("sort", new String[]{ Parameters.PRODUCT_RECEIVED_TIME+" desc"} );
-		return query(params, mimeType);
-
+		params.put("q", new String[] {
+				Parameters.PRODUCT_TYPE_NAME + ":" + type.getName() });
+		params.put("rows", new String[] { "" + n });
+		params.put("sort", new String[] {
+				Parameters.PRODUCT_RECEIVED_TIME + " desc" });
+		return query(params);
 	}
 
-	/**
-	 * Method to commit the current changes to the Solr index.
-	 * @throws Exception
-	 */
-	public void commit() throws IOException, CatalogException {
-
-		String message = "<commit waitSearcher=\"true\"/>";
-		String url =  this.buildUpdateUrl();
-		doPost(url, message, Parameters.MIME_TYPE_XML);
-
-	}
-
-	/**
-	 * Method to send a generic query to the Solr server.
-	 *
-	 * @param parameters
-	 * @param mimeType : the desired mime type for the results (XML, JSON, ...)
-	 * @return
-	 */
-	public String query(Map<String, String[]> parameters, String mimeType) throws CatalogException {
-
+	public QueryResponse query(Map<String, String[]> parameters)
+			throws CatalogException {
 		try {
-
-			// build HTTP request
-			String url = this.buildSelectUrl();
-
-			// execute request
-			return this.doGet(url, parameters, mimeType);
-
-		} catch(Exception e) {
-			LOG.log(Level.SEVERE, e.getMessage());
-			throw new CatalogException(e.getMessage());
+			SolrQuery solrQuery = toSolrQuery(parameters);
+			org.apache.solr.client.solrj.response.QueryResponse rsp = server
+					.query(solrQuery);
+			return productSerializer.deserialize(rsp);
+		} catch (SolrServerException | IOException e) {
+			LOG.log(Level.SEVERE, e.getMessage(), e);
+			throw new CatalogException(e.getMessage(), e);
 		}
-
 	}
 
-	/**
-	 * Method to execute a GET request to the given URL with the given parameters.
-	 * @param url
-	 * @param parameters
-	 * @return
-	 */
-	private String doGet(String url, Map<String, String[]> parameters, String mimeType)
-			throws IOException, CatalogException {
-
-		// build HTTP/GET request
-
-
-		List<BasicNameValuePair> nvps = new ArrayList<BasicNameValuePair>();
-		for (Map.Entry<String, String[]> key : parameters.entrySet()) {
-			for (String value : key.getValue()) {
-				nvps.add(new BasicNameValuePair(key.getKey(), value));
-			}
-		}
-		// request results in JSON format
-		if (mimeType.equals(Parameters.MIME_TYPE_JSON)) {
-			nvps.add(new BasicNameValuePair("wt", "json"));
-		}
-
-		String paramString = URLEncodedUtils.format(nvps, "utf-8");
-
-		HttpRequestBase method = new HttpGet(url+"?"+paramString);
-		LOG.info("GET url: "+url+" query string: "+method.getURI());
-
-		// send HTTP/GET request, return response
-		return doHttp(method);
-
-	}
-
-	/**
-	 * Method to execute a POST request to the given URL.
-	 * @param url
-	 * @param document
-	 * @return
-	 */
-	private String doPost(String url, String document, String mimeType) throws IOException, CatalogException {
-
-		// build HTTP/POST request
-		HttpPost method = new HttpPost(url);
-		HttpEntity requestEntity = null;
+	void close() {
 		try {
-			requestEntity = new StringEntity(document, mimeType, "UTF-8");
-		} catch (UnsupportedEncodingException e) {
-			e.printStackTrace();
+			server.close();
+		} catch (IOException e) {
+			LOG.warning("Unable to close the Solr client: " + e.getMessage());
 		}
-
-		method.setEntity(requestEntity);
-		// send HTTP/POST request, return response
-		return doHttp(method);
-
 	}
 
-	/**
-	 * Common functionality for HTTP GET and POST requests.
-	 * @param method
-	 * @return
-	 * @throws Exception
-	 */
-	private String doHttp(HttpRequestBase method) throws IOException, CatalogException {
-
-		String response = null;
-		BufferedReader br = null;
-		try {
-
-			// send request
-			HttpClient httpClient = new DefaultHttpClient();
-			// OODT-719 Prevent httpclient from spawning closewait tcp connections
-			method.setHeader("Connection", "close");
-
-			HttpResponse statusCode = httpClient.execute(method);
-
-			// read response
-			if (statusCode.getStatusLine().getStatusCode() != HttpStatus.SC_OK) {
-
-				// still consume the response
-				ResponseHandler<String> handler = new BasicResponseHandler();
-
-				handler.handleResponse(statusCode);
-				throw new CatalogException("HTTP method failed: " + statusCode.getStatusLine().toString());
-
+	private SolrQuery toSolrQuery(Map<String, String[]> parameters) {
+		SolrQuery query = new SolrQuery();
+		String[] q = parameters.get("q");
+		query.setQuery(q != null && q.length > 0 ? q[0] : "*:*");
+		String[] fq = parameters.get("fq");
+		if (fq != null) {
+			query.setFilterQueries(fq);
+		}
+		String[] rows = parameters.get("rows");
+		if (rows != null && rows.length > 0) {
+			query.setRows(Integer.parseInt(rows[0]));
+		}
+		String[] start = parameters.get("start");
+		if (start != null && start.length > 0) {
+			query.setStart(Integer.parseInt(start[0]));
+		}
+		String[] fl = parameters.get("fl");
+		if (fl != null && fl.length > 0) {
+			query.setFields(fl);
+		}
+		String[] sort = parameters.get("sort");
+		if (sort != null && sort.length > 0) {
+			String spec = sort[0].trim();
+			int space = spec.lastIndexOf(' ');
+			if (space > 0) {
+				String field = spec.substring(0, space).trim();
+				String dir = spec.substring(space + 1).trim();
+				query.setSort(field, "desc".equalsIgnoreCase(dir)
+						? SolrQuery.ORDER.desc : SolrQuery.ORDER.asc);
 			} else {
-				ResponseHandler<String> handler = new BasicResponseHandler();
-
-				String resp = handler.handleResponse(statusCode);
-
-				response=resp;
-
-			}
-
-		} finally {
-			// must release the connection even if an exception occurred
-			method.releaseConnection();
-			if (br!=null) {
-				try {
-					br.close();
-				} catch (Exception ignored) {
-				}
+				query.setSort(spec, SolrQuery.ORDER.asc);
 			}
 		}
-
-		return response;
-
+		return query;
 	}
-
-	/**
-	 * Builds the URL used to update the Solr index.
-	 *
-	 * Example: http://localhost:8983/solr/update?
-	 * @return
-	 */
-	private String buildUpdateUrl() {
-
-		return solrUrl + (solrUrl.endsWith("/") ? "" : "/") + "update";
-
-	}
-
-	/**
-	 * Builds the URL used to query the Solr index.
-	 *
-	 * Example: http://localhost:8983/solr/select?
-	 * @return
-	 */
-	private String buildSelectUrl() {
-
-		return solrUrl + (solrUrl.endsWith("/") ? "" : "/") + "select";
-
-	}
-
 }

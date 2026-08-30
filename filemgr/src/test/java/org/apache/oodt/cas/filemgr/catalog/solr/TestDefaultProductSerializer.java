@@ -22,6 +22,10 @@ import org.apache.oodt.cas.filemgr.structs.ProductType;
 import org.apache.oodt.cas.filemgr.structs.Reference;
 import org.apache.oodt.cas.metadata.Metadata;
 
+import org.apache.solr.common.SolrDocument;
+import org.apache.solr.common.SolrDocumentList;
+import org.apache.solr.common.util.NamedList;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.xml.sax.InputSource;
@@ -190,6 +194,42 @@ public class TestDefaultProductSerializer {
   private String single(List<String> docs) {
     assertEquals("expected exactly one document, got " + docs, 1, docs.size());
     return docs.get(0);
+  }
+
+  @Test
+  public void deserializesSolrDocumentCoreFields() {
+    SolrDocument doc = new SolrDocument();
+    doc.setField("id", "abc-123");
+    doc.setField(Parameters.PRODUCT_ID, "abc-123");
+    doc.setField(Parameters.PRODUCT_NAME, "filelist_chunk_0.txt");
+    doc.setField(Parameters.PRODUCT_TYPE_NAME, "ChunkList");
+    doc.setField(Parameters.PRODUCT_TYPE_ID, "urn:oodt:ChunkList");
+    doc.addField(Parameters.REFERENCE_ORIGINAL, "file:/data/a.txt");
+    doc.addField(Parameters.REFERENCE_ORIGINAL, "file:/data/b.txt");
+
+    CompleteProduct cp = serializer.deserialize(doc);
+    Product product = cp.getProduct();
+    assertEquals("abc-123", product.getProductId());
+    assertEquals("filelist_chunk_0.txt", product.getProductName());
+    assertEquals("ChunkList", product.getProductType().getName());
+    assertEquals(2, product.getProductReferences().size());
+    assertEquals("file:/data/a.txt",
+        product.getProductReferences().get(0).getOrigReference());
+  }
+
+  @Test
+  public void deserializesEmptySolrJQueryResponse() throws Exception {
+    SolrDocumentList list = new SolrDocumentList();
+    list.setNumFound(0);
+    list.setStart(0);
+    NamedList<Object> body = new NamedList<Object>();
+    body.add("response", list);
+    org.apache.solr.client.solrj.response.QueryResponse rsp =
+        new org.apache.solr.client.solrj.response.QueryResponse();
+    rsp.setResponse(body);
+    QueryResponse mapped = serializer.deserialize(rsp);
+    assertEquals(0, mapped.getNumFound());
+    assertTrue(mapped.getCompleteProducts().isEmpty());
   }
 
   /** Wraps a {@code <doc>} in the envelope {@link DefaultProductSerializer#deserialize} expects. */
