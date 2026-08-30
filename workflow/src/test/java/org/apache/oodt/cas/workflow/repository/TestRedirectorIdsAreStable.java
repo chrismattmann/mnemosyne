@@ -102,6 +102,31 @@ public class TestRedirectorIdsAreStable {
     assertNotNull(fromEngine.addWorkflow(generated));
   }
 
+  /**
+   * The configuration was assembled in generateRedirector and never attached
+   * to the task, so every redirector reached BranchRedirector with an empty
+   * config and called sendEvent(null, ...). The event name is the only thing
+   * this task carries.
+   */
+  @Test
+  public void aredirectorCarriesTheEventItRedirectsTo() throws Exception {
+    for (Object o : repository().getWorkflows()) {
+      for (Object t : ((Workflow) o).getTasks()) {
+        WorkflowTask task = (WorkflowTask) t;
+        if (!task.getTaskId().startsWith("redirector-")) {
+          continue;
+        }
+        assertNotNull("a redirector with no configuration can only fail",
+            task.getTaskConfig());
+        String event = task.getTaskConfig().getProperty("eventName");
+        assertNotNull("the event name is what the redirector exists to send",
+            event);
+        assertEquals("and it should be the workflow the id names",
+            task.getTaskId().substring("redirector-".length()), event);
+      }
+    }
+  }
+
   private PackagedWorkflowRepository repository() throws Exception {
     return new PackagedWorkflowRepository(
         Arrays.asList(new File(MODEL_DIR).listFiles()));
