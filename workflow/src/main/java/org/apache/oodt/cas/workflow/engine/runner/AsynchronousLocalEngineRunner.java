@@ -77,6 +77,9 @@ public class AsynchronousLocalEngineRunner extends AbstractEngineRunnerBase {
       public void run() {
         WorkflowLifecycle lifecycle = getLifecycle(taskProcessor);
         WorkflowTask workflowTask = getTaskFromProcessor(taskProcessor);
+        // Before the task is built, so what it reads from the shared context
+        // is there when it runs. See stampTaskMetadata.
+        stampTaskMetadata(taskProcessor, workflowTask);
         WorkflowTaskInstance inst = GenericWorkflowObjectFactory
             .getTaskObjectFromClassName(workflowTask.getTaskInstanceClassName());
         try {
