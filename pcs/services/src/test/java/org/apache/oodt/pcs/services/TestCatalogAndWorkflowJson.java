@@ -28,6 +28,7 @@ import org.apache.oodt.cas.filemgr.structs.Reference;
 import org.apache.oodt.cas.metadata.Metadata;
 import org.apache.oodt.cas.workflow.structs.Workflow;
 import org.apache.oodt.cas.workflow.structs.WorkflowCondition;
+import org.apache.oodt.cas.workflow.structs.WorkflowConditionConfiguration;
 import org.apache.oodt.cas.workflow.structs.WorkflowInstance;
 import org.apache.oodt.cas.workflow.structs.WorkflowTask;
 import org.apache.oodt.cas.workflow.structs.WorkflowTaskConfiguration;
@@ -200,6 +201,148 @@ public class TestCatalogAndWorkflowJson extends TestCase {
     Map<String, Object> full = WorkflowResource.encodeWorkflow(workflow, true);
     assertTrue(full.get("tasks") instanceof List);
     assertEquals(1, ((List<?>) full.get("tasks")).size());
+  }
+
+  /**
+   * A workflow can carry conditions of its own. The packaged (wengine) dialect
+   * writes a workflow's <conditions> block onto the workflow, not onto any of
+   * its tasks, and the encoder used to drop them -- so an operations view
+   * showed a gated workflow as if nothing gated it.
+   */
+  public void testEncodeWorkflowIncludesItsOwnConditions() {
+    WorkflowCondition settling = new WorkflowCondition();
+    settling.setConditionId("urn:drat:MapsSettling");
+    settling.setConditionName("Maps Settling");
+    settling.setConditionInstanceClassName("org.example.LongCondition");
+    WorkflowCondition done = new WorkflowCondition();
+    done.setConditionId("urn:drat:MapsDone");
+    done.setConditionName("Maps Done");
+    done.setConditionInstanceClassName("org.example.LongCondition");
+
+    WorkflowTask task = new WorkflowTask();
+    task.setTaskId("urn:drat:RatAggregator");
+    task.setTaskName("RatAggregator");
+
+    Workflow workflow = new Workflow();
+    workflow.setId("urn:drat:AggregatePhase");
+    workflow.setName("Aggregate Phase");
+    workflow.setTasks(Arrays.asList(task));
+    workflow.setPreConditions(Arrays.asList(settling, done));
+
+    Map<String, Object> row = WorkflowResource.encodeWorkflow(workflow, true);
+
+    assertTrue(row.get("preConditions") instanceof List);
+    List<?> pre = (List<?>) row.get("preConditions");
+    assertEquals("both conditions should be reported", 2, pre.size());
+    Map<?, ?> first = (Map<?, ?>) pre.get(0);
+    assertEquals("urn:drat:MapsSettling", first.get("id"));
+    assertEquals("Maps Settling", first.get("name"));
+    // Order is what the workflow declared: a sequential block runs them in
+    // that order, so reporting them out of order would misdescribe the gate.
+    assertEquals("urn:drat:MapsDone",
+        ((Map<?, ?>) pre.get(1)).get("id"));
+  }
+
+  /** Post-conditions on a workflow are reported the same way. */
+  public void testEncodeWorkflowIncludesPostConditions() {
+    WorkflowCondition cond = new WorkflowCondition();
+    cond.setConditionId("urn:drat:Verified");
+    cond.setConditionName("Verified");
+    Workflow workflow = new Workflow();
+    workflow.setId("w1");
+    workflow.setName("Flow");
+    workflow.setPostConditions(Arrays.asList(cond));
+
+    Map<String, Object> row = WorkflowResource.encodeWorkflow(workflow, true);
+
+    List<?> post = (List<?>) row.get("postConditions");
+    assertEquals(1, post.size());
+    assertEquals("urn:drat:Verified", ((Map<?, ?>) post.get(0)).get("id"));
+  }
+
+  /**
+   * The XML dialect hangs conditions only on tasks, so its workflows report
+   * empty lists rather than a missing key. One shape for both dialects means
+   * a reader never has to ask which one produced the workflow.
+   */
+  public void testAworkflowWithoutItsOwnConditionsStillReportsTheKeys() {
+    WorkflowTask task = new WorkflowTask();
+    task.setTaskId("t1");
+    task.setTaskName("Split");
+    Workflow workflow = new Workflow();
+    workflow.setId("w1");
+    workflow.setName("Flow");
+    workflow.setTasks(Arrays.asList(task));
+
+    Map<String, Object> full = WorkflowResource.encodeWorkflow(workflow, true);
+    Map<String, Object> summary = WorkflowResource.encodeWorkflow(workflow, false);
+
+    assertTrue(full.containsKey("preConditions"));
+    assertTrue(full.containsKey("postConditions"));
+    assertEquals(0, ((List<?>) full.get("preConditions")).size());
+    // Also present on the summary form the workflow list uses, so the list
+    // and the detail view agree about the shape.
+    assertTrue(summary.containsKey("preConditions"));
+  }
+
+  /**
+   * A condition is configured the way a task is. Reporting only its class name
+   * says what code runs but not what it was told to do, and two conditions of
+   * the same class then read as duplicates of each other.
+   */
+  public void testEncodeConditionIncludesItsConfiguration() {
+    WorkflowConditionConfiguration config = new WorkflowConditionConfiguration();
+    config.addConfigProperty("MinutesToWait", "5");
+    config.addConfigProperty("ProductType", "GenericFile");
+    WorkflowCondition cond = new WorkflowCondition();
+    cond.setConditionId("urn:drat:MapsDone");
+    cond.setConditionName("Maps Done");
+    cond.setConditionInstanceClassName("org.example.LongCondition");
+    cond.setCondConfig(config);
+    cond.setOrder(2);
+    cond.setTimeoutSeconds(90L);
+
+    Map<String, Object> row = WorkflowResource.encodeCondition(cond);
+
+    assertEquals("urn:drat:MapsDone", row.get("id"));
+    assertEquals(Integer.valueOf(2), row.get("order"));
+    assertEquals(Long.valueOf(90L), row.get("timeoutSeconds"));
+    Map<?, ?> props = (Map<?, ?>) row.get("properties");
+    assertEquals(2, props.size());
+    assertEquals("5", props.get("MinutesToWait"));
+    assertEquals("GenericFile", props.get("ProductType"));
+  }
+
+  /** No configuration is an empty map, not a missing key. */
+  public void testAconditionWithoutPropertiesStillReportsTheKey() {
+    WorkflowCondition cond = new WorkflowCondition();
+    cond.setConditionId("urn:drat:Ready");
+    cond.setConditionName("Ready");
+
+    Map<String, Object> row = WorkflowResource.encodeCondition(cond);
+
+    assertTrue(row.containsKey("properties"));
+    assertEquals(0, ((Map<?, ?>) row.get("properties")).size());
+    assertTrue(row.containsKey("timeoutSeconds"));
+  }
+
+  /** The conditions reported on a workflow carry their configuration too. */
+  public void testWorkflowConditionsCarryTheirProperties() {
+    WorkflowConditionConfiguration config = new WorkflowConditionConfiguration();
+    config.addConfigProperty("MinutesToWait", "5");
+    WorkflowCondition cond = new WorkflowCondition();
+    cond.setConditionId("urn:drat:MapsSettling");
+    cond.setConditionName("Maps Settling");
+    cond.setCondConfig(config);
+    Workflow workflow = new Workflow();
+    workflow.setId("urn:drat:AggregatePhase");
+    workflow.setName("Aggregate Phase");
+    workflow.setPreConditions(Arrays.asList(cond));
+
+    Map<String, Object> row = WorkflowResource.encodeWorkflow(workflow, true);
+
+    Map<?, ?> first = (Map<?, ?>) ((List<?>) row.get("preConditions")).get(0);
+    assertEquals("5", ((Map<?, ?>) first.get("properties")).get("MinutesToWait"));
   }
 
   public void testEncodeTaskIncludesConfiguration() {

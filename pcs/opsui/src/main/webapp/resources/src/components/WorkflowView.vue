@@ -51,6 +51,38 @@
       </table>
     </article>
 
+    <article v-if="preConditions.length || postConditions.length" class="card">
+      <h3>Conditions</h3>
+      <p class="muted">Gates on the workflow itself, evaluated around its tasks.</p>
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>When</th>
+            <th>Name</th>
+            <th>ID</th>
+            <th>Class</th>
+            <th>Timeout</th>
+            <th>Properties</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="row in workflowConditions" :key="row.when + (row.cond.id || row.index)">
+            <td>{{ row.index }}</td>
+            <td>{{ row.when }}</td>
+            <td>
+              <a v-if="row.cond.id" href="#" @click.prevent="$emit('open-condition', row.cond.id)">{{ row.cond.name }}</a>
+              <span v-else>{{ row.cond.name }}</span>
+            </td>
+            <td class="mono">{{ row.cond.id }}</td>
+            <td class="mono">{{ row.cond.className }}</td>
+            <td>{{ row.cond.timeoutSeconds > 0 ? row.cond.timeoutSeconds + 's' : '—' }}</td>
+            <td>{{ propertyCount(row.cond) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </article>
+
     <article class="card">
       <h3>Recent instances</h3>
       <p v-if="loading && !instances.length" class="empty">Loading instances…</p>
@@ -108,13 +140,31 @@ export default {
     payload: { type: Object, default: null },
     loading: { type: Boolean, default: false }
   },
-  emits: ['open-task', 'open-instance', 'open-product', 'back'],
+  emits: ['open-task', 'open-condition', 'open-instance', 'open-product', 'back'],
   setup(props) {
     const workflow = computed(() => (props.payload && props.payload.workflow) || {})
     const page = computed(() => (props.payload && props.payload.page) || {})
     return {
       workflow,
       tasks: computed(() => workflow.value.tasks || []),
+      preConditions: computed(() => workflow.value.preConditions || []),
+      postConditions: computed(() => workflow.value.postConditions || []),
+      // Pre- then post-, numbered in declaration order: a sequential block
+      // runs them in the order the workflow declared, so the order shown is
+      // part of what the gate means.
+      // Two conditions of the same class are told apart by their properties,
+      // so the count is worth showing next to the class name; the detail view
+      // lists them.
+      propertyCount(cond) {
+        const props = (cond && cond.properties) || {}
+        const n = Object.keys(props).length
+        return n === 0 ? '—' : String(n)
+      },
+      workflowConditions: computed(() => {
+        const pre = (workflow.value.preConditions || []).map((cond, i) => ({ when: 'pre', cond, index: i + 1 }))
+        const post = (workflow.value.postConditions || []).map((cond, i) => ({ when: 'post', cond, index: i + 1 }))
+        return pre.concat(post)
+      }),
       instances: computed(() => page.value.instances || []),
       truncated: computed(() => Boolean(page.value.truncated)),
       pillClass(status) {

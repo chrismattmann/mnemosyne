@@ -41,6 +41,7 @@ import org.apache.oodt.cas.metadata.Metadata;
 import org.apache.oodt.cas.workflow.structs.Priority;
 import org.apache.oodt.cas.workflow.structs.Workflow;
 import org.apache.oodt.cas.workflow.structs.WorkflowCondition;
+import org.apache.oodt.cas.workflow.structs.WorkflowConditionConfiguration;
 import org.apache.oodt.cas.workflow.structs.WorkflowInstance;
 import org.apache.oodt.cas.workflow.structs.WorkflowInstancePage;
 import org.apache.oodt.cas.workflow.structs.WorkflowTask;
@@ -418,6 +419,17 @@ public class WorkflowResource extends PCSService {
     }
     row.put("id", nullToEmpty(workflow.getId()));
     row.put("name", nullToEmpty(workflow.getName()));
+    // A workflow can carry conditions of its own, not just its tasks. The
+    // packaged (wengine) dialect writes them straight onto the workflow --
+    // PackagedWorkflowRepository does
+    // graph.getParent().getWorkflow().getPreConditions().add(cond) -- so a
+    // <conditions> block on a <workflow> lived only in the model and never
+    // reached a caller. Reporting only task conditions was an assumption
+    // carried over from the XML dialect, where tasks are the only place a
+    // condition can hang. Both dialects report the same shape now; for a
+    // workflow that declares none, these are simply empty.
+    row.put("preConditions", encodeConditionList(workflow.getPreConditions()));
+    row.put("postConditions", encodeConditionList(workflow.getPostConditions()));
     if (withTasks && workflow.getTasks() != null) {
       List<Map<String, Object>> tasks = new ArrayList<Map<String, Object>>();
       List<WorkflowTask> list = workflow.getTasks();
@@ -454,7 +466,30 @@ public class WorkflowResource extends PCSService {
     row.put("id", nullToEmpty(cond.getConditionId()));
     row.put("name", nullToEmpty(cond.getConditionName()));
     row.put("className", nullToEmpty(cond.getConditionInstanceClassName()));
+    // A condition is configured, ordered and timed out, exactly as a task is
+    // configured. Reporting only its class name says what code runs but not
+    // what it was told to do -- and two conditions of the same class differ
+    // only by their properties, so without these they read as duplicates.
+    row.put("properties", encodeConditionProperties(cond.getCondConfig()));
+    row.put("order", Integer.valueOf(cond.getOrder()));
+    row.put("timeoutSeconds", Long.valueOf(cond.getTimeoutSeconds()));
     return row;
+  }
+
+  static Map<String, String> encodeConditionProperties(
+      WorkflowConditionConfiguration config) {
+    Map<String, String> out = new LinkedHashMap<String, String>();
+    if (config == null || config.getProperties() == null) {
+      return out;
+    }
+    Properties props = config.getProperties();
+    List<String> names = new ArrayList<String>(props.stringPropertyNames());
+    Collections.sort(names, String.CASE_INSENSITIVE_ORDER);
+    for (int i = 0; i < names.size(); i++) {
+      String name = names.get(i);
+      out.put(name, nullToEmpty(props.getProperty(name)));
+    }
+    return out;
   }
 
   static Map<String, String> encodeTaskProperties(WorkflowTaskConfiguration config) {
