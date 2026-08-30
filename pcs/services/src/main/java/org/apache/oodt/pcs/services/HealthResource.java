@@ -68,6 +68,22 @@ public class HealthResource extends PCSService {
 
   private static PCSHealthMonitor mon;
 
+  /*
+   * When it is worth trying to build the monitor again, after a failure. Zero
+   * until one has failed.
+   */
+  private static long nextAttemptAt;
+
+  /**
+   * How long to leave a failed monitor alone before trying again.
+   *
+   * <p>
+   * Long enough that a stopped subsystem does not cost every caller, short
+   * enough that starting it recovers without restarting the container.
+   * </p>
+   */
+  private static final long RETRY_COOLDOWN_MILLIS = 60000L;
+
   public HealthResource() throws MalformedURLException, InstantiationException {
     super();
   }
@@ -196,18 +212,55 @@ public class HealthResource extends PCSService {
     return response.toString();
   }
 
+  /**
+   * Builds the health monitor, once, and does not let a failure cost every
+   * caller.
+   *
+   * <p>
+   * PCSHealthMonitor builds a client for each of the three subsystems in its
+   * constructor, and AvroRpcResourceManagerClient retries thirty times at one
+   * second intervals before giving up. So with a resource manager that is not
+   * running, constructing this takes about thirty seconds and then throws --
+   * inside a lock every caller of this class shares.
+   * </p>
+   *
+   * <p>
+   * The failure used to be forgotten, so the next request paid the same thirty
+   * seconds again, and a browser polling the status view kept the endpoint
+   * permanently occupied: it did not fail, it hung. A failure is now
+   * remembered for a cooldown, so one caller waits and the rest are told
+   * immediately what is wrong. The cooldown expires so that starting the
+   * missing subsystem recovers on its own.
+   * </p>
+   */
   private static synchronized PCSHealthMonitor getMonitor() {
-    if (mon == null) {
-      try {
-        mon = new PCSHealthMonitor(PCSService.conf.getFmUrl().toString(),
-            PCSService.conf.getWmUrl().toString(), PCSService.conf.getRmUrl()
-                .toString(), PCSService.conf.getCrawlerConfigFilePath(),
-            PCSService.conf.getWorkflowStatusesFilePath());
-      } catch (MalformedURLException | InstantiationException e) {
-        throw new IllegalStateException("Unable to initialize PCS health monitor", e);
-      }
+    if (mon != null) {
+      return mon;
     }
-    return mon;
+
+    long now = System.currentTimeMillis();
+    if (nextAttemptAt > now) {
+      throw new IllegalStateException(
+          "The PCS health monitor could not be built and will not be tried "
+              + "again for " + ((nextAttemptAt - now) / 1000)
+              + "s. Check that the file manager, workflow manager and resource "
+              + "manager named in this webapp's context.xml are reachable.");
+    }
+
+    try {
+      mon = new PCSHealthMonitor(PCSService.conf.getFmUrl().toString(),
+          PCSService.conf.getWmUrl().toString(), PCSService.conf.getRmUrl()
+              .toString(), PCSService.conf.getCrawlerConfigFilePath(),
+          PCSService.conf.getWorkflowStatusesFilePath());
+      nextAttemptAt = 0L;
+      return mon;
+    } catch (MalformedURLException | InstantiationException
+        | RuntimeException e) {
+      nextAttemptAt = System.currentTimeMillis() + RETRY_COOLDOWN_MILLIS;
+      LOG.log(Level.SEVERE, "Unable to initialize the PCS health monitor; "
+          + "not retrying for " + (RETRY_COOLDOWN_MILLIS / 1000) + "s", e);
+      throw new IllegalStateException("Unable to initialize PCS health monitor", e);
+    }
   }
 
   private Map<String, Object> encodeCrawlerHealth(CrawlerHealth health) {
