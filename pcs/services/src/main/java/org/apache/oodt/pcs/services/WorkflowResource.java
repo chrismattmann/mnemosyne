@@ -149,14 +149,12 @@ public class WorkflowResource extends PCSService {
 
   private String instancesForWorkflow(WorkflowManagerClient client, String status,
       String workflow) throws Exception {
-    List all;
-    try {
-      all = client.getWorkflowInstances();
-    } catch (Exception e) {
-      LOG.warning("getWorkflowInstances failed (empty repo used to return null over Avro): "
-          + e.getMessage());
-      all = Collections.emptyList();
-    }
+    // Not wrapped in a catch that yields an empty list. The repository and the
+    // RPC layer both return an empty list for an empty repository now, so
+    // nothing here has to paper over a null -- and treating any failure as
+    // "no instances" would render an unreachable workflow manager exactly like
+    // a healthy one with nothing in it. This method already declares throws.
+    List all = client.getWorkflowInstances();
     List<WorkflowInstance> matched = new ArrayList<WorkflowInstance>();
     if (all != null) {
       for (int i = 0; i < all.size(); i++) {
