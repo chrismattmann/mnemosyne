@@ -417,6 +417,10 @@ public class WorkflowResource extends PCSService {
     if (productName.length() > 0) {
       row.put("productName", productName);
     }
+    Map<String, Object> progress = PgeProgressPeek.of(inst.getSharedContext());
+    if (progress != null) {
+      row.put("pgeProgress", progress);
+    }
     if (executing != null && inst.getId() != null && inst.getId().length() > 0) {
       boolean running = executing.contains(inst.getId());
       row.put("running", Boolean.valueOf(running));
@@ -490,6 +494,10 @@ public class WorkflowResource extends PCSService {
       }
     }
     row.put("metadata", CatalogResource.encodeMetadata(met));
+    Map<String, Object> progress = PgeProgressPeek.of(met != null ? met : (inst == null ? null : inst.getSharedContext()));
+    if (progress != null) {
+      row.put("pgeProgress", progress);
+    }
     if (inst != null && inst.getWorkflow() != null && inst.getWorkflow().getTasks() != null) {
       List<Map<String, Object>> tasks = new ArrayList<Map<String, Object>>();
       List<WorkflowTask> list = inst.getWorkflow().getTasks();

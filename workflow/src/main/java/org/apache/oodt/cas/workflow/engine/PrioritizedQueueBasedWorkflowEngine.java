@@ -253,8 +253,30 @@ public class PrioritizedQueueBasedWorkflowEngine implements WorkflowEngine {
    */
   @Override
   public boolean updateMetadata(String workflowInstId, Metadata met) {
-    // TODO Auto-generated method stub
-    return false;
+    if (workflowInstId == null || met == null) {
+      return false;
+    }
+    try {
+      WorkflowInstance inst = repo.getWorkflowInstanceById(workflowInstId);
+      if (inst == null) {
+        return false;
+      }
+      Metadata ctx = inst.getSharedContext();
+      if (ctx == null) {
+        ctx = new Metadata();
+        inst.setSharedContext(ctx);
+      }
+      // Overlay the supplied keys. W1 replaces the whole context; the PGE
+      // watcher therefore sends a merged copy. Merging here means a W2
+      // caller that only has the new keys does not wipe WorkflowInstId.
+      ctx.replaceMetadata(met);
+      persist(inst);
+      return true;
+    } catch (Exception e) {
+      LOG.log(Level.WARNING, "Could not update metadata for instance "
+          + workflowInstId + ": " + e.getMessage());
+      return false;
+    }
   }
 
   /*
@@ -308,8 +330,20 @@ public class PrioritizedQueueBasedWorkflowEngine implements WorkflowEngine {
    */
   @Override
   public Metadata getWorkflowInstanceMetadata(String workflowInstId) {
-    // TODO Auto-generated method stub
-    return null;
+    if (workflowInstId == null) {
+      return new Metadata();
+    }
+    try {
+      WorkflowInstance inst = repo.getWorkflowInstanceById(workflowInstId);
+      if (inst == null || inst.getSharedContext() == null) {
+        return new Metadata();
+      }
+      return inst.getSharedContext();
+    } catch (Exception e) {
+      LOG.log(Level.FINE, "No instance metadata for " + workflowInstId + ": "
+          + e.getMessage());
+      return new Metadata();
+    }
   }
 
   private synchronized void persist(WorkflowInstance inst) throws EngineException {

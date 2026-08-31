@@ -133,6 +133,33 @@ public class TestCatalogAndWorkflowJson extends TestCase {
     assertEquals(Boolean.FALSE, row.get("abandoned"));
   }
 
+  public void testEncodeInstanceIncludesPgeProgress() throws Exception {
+    WorkflowInstance inst = new WorkflowInstance();
+    inst.setId("inst-pge");
+    inst.setStatus("PGE EXEC");
+    Metadata met = new Metadata();
+    met.addMetadata("PGETask_Done", "50");
+    met.addMetadata("PGETask_Total", "612");
+    met.addMetadata("PGETask_Progress", "encoded");
+    inst.setSharedContext(met);
+    Map<String, Object> row = WorkflowResource.encodeInstance(inst);
+    Map<?, ?> progress = (Map<?, ?>) row.get("pgeProgress");
+    assertEquals(Integer.valueOf(50), progress.get("done"));
+    assertEquals(Integer.valueOf(612), progress.get("total"));
+    assertEquals("encoded", progress.get("message"));
+
+    File dir = File.createTempFile("jobdir", "pge");
+    dir.delete();
+    dir.mkdir();
+    Files.write(new File(dir, ".progress").toPath(),
+        "done=3\ntotal=10\nmsg=split\n".getBytes(StandardCharsets.UTF_8));
+    Metadata fromFile = new Metadata();
+    fromFile.addMetadata("JobDir", dir.getAbsolutePath());
+    Map<String, Object> peeked = PgeProgressPeek.of(fromFile);
+    assertEquals(Integer.valueOf(3), peeked.get("done"));
+    assertEquals("split", peeked.get("message"));
+  }
+
   public void testEncodeInstanceProductsSkipsNulls() {
     assertEquals(0, WorkflowResource.encodeInstanceProducts(null, null).size());
     Product product = new Product();

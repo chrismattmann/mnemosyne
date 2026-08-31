@@ -50,6 +50,15 @@
           <tr><th>Started</th><td>{{ inst.startDateTime || '—' }}</td></tr>
           <tr><th>Ended</th><td>{{ inst.endDateTime || '—' }}</td></tr>
           <tr><th>Wall clock</th><td class="mono">{{ formatWallClock(wallMs) }}</td></tr>
+          <tr v-if="progressLabel">
+            <th>PGE</th>
+            <td>
+              <div class="pge-progress">
+                <div class="pge-bar" :title="progressLabel"><span :style="{ width: progressPct + '%' }"></span></div>
+                <span class="mono">{{ progressLabel }}</span>
+              </div>
+            </td>
+          </tr>
           <tr v-if="inst.priority"><th>Priority</th><td>{{ inst.priority }}</td></tr>
           <tr v-if="inst.timesBlocked != null"><th>Times blocked</th><td>{{ inst.timesBlocked }}</td></tr>
         </tbody>
@@ -117,6 +126,7 @@ import MetadataTable from './MetadataTable.vue'
 import WorkflowGraph from './WorkflowGraph.vue'
 import { formatWallClock, wallClockMs } from '../sort.js'
 import { instanceAbandoned, instanceFinished } from '../workflowGraph.js'
+import { progressLabel as formatProgress, progressPct as pctProgress } from '../pgeProgress.js'
 
 export default {
   name: 'InstanceView',
@@ -141,6 +151,8 @@ export default {
       finished: computed(() => instanceFinished(inst.value.status)),
       abandoned: computed(() => instanceAbandoned(inst.value)),
       wallMs: computed(() => wallClockMs(inst.value.startDateTime, inst.value.endDateTime, Date.now(), inst.value.status, inst.value.running)),
+      progressLabel: computed(() => formatProgress(inst.value.pgeProgress)),
+      progressPct: computed(() => pctProgress(inst.value.pgeProgress)),
       formatWallClock,
       pillClass(status) {
         if (instanceAbandoned(inst.value)) {
@@ -187,5 +199,26 @@ h3 {
 
 th {
   width: 10rem;
+}
+
+.pge-progress {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.pge-bar {
+  flex: 1;
+  max-width: 16rem;
+  height: 0.55rem;
+  background: var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.pge-bar span {
+  display: block;
+  height: 100%;
+  background: var(--copper);
 }
 </style>

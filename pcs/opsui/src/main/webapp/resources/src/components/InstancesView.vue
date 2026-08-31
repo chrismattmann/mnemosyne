@@ -87,6 +87,10 @@
               {{ inst.currentTaskName || inst.currentTaskId }}
             </a>
             <span v-else>—</span>
+            <div v-if="progressLabel(inst)" class="pge-mini">
+              <div class="pge-bar"><span :style="{ width: progressPct(inst) + '%' }"></span></div>
+              <span class="muted">{{ progressLabel(inst) }}</span>
+            </div>
           </td>
           <td>{{ inst.startDateTime || '—' }}</td>
           <td>{{ inst.endDateTime || '—' }}</td>
@@ -107,6 +111,7 @@ import { formatWallClock, parseStamp, sortRows, toggleSort, wallClockMs } from '
 import { instanceMatches, workflowFilterOptions } from '../instanceFilter.js'
 import { instanceAbandoned, instanceLive } from '../workflowGraph.js'
 import { statusOptions } from '../statusOptions.js'
+import { progressLabel as formatProgress, progressPct as pctProgress } from '../pgeProgress.js'
 
 // Only for a workflow manager too old to be asked what its lifecycle
 // declares. A deployment's own statuses are used when it reports them; see
@@ -238,7 +243,13 @@ export default {
       formatWallClock,
       page: computed(() => pageBody.value.page || 1),
       totalPages: computed(() => pageBody.value.totalPages || 1),
-      pillClass
+      pillClass,
+      progressLabel(inst) {
+        return formatProgress(inst && inst.pgeProgress)
+      },
+      progressPct(inst) {
+        return pctProgress(inst && inst.pgeProgress)
+      }
     }
   }
 }
@@ -281,5 +292,28 @@ label {
 .mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.8rem;
+}
+
+.pge-mini {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.25rem;
+  font-size: 0.72rem;
+}
+
+.pge-bar {
+  width: 4.5rem;
+  height: 0.4rem;
+  background: var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+
+.pge-bar span {
+  display: block;
+  height: 100%;
+  background: var(--copper);
 }
 </style>

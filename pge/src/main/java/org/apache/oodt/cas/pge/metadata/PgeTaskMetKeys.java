@@ -76,6 +76,24 @@ public enum PgeTaskMetKeys {
          "PGETask/Runtime",
          "PGETask_Runtime"),
    /**
+    * How far the running script has gotten (numerator).
+    */
+   PROGRESS_DONE(
+         "PGETask/Done",
+         "PGETask_Done"),
+   /**
+    * Denominator for {@link #PROGRESS_DONE}.
+    */
+   PROGRESS_TOTAL(
+         "PGETask/Total",
+         "PGETask_Total"),
+   /**
+    * One-line description of the current PGE step, e.g. "encoded".
+    */
+   PROGRESS_MESSAGE(
+         "PGETask/Progress",
+         "PGETask_Progress"),
+   /**
     * CAS Workflow Manager URL to which CAS-PGE should update it's status
     * and metadata.
     */
