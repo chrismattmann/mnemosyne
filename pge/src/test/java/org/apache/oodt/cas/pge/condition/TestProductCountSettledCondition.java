@@ -35,11 +35,33 @@ public class TestProductCountSettledCondition extends TestCase {
    */
   private static class Catalog extends ProductCountSettledCondition {
     private final int count;
-    private final long quietFor;
+    private long quietFor;
+    /* How many polls before the producer goes quiet. */
+    private int quietAfterPolls = 0;
+    int polls = 0;
+    private long clock = 0;
 
     Catalog(int count, long quietFor) {
       this.count = count;
       this.quietFor = quietFor;
+    }
+
+    Catalog goesQuietAfter(int polls, long quietFor) {
+      this.quietAfterPolls = polls;
+      this.quietFor = quietFor;
+      return this;
+    }
+
+    @Override
+    protected boolean pause(long seconds) {
+      polls++;
+      clock += seconds * 1000L;
+      return true;
+    }
+
+    @Override
+    protected long now() {
+      return clock;
     }
 
     @Override
@@ -49,7 +71,8 @@ public class TestProductCountSettledCondition extends TestCase {
 
     @Override
     protected long secondsSinceNewest(String urlStr, String typeName) {
-      return quietFor;
+      // Before the producer settles, something landed a moment ago.
+      return polls >= quietAfterPolls ? quietFor : 0;
     }
   }
 
@@ -113,6 +136,33 @@ public class TestProductCountSettledCondition extends TestCase {
   public void testAcatalogThatCannotBeReadDoesNotPass() {
     assertFalse("count unreadable", evaluate(new Catalog(-1, 3600), config()));
     assertFalse("age unreadable", evaluate(new Catalog(120, -1), config()));
+  }
+
+  /**
+   * The gate waits rather than reporting "not yet".
+   *
+   * <p>
+   * A condition gets one evaluation: returning false fails the attempt and
+   * leaves the instance in a state TaskProcessor will not offer again. So a
+   * gate that needs to wait has to do the waiting itself.
+   * </p>
+   */
+  public void testItWaitsForTheProducerRatherThanFailing() {
+    Catalog catalog = new Catalog(120, 90).goesQuietAfter(3, 90);
+
+    assertTrue("it should wait for the producer, not give up on it",
+        evaluate(catalog, config()));
+    assertEquals("and it should have looked more than once", 3, catalog.polls);
+  }
+
+  /** It does not wait for ever: a producer that never stops has not finished. */
+  public void testItGivesUpAfterTheLimit() {
+    Catalog neverQuiet = new Catalog(120, 0);
+
+    assertFalse("nothing ever went quiet, so the producer has not finished",
+        evaluate(neverQuiet,
+            config(ProductCountSettledCondition.MAX_WAIT_SECONDS, "30",
+                   ProductCountSettledCondition.POLL_SECONDS, "10")));
   }
 
   /** Without being told what to count, it cannot say yes. */
