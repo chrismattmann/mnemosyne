@@ -24,14 +24,24 @@
  * everything on them belongs to some other workflow. The service filters and
  * returns the matches as one page, which is also the honest page count.
  *
+ * The sort travels for the same reason. Ordering a page after it arrives
+ * orders the twenty rows the service happened to return, so "longest wall
+ * clock" names the longest of those twenty and stays silent about the rest.
+ *
  * @param {object} route the current route
- * @returns {{status: string, page: number, workflow: string}} the request
+ * @returns {{status: string, page: number, workflow: string, sort: string,
+ *   dir: string}} the request
  */
 export function instancesRequest(route) {
   const r = route || {}
+  const sort = r.sort || ''
   return {
     status: r.status || 'ALL',
     page: Number(r.page) > 0 ? Number(r.page) : 1,
-    workflow: r.workflow || ''
+    workflow: r.workflow || '',
+    sort: sort,
+    // A direction without a column to point it at means nothing, so it
+    // travels only alongside one.
+    dir: sort ? (r.dir === 'desc' ? 'desc' : 'asc') : ''
   }
 }

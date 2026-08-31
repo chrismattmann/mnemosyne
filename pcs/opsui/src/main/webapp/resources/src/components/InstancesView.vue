@@ -98,6 +98,9 @@
         </tr>
       </tbody>
     </table>
+    <p v-if="truncated" class="muted note">
+      Ordered across all {{ total }} matching instances; the first {{ shown }} of that order are pageable here.
+    </p>
     <Pager :page="page" :total-pages="totalPages" @page="$emit('page', $event)"/>
   </section>
 </template>
@@ -107,7 +110,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import Pager from './Pager.vue'
 import RefreshNote from './RefreshNote.vue'
 import SortHead from './SortHead.vue'
-import { formatWallClock, parseStamp, sortRows, toggleSort, wallClockMs } from '../sort.js'
+import { formatWallClock, parseStamp, sortRows, wallClockMs } from '../sort.js'
 import { instanceMatches, workflowFilterOptions } from '../instanceFilter.js'
 import { instanceAbandoned, instanceLive } from '../workflowGraph.js'
 import { statusOptions } from '../statusOptions.js'
@@ -133,16 +136,18 @@ export default {
     statuses: { type: Array, default: () => [] },
     workflow: { type: String, default: '' },
     since: { type: String, default: '' },
+    // Owned by the route, because the order is asked of the service rather
+    // than applied to what it sent back.
+    sort: { type: String, default: '' },
+    dir: { type: String, default: 'asc' },
     workflows: { type: Array, default: () => [] },
     loading: { type: Boolean, default: false },
     refreshedAt: { type: Number, default: 0 },
     stale: { type: Boolean, default: false }
   },
-  emits: ['status', 'page', 'filter-workflow', 'filter-since', 'open-workflow', 'open-task', 'open-instance', 'open-product'],
-  setup(props) {
+  emits: ['status', 'page', 'sort', 'filter-workflow', 'filter-since', 'open-workflow', 'open-task', 'open-instance', 'open-product'],
+  setup(props, { emit }) {
     const pageBody = computed(() => (props.payload && props.payload.page) || {})
-    const sort = ref('')
-    const dir = ref('asc')
     const now = ref(Date.now())
     let tick = null
     onMounted(() => {
@@ -176,11 +181,14 @@ export default {
     const filtered = computed(() => {
       return instances.value.filter((inst) => instanceMatches(inst, props.workflow, props.since))
     })
+    // The service returns these already ordered. Ordering them again is a
+    // no-op against a current service and keeps the column working against
+    // one too old to know the parameters.
     const rows = computed(() => {
-      if (!sort.value) {
+      if (!props.sort) {
         return filtered.value
       }
-      return sortRows(filtered.value, getters[sort.value] || getters.workflow, dir.value)
+      return sortRows(filtered.value, getters[props.sort] || getters.workflow, props.dir)
     })
     const workflowOptions = computed(() => workflowFilterOptions(instances.value, props.workflows))
     // Named statusList because the reported statuses arrive as a prop called
@@ -210,9 +218,7 @@ export default {
     }
 
     function onSort(field) {
-      const next = toggleSort(field, sort.value, dir.value)
-      sort.value = next.field
-      dir.value = next.dir
+      emit('sort', field)
     }
 
     function pillClass(status, abandoned) {
@@ -237,12 +243,13 @@ export default {
       instances,
       rows,
       workflowOptions,
-      sort,
-      dir,
       onSort,
       formatWallClock,
       page: computed(() => pageBody.value.page || 1),
       totalPages: computed(() => pageBody.value.totalPages || 1),
+      truncated: computed(() => pageBody.value.truncated === true),
+      total: computed(() => pageBody.value.total || 0),
+      shown: computed(() => pageBody.value.shown || 0),
       pillClass,
       progressLabel(inst) {
         return formatProgress(inst && inst.pgeProgress)
@@ -292,6 +299,11 @@ label {
 .mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.8rem;
+}
+
+.note {
+  font-size: 0.8rem;
+  margin: 0.6rem 0 0;
 }
 
 .pge-mini {

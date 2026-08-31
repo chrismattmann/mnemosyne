@@ -111,12 +111,21 @@ public class WorkflowResource extends PCSService {
   public String instances(
       @QueryParam("status") @DefaultValue("ALL") String status,
       @QueryParam("page") @DefaultValue("1") int pageNum,
-      @QueryParam("workflow") String workflow) throws Exception {
+      @QueryParam("workflow") String workflow,
+      @QueryParam("sort") String sort,
+      @QueryParam("dir") String dir) throws Exception {
     if (pageNum < 1) {
       pageNum = 1;
     }
     WorkflowManagerClient client = wm();
     try {
+      // A sort has to see everything to mean anything. Ordering a page after
+      // it arrives orders the twenty rows the manager happened to return,
+      // and a column header that does that says the longest-running task is
+      // at the top when it is only the longest of those twenty.
+      if (InstanceOrder.isSortable(sort)) {
+        return orderedInstances(client, status, workflow, sort, dir, pageNum);
+      }
       if (workflow != null && workflow.trim().length() > 0) {
         return instancesForWorkflow(client, status, workflow.trim());
       }
@@ -149,6 +158,99 @@ public class WorkflowResource extends PCSService {
     } finally {
       closeQuietly(client);
     }
+  }
+
+  /** How many instances a page of ordered results holds. */
+  static final int ORDERED_PAGE_SIZE = 20;
+
+  /**
+   * Instances ordered across the whole set, then paged.
+   *
+   * <p>
+   * The manager pages but cannot order, so ordering means reading the set and
+   * arranging it here. That is the same shape the workflow filter already
+   * uses, and it carries the same admission: past RECENT_INSTANCE_LIMIT the
+   * answer is over a capped set, and the response says so rather than
+   * implying the order is global.
+   * </p>
+   */
+  private String orderedInstances(WorkflowManagerClient client, String status,
+      String workflow, String sort, String dir, int pageNum) throws Exception {
+    List all = client.getWorkflowInstances();
+    List<WorkflowInstance> matched = new ArrayList<WorkflowInstance>();
+    if (all != null) {
+      for (int i = 0; i < all.size(); i++) {
+        Object item = all.get(i);
+        if (!(item instanceof WorkflowInstance)) {
+          continue;
+        }
+        WorkflowInstance inst = (WorkflowInstance) item;
+        if (workflow != null && workflow.trim().length() > 0
+            && !matchesWorkflow(inst, workflow.trim())) {
+          continue;
+        }
+        if (status != null && status.trim().length() > 0
+            && !"ALL".equalsIgnoreCase(status.trim())
+            && !status.trim().equals(statusOf(inst))) {
+          continue;
+        }
+        matched.add(inst);
+      }
+    }
+
+    boolean truncated = matched.size() > RECENT_INSTANCE_LIMIT;
+
+    Set executing = executingIds(client);
+    List<Map<String, Object>> encoded = new ArrayList<Map<String, Object>>();
+    for (int i = 0; i < matched.size(); i++) {
+      encoded.add(encodeInstance(matched.get(i), executing));
+    }
+    // Ordered before the cap, so a capped answer is still the top of the
+    // whole set rather than the top of an arbitrary slice of it.
+    Collections.sort(encoded,
+        InstanceOrder.by(sort, dir, System.currentTimeMillis()));
+    if (truncated) {
+      encoded = encoded.subList(0, RECENT_INSTANCE_LIMIT);
+    }
+
+    int totalPages = (encoded.size() + ORDERED_PAGE_SIZE - 1)
+        / ORDERED_PAGE_SIZE;
+    if (totalPages < 1) {
+      totalPages = 1;
+    }
+    if (pageNum > totalPages) {
+      pageNum = totalPages;
+    }
+    int from = (pageNum - 1) * ORDERED_PAGE_SIZE;
+    int to = Math.min(from + ORDERED_PAGE_SIZE, encoded.size());
+    List<Map<String, Object>> page = from < to
+        ? encoded.subList(from, to)
+        : new ArrayList<Map<String, Object>>();
+
+    Map<String, Object> body = new LinkedHashMap<String, Object>();
+    body.put("status", status);
+    if (workflow != null && workflow.trim().length() > 0) {
+      body.put("workflow", workflow.trim());
+    }
+    body.put("sort", sort);
+    body.put("dir", "desc".equalsIgnoreCase(dir) ? "desc" : "asc");
+    body.put("page", Integer.valueOf(pageNum));
+    body.put("totalPages", Integer.valueOf(totalPages));
+    body.put("pageSize", Integer.valueOf(page.size()));
+    // What the order was taken over, and what survived the cap. A view that
+    // says "top by wall clock" while holding a slice should be able to say
+    // which slice.
+    body.put("total", Integer.valueOf(matched.size()));
+    body.put("shown", Integer.valueOf(encoded.size()));
+    body.put("truncated", Boolean.valueOf(truncated));
+    body.put("instances", page);
+    JSONObject response = new JSONObject();
+    response.put("page", body);
+    return response.toString();
+  }
+
+  private static String statusOf(WorkflowInstance inst) {
+    return inst.getState() == null ? "" : inst.getState().getName();
   }
 
   private String instancesForWorkflow(WorkflowManagerClient client, String status,

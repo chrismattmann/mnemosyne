@@ -42,7 +42,7 @@
     <SearchView v-else-if="route.view === 'search'" :payload="searchPayload" :loading="loading" @query="openSearch" @open="openProduct" @open-type="openType" @back="go({ view: 'catalog' })"/>
     <TypeView v-else-if="route.view === 'type'" :payload="typePayload" :loading="loading" :refreshed-at="refreshedAt" :stale="stale" @more="openTypeMore" @refresh="refreshType" @open="openProduct" @back="go({ view: 'catalog' })"/>
     <ProductView v-else-if="route.view === 'product'" :payload="productPayload" :pedigree="pedigree" :loading="loading" @open-type="openType" @open-instance="openInstance" @open-workflow="openWorkflow" @open-task="openTask" @open-product="openProduct" @back="go({ view: 'catalog' })"/>
-    <InstancesView v-else-if="route.view === 'instances'" :payload="instancePayload" :workflows="workflows" :statuses="lifecycleStatuses" :status="route.status || 'ALL'" :workflow="route.workflow || ''" :since="route.since || ''" :loading="loading" :refreshed-at="refreshedAt" :stale="stale" @status="openInstances" @page="openInstancesPage" @filter-workflow="setInstanceWorkflow" @filter-since="setInstanceSince" @open-workflow="openWorkflow" @open-task="openTaskFromInstanceRow" @open-instance="openInstance" @open-product="openProduct"/>
+    <InstancesView v-else-if="route.view === 'instances'" :payload="instancePayload" :workflows="workflows" :statuses="lifecycleStatuses" :status="route.status || 'ALL'" :workflow="route.workflow || ''" :since="route.since || ''" :sort="route.sort || ''" :dir="route.dir || 'asc'" :loading="loading" :refreshed-at="refreshedAt" :stale="stale" @status="openInstances" @page="openInstancesPage" @filter-workflow="setInstanceWorkflow" @filter-since="setInstanceSince" @sort="setInstanceSort" @open-workflow="openWorkflow" @open-task="openTaskFromInstanceRow" @open-instance="openInstance" @open-product="openProduct"/>
     <InstanceView v-else-if="route.view === 'instance'" :payload="instanceDetail" :loading="loading" @open-workflow="openWorkflow" @open-task="openTaskFromInstance" @open-instance="openInstance" @open-type="openType" @open-product="openProduct" @back="backFromInstance"/>
     <ResourcesView v-else-if="route.view === 'resources'" :payload="resourcePayload" :stubs="resourceStubs" :loading="loading"/>
     <WorkflowsView v-else-if="route.view === 'workflows'" :workflows="workflows" :loading="loading" @open="openWorkflow"/>
@@ -78,6 +78,7 @@ import { productRoute } from './productRef.js'
 import { instancesRequest } from './instancesRequest.js'
 import { loadTypePages } from './catalogPages.js'
 import { instancesQuery, splitHash } from './instanceHash.js'
+import { toggleSort } from './sort.js'
 import { POLL_MS, shouldPoll } from './pollViews.js'
 import { shouldResetTypeVisit, typeFromParts, typeHash } from './typeVisit.js'
 
@@ -150,7 +151,9 @@ export default {
           status: parts[1] || 'ALL',
           page: Number(parts[2] || 1),
           workflow: split.query.workflow || '',
-          since: split.query.since || ''
+          since: split.query.since || '',
+          sort: split.query.sort || '',
+          dir: split.query.dir === 'desc' ? 'desc' : 'asc'
         }
       }
       if (head === 'workflows') {
@@ -197,7 +200,7 @@ export default {
         const status = next.status || 'ALL'
         const page = next.page && next.page !== 1 ? '/' + next.page : ''
         return 'instances/' + encodeURIComponent(status) + page
-          + instancesQuery(next.workflow, next.since)
+          + instancesQuery(next.workflow, next.since, next.sort, next.dir)
       }
       if (next.view === 'workflows') {
         return 'workflows'
@@ -312,7 +315,9 @@ export default {
         status: route.value.status || 'ALL',
         page: route.value.page || 1,
         workflow: route.value.workflow || '',
-        since: route.value.since || ''
+        since: route.value.since || '',
+        sort: route.value.sort || '',
+        dir: route.value.dir || 'asc'
       }, extra || {})
     }
 
@@ -332,6 +337,14 @@ export default {
       go(instanceRoute({ since: since || '', page: 1 }))
     }
 
+    // The order is part of the question asked of the service, so changing it
+    // asks again from the first page rather than re-arranging the page in
+    // hand.
+    function setInstanceSort(field) {
+      const next = toggleSort(field, route.value.sort || '', route.value.dir || 'asc')
+      go(instanceRoute({ sort: next.field, dir: next.dir, page: 1 }))
+    }
+
     function backFromInstance() {
       go(instanceRoute({ view: 'instances' }))
     }
@@ -343,6 +356,8 @@ export default {
         status: route.value.status,
         workflow: route.value.workflow,
         since: route.value.since,
+        sort: route.value.sort,
+        dir: route.value.dir,
         page: route.value.page
       })
     }
@@ -510,7 +525,7 @@ export default {
           // them belonged to some other workflow.
           const ask = instancesRequest(r)
           const [page, defs] = await Promise.all([
-            getInstances(ask.status, ask.page, ask.workflow),
+            getInstances(ask.status, ask.page, ask.workflow, ask.sort, ask.dir),
             getWorkflows()
           ])
           instancePayload.value = page
@@ -598,7 +613,7 @@ export default {
       route, loading, error, health, refreshedAt, stale, types, lifecycleStatuses, catalogUnavailable, typePayload, productPayload,
       pedigree, instancePayload, instanceDetail, workflows, workflowPayload, taskPayload,
       conditionPayload, configPayload, searchPayload, resourcePayload, resourceStubs, go, openType, openTypePage, openTypeMore, refreshType, openProduct,
-      openProductByPath, openLatestFile, openInstances, openInstancesPage, setInstanceWorkflow, setInstanceSince, backFromInstance, openInstance, openWorkflow, openTask, openTaskFromWorkflow, openTaskFromInstance, openTaskFromInstanceRow, openCondition, openConditionFromTask, openConditionFromWorkflow, backFromTask, backFromCondition, openConfig, openSearch
+      openProductByPath, openLatestFile, openInstances, openInstancesPage, setInstanceWorkflow, setInstanceSince, setInstanceSort, backFromInstance, openInstance, openWorkflow, openTask, openTaskFromWorkflow, openTaskFromInstance, openTaskFromInstanceRow, openCondition, openConditionFromTask, openConditionFromWorkflow, backFromTask, backFromCondition, openConfig, openSearch
     }
   }
 }
