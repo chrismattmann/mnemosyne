@@ -118,6 +118,25 @@ public interface WorkflowEngine {
     WorkflowRepository getWorkflowRepository();
 
     /**
+     * Tells this engine which repository to resolve workflows against.
+     *
+     * <p>
+     * For an engine that is handed models rather than looking them up, this
+     * is how it comes to have one to report at all: without it
+     * {@link #getWorkflowRepository()} can only answer null, and every caller
+     * has to guard for that. An engine whose repository is fixed at
+     * construction -- because something it built holds the reference -- keeps
+     * it, since accepting a different one here would report a repository it
+     * does not actually use.
+     * </p>
+     *
+     * @param repository the repository to resolve against
+     */
+    default void setWorkflowRepository(WorkflowRepository repository) {
+        // Fixed at construction by default.
+    }
+
+    /**
      * Updates the {@link Metadata} context for the {@link WorkflowInstance}
      * identified by the given <code>workflowInstId</code>
      *

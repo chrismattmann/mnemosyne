@@ -71,6 +71,9 @@ public class ThreadPoolWorkflowEngine implements WorkflowEngine, WorkflowStatus 
   /* our instance repository */
   private WorkflowInstanceRepository instRep = null;
 
+  /* The model repository this engine reports, supplied by whoever owns both. */
+  private org.apache.oodt.cas.workflow.repository.WorkflowRepository modelRepo = null;
+
   /* our resource manager client */
   private ResourceManagerClient rClient = null;
 
@@ -246,14 +249,32 @@ public class ThreadPoolWorkflowEngine implements WorkflowEngine, WorkflowStatus 
    * org.apache.oodt.cas.workflow.engine.WorkflowEngine#getInstanceRepository()
    */
   /**
-   * This engine resolves models through the caller that hands it a workflow,
-   * rather than holding a repository of its own.
+   * This engine is handed a workflow to run rather than looking one up, so
+   * it needs no repository to execute. It is still asked which one it
+   * belongs to -- by a caller adding a workflow at runtime, which has to put
+   * it where the engine's owner will look. Answering null made every such
+   * caller guard for an engine that could not say.
    *
-   * @return null
+   * @return the repository this engine was given, or null if none was
    */
   public org.apache.oodt.cas.workflow.repository.WorkflowRepository
       getWorkflowRepository() {
-    return null;
+    return this.modelRepo;
+  }
+
+  /**
+   * Accepts the repository this engine should report.
+   *
+   * <p>
+   * Set by whoever owns both, so the two agree on which workflows exist
+   * rather than each holding a repository built separately from the same
+   * configuration.
+   * </p>
+   */
+  @Override
+  public void setWorkflowRepository(
+      org.apache.oodt.cas.workflow.repository.WorkflowRepository repository) {
+    this.modelRepo = repository;
   }
 
   public WorkflowInstanceRepository getInstanceRepository() {
