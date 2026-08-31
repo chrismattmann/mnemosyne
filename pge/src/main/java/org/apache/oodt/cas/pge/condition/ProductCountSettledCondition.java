@@ -81,6 +81,15 @@ import java.util.logging.Logger;
  * </p>
  *
  * <p>
+ * <b>This waits rather than reporting "not yet".</b> A condition gets one
+ * evaluation: ConditionTaskInstance throws when it returns false, which
+ * fails the attempt, and the instance is left in PreConditionEval -- a state
+ * TaskProcessor does not offer for execution again. There is no "ask me
+ * later" in the contract, so a gate that needs to wait has to do the waiting
+ * itself.
+ * </p>
+ *
+ * <p>
  * This is deliberately not a timer. A condition that counts down passes
  * whether or not the work is finished, so a reduce gated on one runs against
  * whatever happens to have been ingested by then -- including nothing at all.
@@ -96,9 +105,13 @@ public class ProductCountSettledCondition implements WorkflowConditionInstance {
   static final String PRODUCT_TYPE_NAME = "ProductTypeName";
   static final String MIN_COUNT = "MinCount";
   static final String QUIET_SECONDS = "QuietSeconds";
+  static final String POLL_SECONDS = "PollSeconds";
+  static final String MAX_WAIT_SECONDS = "MaxWaitSeconds";
 
   private static final int DEFAULT_MIN_COUNT = 1;
   private static final int DEFAULT_QUIET_SECONDS = 30;
+  private static final int DEFAULT_POLL_SECONDS = 10;
+  private static final int DEFAULT_MAX_WAIT_SECONDS = 3600;
 
   public ProductCountSettledCondition() {
     super();
@@ -117,29 +130,59 @@ public class ProductCountSettledCondition implements WorkflowConditionInstance {
     int minCount = intProperty(config, MIN_COUNT, DEFAULT_MIN_COUNT);
     long quietSeconds = intProperty(config, QUIET_SECONDS,
         DEFAULT_QUIET_SECONDS);
+    long pollSeconds = intProperty(config, POLL_SECONDS, DEFAULT_POLL_SECONDS);
+    long maxWaitSeconds = intProperty(config, MAX_WAIT_SECONDS,
+        DEFAULT_MAX_WAIT_SECONDS);
 
+    long gaveUpAt = now() + (maxWaitSeconds * 1000L);
+    while (true) {
+      if (settled(urlStr, typeName, minCount, quietSeconds)) {
+        return true;
+      }
+      if (now() >= gaveUpAt) {
+        LOG.log(Level.WARNING, "[" + typeName + "] had not gone quiet for "
+            + quietSeconds + "s within " + maxWaitSeconds
+            + "s; the producer has not finished");
+        return false;
+      }
+      if (!pause(pollSeconds)) {
+        // Interrupted: something wants this thread to stop, and reporting
+        // the producer finished on the way out would be a lie.
+        return false;
+      }
+    }
+  }
+
+  /** Whether the producer looks finished right now. */
+  private boolean settled(String urlStr, String typeName, int minCount,
+      long quietSeconds) {
     int count = countProducts(urlStr, typeName);
-    if (count < 0) {
-      // Could not be counted. Not the same as "not finished", but a caller
-      // waiting on a catalog it cannot read should wait rather than proceed.
+    if (count < 0 || count < minCount) {
       return false;
     }
-    if (count < minCount) {
-      LOG.log(Level.FINE, "[" + typeName + "] at " + count + ", waiting for "
-          + minCount);
-      return false;
-    }
-
     long quietFor = secondsSinceNewest(urlStr, typeName);
     if (quietFor < 0) {
       return false;
     }
-
-    boolean settled = quietFor >= quietSeconds;
     LOG.log(Level.FINE, "[" + typeName + "] at " + count + ", newest "
-        + quietFor + "s ago, needs " + quietSeconds
-        + (settled ? ": settled" : ""));
-    return settled;
+        + quietFor + "s ago, needs " + quietSeconds);
+    return quietFor >= quietSeconds;
+  }
+
+  /** Overridable so a test does not have to sleep. */
+  protected boolean pause(long seconds) {
+    try {
+      Thread.sleep(seconds * 1000L);
+      return true;
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      return false;
+    }
+  }
+
+  /** Overridable so a test can move time without waiting for it. */
+  protected long now() {
+    return System.currentTimeMillis();
   }
 
   /**
