@@ -108,6 +108,11 @@ public class AvroRpcWorkflowManager implements WorkflowManager,org.apache.oodt.c
         logger.debug("Setting workflow engine url: {}", workflowManagerUrl.toString());
         engine.setWorkflowManagerUrl(safeGetUrlFromString("http://" + getHostname()  + ":" + port));
         repo = getWorkflowRepositoryFromProperty();
+        // An engine that does not build a repository of its own is told which
+        // one it belongs to, so it can answer for it. Without this it reports
+        // nothing and every caller adding a workflow at runtime has to guard
+        // for an engine that cannot say where to put it.
+        engine.setWorkflowRepository(repo);
 
         logger.debug("Starting Http Server...");
         // start up the server
@@ -185,6 +190,10 @@ public class AvroRpcWorkflowManager implements WorkflowManager,org.apache.oodt.c
     @Override
     public boolean refreshRepository() throws AvroRemoteException {
         repo = getWorkflowRepositoryFromProperty();
+        // Refreshing replaces the repository wholesale, so hand the new one
+        // over as well; otherwise the engine keeps answering for the copy
+        // that was just discarded.
+        engine.setWorkflowRepository(repo);
         return true;
     }
 
@@ -221,8 +230,12 @@ public class AvroRpcWorkflowManager implements WorkflowManager,org.apache.oodt.c
             // valid id, and never run. Anything that fans out through dynamic
             // workflows produced instances that did nothing, which is how
             // DRAT runs one RAT audit per MIME type.
+            // Every engine reports a repository now: one it built, or the one
+            // it was handed above. Registering again is only needed when the
+            // two are actually different objects, which is the case for an
+            // engine whose processor queue holds its own.
             WorkflowRepository engineRepo = this.engine.getWorkflowRepository();
-            if (engineRepo != null && engineRepo != this.repo) {
+            if (engineRepo != this.repo) {
                 engineRepo.addWorkflow(dynamicWorkflow);
             }
 
