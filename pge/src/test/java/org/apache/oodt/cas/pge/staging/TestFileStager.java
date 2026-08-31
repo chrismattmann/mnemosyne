@@ -127,6 +127,54 @@ public class TestFileStager extends TestCase {
             .toString());
    }
 
+   /**
+    * Space is legal in a filename and illegal in a URI. Apache Tika's test
+    * corpus has files like
+    * "a_bii-s-2_metabolite profiling_NMR spectroscopy.txt", and staging one
+    * threw IllegalArgumentException from URI.create before it could be
+    * copied, failing the whole task.
+    */
+   public void testApathWithSpacesIsEncoded() throws URISyntaxException {
+      String withSpaces = "/data/test-documents/metabolite profiling_NMR.txt";
+
+      URI uri = FileStager.asURI(withSpaces);
+
+      assertEquals("file:///data/test-documents/metabolite%20profiling_NMR.txt",
+            uri.toString());
+      // and it still points at the file it was given
+      assertEquals(withSpaces, new File(uri).getAbsolutePath());
+   }
+
+   /** The same for a relative path, which is resolved before encoding. */
+   public void testArelativePathWithSpacesIsEncoded()
+         throws URISyntaxException {
+      URI uri = FileStager.asURI("test docs/data file.dat");
+
+      assertTrue("expected an encoded absolute file URI, got: " + uri,
+            uri.toString().startsWith("file://"));
+      assertFalse("a space must not survive into the URI",
+            uri.toString().contains(" "));
+      assertEquals(new File("test docs/data file.dat").getAbsolutePath(),
+            new File(uri).getAbsolutePath());
+   }
+
+   /** Other characters a filesystem allows and a URI does not. */
+   public void testOthercharactersIllegalInAuriAreEncoded()
+         throws URISyntaxException {
+      URI uri = FileStager.asURI("/data/report [final] v2.txt");
+
+      assertFalse("brackets must not survive unencoded: " + uri,
+            uri.toString().contains("["));
+      assertEquals("/data/report [final] v2.txt",
+            new File(uri).getAbsolutePath());
+   }
+
+   /** A URI that names a scheme is still taken as a URI, not a path. */
+   public void testAschemeIsStillHonoured() throws URISyntaxException {
+      assertEquals("http://somewhere.com/a/b.dat",
+            FileStager.asURI("http://somewhere.com/a/b.dat").toString());
+   }
+
    public static class ProductIdMatcher implements IArgumentMatcher {
 
       private String productId;

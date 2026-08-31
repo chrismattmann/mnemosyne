@@ -100,15 +100,46 @@ public abstract class FileStager {
       return files;
    }
 
+   /**
+    * The URI for something to stage, which may be given as a URI or as a
+    * plain filesystem path.
+    *
+    * <p>
+    * A path is not a URI. Space is legal in a filename and illegal in a URI,
+    * so URI.create threw on the way in and the branch meant to handle a bare
+    * path was never reached -- and it would have thrown too, since it pasted
+    * the path after "file://" without encoding it. Staging any file whose
+    * name contains a space failed, and Apache Tika's own test corpus is full
+    * of them.
+    * </p>
+    *
+    * <p>
+    * A string that parses as a URI and names a scheme is taken as one.
+    * Anything else is treated as the path it is and encoded.
+    * </p>
+    */
    @VisibleForTesting
    static URI asURI(String path) {
       Validate.notNull(path, "path must not be null");
 
-      URI uri = URI.create(path);
-      if (uri.getScheme() == null) {
-         uri = URI.create("file://" + new File(path).getAbsolutePath());
+      try {
+         URI uri = new URI(path);
+         if (uri.getScheme() != null) {
+            return uri;
+         }
+      } catch (URISyntaxException e) {
+         // Not a URI, so it is a path. Fall through and encode it.
       }
-      return uri;
+
+      try {
+         // The empty authority keeps the file:/// form that callers and the
+         // existing behaviour expect; the constructor encodes the path.
+         return new URI("file", "", new File(path).getAbsolutePath(), null,
+               null);
+      } catch (URISyntaxException e) {
+         throw new IllegalArgumentException(
+               "Unable to express as a URI: [" + path + "]", e);
+      }
    }
 
    protected abstract void stageFile(URI stageFile, File destDir,
