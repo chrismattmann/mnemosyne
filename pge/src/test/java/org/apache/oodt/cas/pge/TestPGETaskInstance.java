@@ -635,7 +635,17 @@ public class TestPGETaskInstance {
 
    private PGETaskInstance createTestInstance(String workflowInstId)
          throws Exception {
-      PGETaskInstance pgeTask = new PGETaskInstance();
+      // Report phases unchanged, as a manager too old to name its lifecycle
+      // would. These tests are about what a PGE does, not about which
+      // statuses some engine happens to declare -- and without this the
+      // instance asks a real workflow manager, so the answer depended on
+      // whether one happened to be running on the machine.
+      PGETaskInstance pgeTask = new PGETaskInstance() {
+         @Override
+         protected java.util.List<String> loadSupportedStatuses() {
+            return new java.util.ArrayList<String>();
+         }
+      };
        pgeTask.setWorkflowInstId(workflowInstId);
       pgeTask.pgeMetadata = new PgeMetadata();
       pgeTask.pgeMetadata.replaceMetadata(NAME, "TestPGE");
