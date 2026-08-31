@@ -726,6 +726,10 @@ public class AvroRpcWorkflowManager implements WorkflowManager,org.apache.oodt.c
             throw oodtError(e);
         }
 
+        // Stamp the live worker first: W1 updateMetadata persists that
+        // object whole, and without this the next progress overlay
+        // writes STARTED over the phase we are about to store.
+        engine.syncExecutingStatus(workflowInstId, status);
         wInst.setStatus(status);
         return doUpdateWorkflowInstance(wInst);
     }
