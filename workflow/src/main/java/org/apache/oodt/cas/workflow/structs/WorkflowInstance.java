@@ -168,6 +168,41 @@ public class WorkflowInstance {
    */
   public void setState(WorkflowState state) {
     this.state = state;
+    stampEndDateIfFinished(state);
+  }
+
+  /**
+   * Records when this instance finished, the first time it is set finished.
+   *
+   * <p>
+   * A wall clock is the difference between two times, and the queue-based
+   * engine recorded only the start: nothing in it ever set an end date, so
+   * everything downstream had nothing to subtract from. Finished work showed
+   * no elapsed time at all, or read as though it were still running.
+   * </p>
+   *
+   * <p>
+   * Done here rather than where instances are written because there is more
+   * than one writer -- the processor queue, the task querier and the engine
+   * each persist -- and only one place where a workflow becomes finished.
+   * Reaching a state in the lifecycle's done stage is what finishing is.
+   * </p>
+   *
+   * <p>
+   * Set once. The end of a workflow is when it first finished, not when
+   * something last wrote it down, so an engine that stamps its own end date
+   * keeps it and a state written twice does not move it.
+   * </p>
+   */
+  private void stampEndDateIfFinished(WorkflowState state) {
+    if (state == null || state.getCategory() == null
+        || !"done".equals(state.getCategory().getName())) {
+      return;
+    }
+    if (this.endDate != null) {
+      return;
+    }
+    this.endDate = new Date();
   }
 
   /**
