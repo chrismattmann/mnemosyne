@@ -99,7 +99,7 @@
       </tbody>
     </table>
     <p v-if="truncated" class="muted note">
-      Ordered across all {{ total }} matching instances; the first {{ shown }} of that order are pageable here.
+      Showing the {{ shown }} most recent of {{ total }} matching instances.
     </p>
     <Pager :page="page" :total-pages="totalPages" @page="$emit('page', $event)"/>
   </section>
