@@ -21,6 +21,7 @@ import java.net.URL;
 
 //OODT imports
 import org.apache.oodt.cas.workflow.instrepo.WorkflowInstanceRepository;
+import org.apache.oodt.cas.workflow.repository.WorkflowRepository;
 import org.apache.oodt.cas.workflow.structs.exceptions.EngineException;
 import org.apache.oodt.cas.workflow.structs.Workflow;
 import org.apache.oodt.cas.workflow.structs.WorkflowInstance;
@@ -99,6 +100,22 @@ public interface WorkflowEngine {
      *         {@link WorkflowEngine}.
      */
     WorkflowInstanceRepository getInstanceRepository();
+
+    /**
+     * The model repository this engine resolves workflows against.
+     *
+     * <p>
+     * A caller that adds a workflow at runtime -- a dynamic workflow built
+     * from task ids, for one -- has to add it to the repository the engine
+     * will look in, or the instance it then starts refers to a model nothing
+     * can resolve. Building a second repository from the same configuration
+     * is not the same thing: each call to the factory returns a new object,
+     * so an addition to one is invisible to the other.
+     * </p>
+     *
+     * @return the repository, or null for an engine that does not hold one
+     */
+    WorkflowRepository getWorkflowRepository();
 
     /**
      * Updates the {@link Metadata} context for the {@link WorkflowInstance}

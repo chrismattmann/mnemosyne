@@ -179,6 +179,76 @@ public class TestQueueBasedEngineEndToEnd extends TestCase {
         "Failure", finished.getState().getName());
   }
 
+  // ---- dynamic workflows -------------------------------------------------
+
+  /**
+   * A workflow added at runtime has to be added to the repository the engine
+   * resolves against, or the instance started from it refers to a model
+   * nothing can find.
+   *
+   * <p>
+   * The workflow manager and the engine each built a repository from the same
+   * property. That looks equivalent and is not: the factory returns a new
+   * object per call, so an addition to one was invisible to the other.
+   * executeDynamicWorkflow added the workflow to the manager's repository and
+   * started an instance the engine resolved against its own, where the
+   * workflow did not exist. The instance was created, reported a valid id,
+   * and stayed in Queued forever. This test holds the engine to the part it
+   * can guarantee: what it hands out is what it resolves against.
+   * </p>
+   */
+  public void testTheEngineResolvesAgainstTheRepositoryItExposes()
+      throws Exception {
+    assertNotNull("an engine that resolves models must expose the repository"
+        + " it resolves against, so a caller adding a workflow at runtime can"
+        + " add it where the engine will look",
+        engine.getWorkflowRepository());
+
+    Workflow dynamic = new Workflow();
+    dynamic.getTasks().add(
+        engine.getWorkflowRepository().getWorkflowTaskById("urn:oodt:e2e:PhaseWork"));
+
+    String id = engine.getWorkflowRepository().addWorkflow(dynamic);
+    assertNotNull("the repository should give the new workflow an id", id);
+
+    assertNotNull("a workflow added through the engine's repository must be"
+        + " resolvable from it: this is what the processor queue does when it"
+        + " loads the instance, and returning null here is what left dynamic"
+        + " instances stuck in Queued",
+        engine.getWorkflowRepository().getWorkflowById(id));
+  }
+
+  /**
+   * Two repositories built from the same configuration are two repositories.
+   *
+   * <p>
+   * This is the trap the manager fell into. It built one from a property and
+   * the engine built another from the same property, which reads as though
+   * both refer to the same thing. A workflow added at runtime went into one
+   * of them, and the instance started from it was resolved against the other.
+   * Pinned here so the next caller tempted to build "the" repository from the
+   * property has this written down.
+   * </p>
+   */
+  public void testAsecondRepositoryBuiltTheSameWayIsAdifferentRepository()
+      throws Exception {
+    PackagedWorkflowRepository other = new PackagedWorkflowRepository(
+        java.util.Arrays.asList(new File(MODEL_DIR).listFiles()));
+
+    Workflow dynamic = new Workflow();
+    dynamic.getTasks().add(
+        engine.getWorkflowRepository().getWorkflowTaskById("urn:oodt:e2e:PhaseWork"));
+    String id = engine.getWorkflowRepository().addWorkflow(dynamic);
+
+    assertNotNull("the repository it was added to must hold it",
+        engine.getWorkflowRepository().getWorkflowById(id));
+    assertNull("a repository built separately from the same files does not"
+        + " see a workflow added to the other at runtime -- adding to one and"
+        + " resolving against the other is what left dynamic instances in"
+        + " Queued with no model",
+        other.getWorkflowById(id));
+  }
+
   // ---- parallel ----------------------------------------------------------
 
   /**
