@@ -42,6 +42,7 @@ import org.apache.oodt.cas.pge.config.RegExprOutputFiles;
 import org.apache.oodt.cas.pge.config.XmlFilePgeConfigBuilder;
 import org.apache.oodt.cas.pge.exceptions.PGEException;
 import org.apache.oodt.cas.pge.metadata.PgeMetadata;
+import org.apache.oodt.cas.pge.metadata.PgeProgress;
 import org.apache.oodt.cas.pge.metadata.PgeTaskMetKeys;
 import org.apache.oodt.cas.pge.staging.FileManagerFileStager;
 import org.apache.oodt.cas.pge.staging.FileStager;
@@ -108,6 +109,8 @@ public class PGETaskInstance implements WorkflowTaskInstance {
    private String workflowInstId;
    protected PgeMetadata pgeMetadata;
    protected PgeConfig pgeConfig;
+   private PgeProgress lastProgress;
+   static final long PROGRESS_POLL_MS = 2000L;
 
    protected PGETaskInstance() {}
 
@@ -157,6 +160,72 @@ public class PGETaskInstance implements WorkflowTaskInstance {
       logger.info("Updating status to workflow as [" + status + "]");
       if (!getWorkflowManagerClient().updateWorkflowInstanceStatus(workflowInstId, status)) {
          throw new PGEException("Failed to update workflow status : client returned false");
+      }
+   }
+
+   /**
+    * While the script runs, copy {@code .progress} into the instance metadata
+    * so OPSUI can draw a bar. Scripts that never write the file are a no-op.
+    * Reads the current shared context, overlays the progress keys, and writes
+    * the whole map back: W1 {@code updateMetadata} replaces the context, W2
+    * can merge; either way existing keys survive.
+    */
+   protected Thread startProgressWatcher() {
+      Thread watcher = new Thread(new Runnable() {
+         @Override
+         public void run() {
+            while (!Thread.currentThread().isInterrupted()) {
+               reportProgress();
+               try {
+                  Thread.sleep(PROGRESS_POLL_MS);
+               } catch (InterruptedException e) {
+                  Thread.currentThread().interrupt();
+                  return;
+               }
+            }
+         }
+      }, "pge-progress-" + workflowInstId);
+      watcher.setDaemon(true);
+      watcher.start();
+      return watcher;
+   }
+
+   protected void stopProgressWatcher(Thread watcher) {
+      if (watcher == null) {
+         return;
+      }
+      watcher.interrupt();
+      try {
+         watcher.join(1000L);
+      } catch (InterruptedException e) {
+         Thread.currentThread().interrupt();
+      }
+   }
+
+   protected void reportProgress() {
+      if (pgeConfig == null || pgeConfig.getExeDir() == null) {
+         return;
+      }
+      PgeProgress next = PgeProgress.readFile(new File(pgeConfig.getExeDir(), PgeProgress.FILE_NAME));
+      if (next == null || next.sameAs(lastProgress)) {
+         return;
+      }
+      try {
+         WorkflowManagerClient client = getWorkflowManagerClient();
+         Metadata current = null;
+         try {
+            current = client.getWorkflowInstanceMetadata(workflowInstId);
+         } catch (Exception e) {
+            logger.debug("No instance metadata yet for progress: {}", e.getMessage());
+         }
+         if (current == null) {
+            current = new Metadata();
+         }
+         current.replaceMetadata(next.toMetadata());
+         client.updateMetadataForWorkflow(workflowInstId, current);
+         lastProgress = next;
+      } catch (Exception e) {
+         logger.warn("Could not report PGE progress: {}", e.getMessage());
       }
    }
 
@@ -403,13 +472,19 @@ public class PGETaskInstance implements WorkflowTaskInstance {
          // run script and evaluate whether success or failure
          updateStatus(RUNNING_PGE.getWorkflowStatusName());
          logger.debug("Starting execution of PGE: {}", sf.getCommands());
-         if (!wasPgeSuccessful(ExecUtils.callProgram(
-               pgeConfig.getShellType() + " " + getScriptPath(), julLogger,
-               new File(pgeConfig.getExeDir()).getAbsoluteFile()))) {
-            logger.error("PGE didn't finish successfully: {}", sf);
-            throw new RuntimeException("Pge didn't finish successfully");
-         } else {
-            logger.info("Successfully completed running script file: '{}'", sf);
+         Thread progressWatcher = startProgressWatcher();
+         try {
+            if (!wasPgeSuccessful(ExecUtils.callProgram(
+                  pgeConfig.getShellType() + " " + getScriptPath(), julLogger,
+                  new File(pgeConfig.getExeDir()).getAbsoluteFile()))) {
+               logger.error("PGE didn't finish successfully: {}", sf);
+               throw new RuntimeException("Pge didn't finish successfully");
+            } else {
+               logger.info("Successfully completed running script file: '{}'", sf);
+            }
+         } finally {
+            stopProgressWatcher(progressWatcher);
+            reportProgress();
          }
 
          long endTime = System.currentTimeMillis();

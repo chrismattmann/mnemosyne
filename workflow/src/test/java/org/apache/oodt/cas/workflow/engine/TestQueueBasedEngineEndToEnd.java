@@ -145,6 +145,27 @@ public class TestQueueBasedEngineEndToEnd extends TestCase {
   }
 
   /**
+   * A running PGE reports how far it has gotten by overlaying a few keys on
+   * the instance. Those keys have to land next to WorkflowInstId, not replace
+   * the context.
+   */
+  public void testUpdateMetadataOverlaysWithoutWiping() throws Exception {
+    Metadata start = new Metadata();
+    start.addMetadata("SuppliedAtStart", "yes");
+    WorkflowInstance inst = engine.startWorkflow(modelFor("urn:oodt:e2e:TwoStep"), start);
+
+    Metadata progress = new Metadata();
+    progress.addMetadata("PGETask_Done", "50");
+    progress.addMetadata("PGETask_Total", "612");
+    assertTrue(engine.updateMetadata(inst.getId(), progress));
+
+    Metadata got = engine.getWorkflowInstanceMetadata(inst.getId());
+    assertEquals("yes", got.getMetadata("SuppliedAtStart"));
+    assertEquals("50", got.getMetadata("PGETask_Done"));
+    assertEquals("612", got.getMetadata("PGETask_Total"));
+  }
+
+  /**
    * Brian's first objection on the umbrella issue: whether metadata flows
    * through from one task to the next, or whether each task is handed a
    * context that has lost what the previous one wrote.
