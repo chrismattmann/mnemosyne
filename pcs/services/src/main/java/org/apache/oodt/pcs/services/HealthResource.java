@@ -83,6 +83,8 @@ public class HealthResource extends PCSService {
     output.put("crawlerStatus", this.encodeCrawlerHealthReportOutput(report));
     output.put("latestFiles", this.encodeLatestFilesOutput(report));
     output.put("jobHealth", this.encodeJobHealthStatusList(report));
+    output.put("jobHealthAvailable",
+        Boolean.valueOf(workflowManagerReachable(report)));
     output.put("ingestHealth", this.encodeIngestHealthList(report));
     return this.encodeReportAsJson(output);
   }
@@ -118,6 +120,8 @@ public class HealthResource extends PCSService {
     Map<String, Object> output = new ConcurrentHashMap<String, Object>();
     output.put("generated", report.getCreateDateIsoFormat());
     output.put("jobHealth", this.encodeJobHealthStatusList(report));
+    output.put("jobHealthAvailable",
+        Boolean.valueOf(workflowManagerReachable(report)));
     return this.encodeReportAsJson(output);
   }
 
@@ -370,6 +374,26 @@ public class HealthResource extends PCSService {
     }
 
     return crawlerOutput;
+  }
+
+  /**
+   * Whether the job counts mean anything.
+   *
+   * <p>
+   * They are counted by asking the workflow manager. With the manager down
+   * there is nothing to ask, and the list comes back empty -- which reads,
+   * to anything rendering it, exactly like a deployment with no jobs. The
+   * honest answer is that the counts are unknown, and zero is not that: it
+   * is a claim that there is no work, made at the moment we cannot see any
+   * of it. This is the same distinction #257 drew for the file manager,
+   * which used to describe an empty catalog when it could not reach one.
+   * </p>
+   */
+  private boolean workflowManagerReachable(PCSHealthMonitorReport report) {
+    return report != null
+        && report.getWmStatus() != null
+        && PCSHealthMonitorMetKeys.STATUS_UP.equals(report.getWmStatus()
+            .getStatus());
   }
 
   private Map<String, Object> encodeDaemonOutput(PCSHealthMonitorReport report,
