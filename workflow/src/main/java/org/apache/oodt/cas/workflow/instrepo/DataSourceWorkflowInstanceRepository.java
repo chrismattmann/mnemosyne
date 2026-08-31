@@ -1159,4 +1159,57 @@ public class DataSourceWorkflowInstanceRepository extends
         }
     }
 
+
+    /**
+     * Close the database, when it is one this process is running itself.
+     *
+     * <p>
+     * An embedded HSQLDB file database is opened by the first connection and
+     * stays open until it is told to shut down. Closing connections is not
+     * enough and neither is stopping everything above it: the database keeps
+     * a timer thread of its own, which holds the process alive and goes on
+     * writing the heartbeat in the lock file. A workflow manager stopped this
+     * way left a JVM listening on nothing, holding the instance database for
+     * hours, and every later attempt to empty that database was refused with
+     * "Database lock acquisition failure" against a lock whose owner had
+     * already been asked to stop.
+     * </p>
+     *
+     * <p>
+     * Only for a database this process runs. A server somewhere else is not
+     * ours to shut down, and the URL is what tells the two apart.
+     * </p>
+     */
+    @Override
+    public void release() {
+        Connection conn = null;
+        Statement statement = null;
+        try {
+            conn = dataSource.getConnection();
+            String url = conn.getMetaData().getURL();
+            if (url == null || !url.contains("hsqldb:file:")) {
+                return;
+            }
+            statement = conn.createStatement();
+            statement.execute("SHUTDOWN");
+            LOG.log(Level.INFO, "Closed the workflow instance database at ["
+                + url + "]");
+        } catch (Exception e) {
+            LOG.log(Level.WARNING, "Unable to close the workflow instance "
+                + "database: " + e.getMessage());
+        } finally {
+            if (statement != null) {
+                try {
+                    statement.close();
+                } catch (SQLException ignored) {
+                }
+            }
+            if (conn != null) {
+                try {
+                    conn.close();
+                } catch (SQLException ignored) {
+                }
+            }
+        }
+    }
 }

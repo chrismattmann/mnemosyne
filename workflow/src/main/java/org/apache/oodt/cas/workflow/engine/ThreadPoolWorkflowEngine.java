@@ -142,6 +142,17 @@ public class ThreadPoolWorkflowEngine implements WorkflowEngine, WorkflowStatus 
     if (pool != null) {
       pool.shutdownNow();
     }
+    // The same reason as the queue engine: a repository holding a store open
+    // keeps it, and the process, for as long as nobody says otherwise.
+    WorkflowInstanceRepository repo = getInstanceRepository();
+    if (repo != null) {
+      try {
+        repo.release();
+      } catch (RuntimeException e) {
+        LOG.log(Level.WARNING, "Error releasing the instance repository: "
+            + e.getMessage());
+      }
+    }
   }
 
   /*

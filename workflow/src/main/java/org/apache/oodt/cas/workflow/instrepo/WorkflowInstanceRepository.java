@@ -208,4 +208,20 @@ public interface WorkflowInstanceRepository extends Pagination {
      */
     public boolean clearWorkflowInstances() throws InstanceRepositoryException;
 
+
+    /**
+     * Let go of whatever this repository is holding.
+     *
+     * <p>
+     * Most repositories hold nothing between calls and have nothing to do
+     * here, which is why this does nothing unless a repository says
+     * otherwise. One that keeps a store open for the life of the process has
+     * to be told when that life is over: an embedded database goes on running
+     * its own threads and holding its own file lock long after the manager
+     * that opened it has stopped serving, and nothing else will ever close
+     * it.
+     * </p>
+     */
+    default void release() {
+    }
 }
