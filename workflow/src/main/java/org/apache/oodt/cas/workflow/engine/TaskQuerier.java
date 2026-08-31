@@ -135,6 +135,17 @@ public class TaskQuerier implements Runnable {
         // what gives the queue its next child, and it now reports Executing
         // while those children run. Excluding it here would stop a sequential
         // workflow after its first task.
+        // Looked at, and not ready: one deferral, once per pass. This is the
+        // only place that knows a pass happened, and the only place that sees
+        // every processor whether or not it has anything to hand out -- a
+        // processor waiting on conditions is dispatching those conditions, so
+        // it never reaches the nextState call below.
+        if (!processor.isAnyCategory("done", "holding")
+            && processor.isWaitingOnPreConditions()) {
+          processor.getWorkflowInstance().recordBlocked();
+          persist(processor.getWorkflowInstance());
+        }
+
         if (!processor.isAnyCategory("done", "holding")
             && !(processor instanceof TaskProcessor
                  && processor.isAnyState("Executing"))

@@ -177,6 +177,11 @@ public class IterativeWorkflowProcessorThread implements WorkflowStatus, CoreMet
       if (task.getConditions() != null) {
         while (!satisfied(task.getConditions(), task.getTaskId()) && !isStopped()) {
 
+          // Checked, not ready, and about to wait and check again: the same
+          // deferral the queue engine records when it leaves a processor
+          // waiting on its conditions.
+          workflowInst.recordBlocked();
+
           // if we're not paused, go ahead and pause us now
           if (!isPaused()) {
             pause();

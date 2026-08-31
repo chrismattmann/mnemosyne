@@ -247,6 +247,17 @@ public abstract class WorkflowProcessor implements WorkflowProcessorListener,
    *          The state to move to.
    */
   public void setState(WorkflowState state) {
+    // Blocked is a deferral a lifecycle can declare for itself, and it is
+    // reached without passing through the chain above, so it is counted here
+    // rather than there. Counted on the way in only: staying blocked is one
+    // deferral, not one per look. This is the processor's setState and not
+    // the instance's, so a repository rebuilding a stored instance that was
+    // blocked does not count it again.
+    if (state != null && "Blocked".equals(state.getName())
+        && (this.workflowInstance.getState() == null
+            || !"Blocked".equals(this.workflowInstance.getState().getName()))) {
+      this.workflowInstance.recordBlocked();
+    }
     this.workflowInstance.setState(state);
     this.notifyChange(this, ChangeType.STATE);
   }
@@ -545,6 +556,21 @@ public abstract class WorkflowProcessor implements WorkflowProcessorListener,
       List<WorkflowProcessor> prerequisites) {
     this.prerequisites = prerequisites != null
         ? prerequisites : new Vector<WorkflowProcessor>();
+  }
+
+  /**
+   * Whether this is waiting for its own conditions rather than doing work.
+   *
+   * <p>
+   * Asked by the querier once per pass, which is the only place that knows a
+   * pass happened. It cannot be counted from inside nextState: a processor
+   * waiting on conditions has runnable condition sub-processors, so the
+   * querier dispatches those and never asks this one for a next state at
+   * all.
+   * </p>
+   */
+  public boolean isWaitingOnPreConditions() {
+    return !this.passedPreConditions();
   }
 
   protected boolean passedPreConditions() {
