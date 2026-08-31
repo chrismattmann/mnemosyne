@@ -508,6 +508,20 @@ public class AvroRpcWorkflowManager implements WorkflowManager,org.apache.oodt.c
 
     }
 
+    /**
+     * The statuses this deployment's engine can report, so a client filtering
+     * on status offers the ones that actually occur here rather than a list
+     * written for whichever engine its author had in mind.
+     */
+    @Override
+    public List<String> getSupportedWorkflowStatuses() throws AvroRemoteException {
+        java.util.List<String> statuses = engine.getSupportedStatuses();
+        if (statuses == null || statuses.isEmpty()) {
+            return new ArrayList<String>();
+        }
+        return new ArrayList<String>(statuses);
+    }
+
     @Override
     public List<String> getExecutingWorkflowInstanceIds() throws AvroRemoteException {
         java.util.Collection executing = engine.getExecutingInstanceIds();

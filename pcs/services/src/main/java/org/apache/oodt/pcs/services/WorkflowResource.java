@@ -293,6 +293,39 @@ public class WorkflowResource extends PCSService {
     }
   }
 
+  /**
+   * The statuses this deployment's engine can report.
+   *
+   * <p>
+   * A reader filtering instances by status has to be offered the statuses
+   * that actually occur here. A list written into a client is a list for
+   * whichever engine its author had in mind: against the other one it offers
+   * states that never happen, omits the ones that do, and a status differing
+   * only in case matches nothing at all.
+   * </p>
+   */
+  @GET
+  @Path("statuses")
+  @Produces("application/json")
+  public String statuses() throws Exception {
+    WorkflowManagerClient client = wm();
+    try {
+      List<?> supported = client.getSupportedWorkflowStatuses();
+      List<String> out = new ArrayList<String>();
+      if (supported != null) {
+        for (int i = 0; i < supported.size(); i++) {
+          Object status = supported.get(i);
+          if (status != null && !status.toString().equals("")) {
+            out.add(status.toString());
+          }
+        }
+      }
+      return json("statuses", out);
+    } finally {
+      closeQuietly(client);
+    }
+  }
+
   @GET
   @Path("conditions/{id}")
   @Produces("application/json")

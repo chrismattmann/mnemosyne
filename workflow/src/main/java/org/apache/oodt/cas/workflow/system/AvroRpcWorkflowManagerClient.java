@@ -262,6 +262,11 @@ public class AvroRpcWorkflowManagerClient implements WorkflowManagerClient {
         return ids == null ? new Vector() : new Vector(ids);
     }
 
+    public List getSupportedWorkflowStatuses() throws Exception {
+        List statuses = proxy.getSupportedWorkflowStatuses();
+        return statuses == null ? new Vector() : new Vector(statuses);
+    }
+
     public Vector getWorkflowInstances() throws Exception {
         List workflowInstances =  AvroTypeFactory.getWorkflowInstances(proxy.getWorkflowInstances());
         Vector vector = new Vector();

@@ -421,7 +421,7 @@ public final class PCSHealthMonitor implements CoreMetKeys,
     }
 
     List statuses = new Vector();
-    List states = this.statesFile.getStates();
+    List states = workflowStates();
 
     if (states != null && states.size() > 0) {
       for (Object state1 : states) {
@@ -439,6 +439,33 @@ public final class PCSHealthMonitor implements CoreMetKeys,
     }
 
     return statuses;
+  }
+
+  /**
+   * The workflow statuses to report on.
+   *
+   * <p>
+   * Asked of the Workflow Manager, because its engine reads the lifecycle
+   * that decides which statuses exist, and that lifecycle differs by engine:
+   * the queue-based one declares Queued, WaitingOnResources and
+   * PreConditionEval, none of which appear in the older file. A states file
+   * written per deployment goes stale the moment the engine changes, and
+   * reports every count as zero without saying why.
+   * </p>
+   *
+   * <p>
+   * The configured file is still used when the manager cannot be asked, so a
+   * deployment running an older manager keeps what it had.
+   * </p>
+   */
+  private List workflowStates() {
+    if (wm() != null) {
+      List reported = wm().safeGetSupportedStatuses();
+      if (reported != null && !reported.isEmpty()) {
+        return reported;
+      }
+    }
+    return this.statesFile.getStates();
   }
 
   private List getIngestHealth() {
@@ -619,7 +646,7 @@ public final class PCSHealthMonitor implements CoreMetKeys,
       return;
     }
 
-    List states = this.statesFile.getStates();
+    List states = workflowStates();
 
     if (states != null && states.size() > 0) {
       for (Object state1 : states) {

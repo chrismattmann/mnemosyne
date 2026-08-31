@@ -77,6 +77,10 @@ export function getInstance(id) {
   return fetch(`${services()}/workflow/instances/${encodeURIComponent(id)}`).then(readJson)
 }
 
+export function getStatuses() {
+  return fetch(`${services()}/workflow/statuses`).then(readJson)
+}
+
 export function getWorkflows() {
   return fetch(`${services()}/workflow/definitions`).then(readJson)
 }

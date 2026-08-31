@@ -73,6 +73,12 @@ public class MockWorkflowManagerClient extends
       return Lists.newArrayList();
    }
 
+   public List getSupportedWorkflowStatuses() throws Exception {
+      lastMethodCallDetails = new MethodCallDetails(
+            "getSupportedWorkflowStatuses", Lists.newArrayList());
+      return Lists.newArrayList();
+   }
+
    public WorkflowInstancePage getFirstPage() throws Exception {
       lastMethodCallDetails = new MethodCallDetails("getFirstPage",
             Lists.newArrayList());

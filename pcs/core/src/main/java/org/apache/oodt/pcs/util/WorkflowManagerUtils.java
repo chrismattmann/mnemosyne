@@ -95,6 +95,30 @@ public class WorkflowManagerUtils implements Serializable, AutoCloseable {
     }
   }
 
+  /**
+   * The statuses the manager's engine can report, or an empty list.
+   *
+   * <p>
+   * Callers that enumerate statuses have had to be told them in advance, in
+   * a file written per deployment. The manager knows: its engine reads a
+   * lifecycle. A manager too old to be asked answers with nothing, and the
+   * caller keeps whatever it was configured with.
+   * </p>
+   */
+  public List safeGetSupportedStatuses() {
+    if (!isConnected()) {
+      return new java.util.ArrayList();
+    }
+    try {
+      List statuses = this.client.getSupportedWorkflowStatuses();
+      return statuses == null ? new java.util.ArrayList() : statuses;
+    } catch (Exception e) {
+      LOG.log(Level.WARNING, "Unable to get the supported workflow statuses"
+          + " from the Workflow Manager: Message: " + e.getMessage());
+      return new java.util.ArrayList();
+    }
+  }
+
   public List safeGetWorkflowInstancesByStatus(String status) {
     try {
       return this.client.getWorkflowInstancesByStatus(status);

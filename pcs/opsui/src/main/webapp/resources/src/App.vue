@@ -42,7 +42,7 @@
     <SearchView v-else-if="route.view === 'search'" :payload="searchPayload" :loading="loading" @query="openSearch" @open="openProduct" @open-type="openType" @back="go({ view: 'catalog' })"/>
     <TypeView v-else-if="route.view === 'type'" :payload="typePayload" :loading="loading" :refreshed-at="refreshedAt" :stale="stale" @more="openTypeMore" @refresh="refreshType" @open="openProduct" @back="go({ view: 'catalog' })"/>
     <ProductView v-else-if="route.view === 'product'" :payload="productPayload" :pedigree="pedigree" :loading="loading" @open-type="openType" @open-instance="openInstance" @open-workflow="openWorkflow" @open-task="openTask" @open-product="openProduct" @back="go({ view: 'catalog' })"/>
-    <InstancesView v-else-if="route.view === 'instances'" :payload="instancePayload" :workflows="workflows" :status="route.status || 'ALL'" :workflow="route.workflow || ''" :since="route.since || ''" :loading="loading" :refreshed-at="refreshedAt" :stale="stale" @status="openInstances" @page="openInstancesPage" @filter-workflow="setInstanceWorkflow" @filter-since="setInstanceSince" @open-workflow="openWorkflow" @open-task="openTaskFromInstanceRow" @open-instance="openInstance" @open-product="openProduct"/>
+    <InstancesView v-else-if="route.view === 'instances'" :payload="instancePayload" :workflows="workflows" :statuses="lifecycleStatuses" :status="route.status || 'ALL'" :workflow="route.workflow || ''" :since="route.since || ''" :loading="loading" :refreshed-at="refreshedAt" :stale="stale" @status="openInstances" @page="openInstancesPage" @filter-workflow="setInstanceWorkflow" @filter-since="setInstanceSince" @open-workflow="openWorkflow" @open-task="openTaskFromInstanceRow" @open-instance="openInstance" @open-product="openProduct"/>
     <InstanceView v-else-if="route.view === 'instance'" :payload="instanceDetail" :loading="loading" @open-workflow="openWorkflow" @open-task="openTaskFromInstance" @open-instance="openInstance" @open-type="openType" @open-product="openProduct" @back="backFromInstance"/>
     <ResourcesView v-else-if="route.view === 'resources'" :payload="resourcePayload" :stubs="resourceStubs" :loading="loading"/>
     <WorkflowsView v-else-if="route.view === 'workflows'" :workflows="workflows" :loading="loading" @open="openWorkflow"/>
@@ -71,7 +71,7 @@ import ConditionView from './components/ConditionView.vue'
 import ConfigView from './components/ConfigView.vue'
 import {
   getCondition, getConfig, getHealth, getInstance, getInstances, getPedigree, getProduct,
-  getResources, getTask, getTypeProducts, getTypes, getWorkflow, getWorkflows, queryCatalog
+  getResources, getStatuses, getTask, getTypeProducts, getTypes, getWorkflow, getWorkflows, queryCatalog
 } from './api.js'
 import { catalogSqlError } from './sqlQuery.js'
 import { productRoute } from './productRef.js'
@@ -92,6 +92,7 @@ export default {
     const error = ref('')
     const health = ref(null)
     const types = ref([])
+    const lifecycleStatuses = ref([])
     const catalogUnavailable = ref(null)
     const typePayload = ref(null)
     const productPayload = ref(null)
@@ -491,6 +492,16 @@ export default {
             }
           }
         } else if (r.view === 'instances') {
+          // Ask the deployment what its lifecycle declares, once. Falls back
+          // to the built-in list if this manager cannot answer.
+          if (!lifecycleStatuses.value.length) {
+            try {
+              const body = await getStatuses()
+              lifecycleStatuses.value = body.statuses || []
+            } catch (ignored) {
+              lifecycleStatuses.value = []
+            }
+          }
           const [page, defs] = await Promise.all([
             getInstances(r.status || 'ALL', r.page || 1),
             getWorkflows()
@@ -577,7 +588,7 @@ export default {
     })
 
     return {
-      route, loading, error, health, refreshedAt, stale, types, catalogUnavailable, typePayload, productPayload,
+      route, loading, error, health, refreshedAt, stale, types, lifecycleStatuses, catalogUnavailable, typePayload, productPayload,
       pedigree, instancePayload, instanceDetail, workflows, workflowPayload, taskPayload,
       conditionPayload, configPayload, searchPayload, resourcePayload, resourceStubs, go, openType, openTypePage, openTypeMore, refreshType, openProduct,
       openProductByPath, openLatestFile, openInstances, openInstancesPage, setInstanceWorkflow, setInstanceSince, backFromInstance, openInstance, openWorkflow, openTask, openTaskFromWorkflow, openTaskFromInstance, openTaskFromInstanceRow, openCondition, openConditionFromTask, openConditionFromWorkflow, backFromTask, backFromCondition, openConfig, openSearch
