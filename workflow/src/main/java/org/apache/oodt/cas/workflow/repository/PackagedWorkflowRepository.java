@@ -471,6 +471,18 @@ public class PackagedWorkflowRepository implements WorkflowRepository {
         pcw.setTasks(workflow.getTasks());
         pcw.setId(workflow.getId());
     }
+    // Name it if the caller could not.
+    //
+    // A name that includes the id can only be built once the id exists, and
+    // the id is minted here, so a caller naming its workflow afterwards names
+    // the object it handed over rather than the copy kept here. That is what
+    // executeDynamicWorkflow does, and every dynamic workflow was stored
+    // without a name as a result: listed by a bare uuid, with nothing to show
+    // in a workflow list and no way to tell one from another.
+    if (pcw.getName() == null || pcw.getName().equals("")) {
+      pcw.setName("Dynamic Workflow-" + pcw.getId());
+    }
+
     this.workflows.put(pcw.getId(), pcw);
     this.eventWorkflowMap.put(workflowId, Collections.singletonList(pcw));
 
