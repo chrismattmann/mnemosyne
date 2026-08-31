@@ -19,7 +19,6 @@ package org.apache.oodt.pcs.tools;
 
 //JDK imports
 import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.Calendar;
@@ -27,6 +26,8 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.Iterator;
+import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.net.URL;
 import java.util.List;
 import java.util.Vector;
@@ -348,7 +349,10 @@ public final class PCSHealthMonitor implements CoreMetKeys,
 
     rmStatus.setDaemonName(RESOURCE_MANAGER_DAEMON_NAME);
     rmStatus.setStatus(printUp(getRmUp()));
-    rmStatus.setUrlStr(safeUrl(rm() == null ? null : rm().getResmgrUrl()));
+    // Do not call rm() just to print the URL. Building that client is an
+    // Avro connect, and when Resource Manager is down it waits the transfer
+    // timeout. The configured address is enough to show on the status page.
+    rmStatus.setUrlStr(rmUrlStr != null ? rmUrlStr : "unavailable");
 
     return rmStatus;
   }
@@ -819,6 +823,38 @@ public final class PCSHealthMonitor implements CoreMetKeys,
     };
   }
 
+  /**
+   * Avro's client timeout is minutes (transfers). A health ping against a
+   * port nobody is listening on must not inherit that. TCP is enough to say
+   * DOWN; the Avro call is only for a daemon that accepted the socket.
+   */
+  static final int HEALTH_CONNECT_TIMEOUT_MS = 750;
+
+  static boolean tcpReachable(URL url, int timeoutMs) {
+    if (url == null || url.getHost() == null || url.getHost().length() == 0) {
+      return false;
+    }
+    int port = url.getPort();
+    if (port <= 0) {
+      port = url.getDefaultPort();
+    }
+    if (port <= 0) {
+      return false;
+    }
+    Socket socket = new Socket();
+    try {
+      socket.connect(new InetSocketAddress(url.getHost(), port), timeoutMs);
+      return true;
+    } catch (Exception e) {
+      return false;
+    } finally {
+      try {
+        socket.close();
+      } catch (Exception ignored) {
+      }
+    }
+  }
+
   private boolean getCrawlerUp(String crawlUrlStr) {
     // Avro, like everything else PCS talks to. The XML-RPC controller this
     // used is on its way out of Mnemosyne along with the transport under it.
@@ -828,6 +864,10 @@ public final class PCSHealthMonitor implements CoreMetKeys,
     // transceiver leaked per probe is a transceiver leaked per minute.
     AvroRpcCrawlDaemonController controller = null;
     try {
+      URL crawlUrl = new URL(crawlUrlStr);
+      if (!tcpReachable(crawlUrl, HEALTH_CONNECT_TIMEOUT_MS)) {
+        return false;
+      }
       controller = new AvroRpcCrawlDaemonController(crawlUrlStr);
       return controller.isRunning();
     } catch (Exception e) {
@@ -844,6 +884,9 @@ public final class PCSHealthMonitor implements CoreMetKeys,
   }
 
   private boolean getFmUp() {
+    if (fm() == null) {
+      return false;
+    }
     try {
       if (fm.getFmgrClient() != null && fm.getFmgrClient().isAlive()) {
         return true;
@@ -889,6 +932,9 @@ public final class PCSHealthMonitor implements CoreMetKeys,
   }
 
   private boolean getWmUp() {
+    if (wm() == null) {
+      return false;
+    }
     try {
       wm.getClient().getRegisteredEvents();
       return true;
@@ -898,10 +944,21 @@ public final class PCSHealthMonitor implements CoreMetKeys,
   }
 
   private boolean getRmUp() {
+    URL url = null;
+    try {
+      url = rmUrlStr == null ? null : new URL(rmUrlStr);
+    } catch (Exception e) {
+      return false;
+    }
+    // Probe the port before building an Avro client. ImageCat runs jobs
+    // locally and often has no Resource Manager; Avro would wait the
+    // transfer timeout (minutes) on a closed port and hold getReport's
+    // lock, which is the status page and then everything behind it.
+    if (!tcpReachable(url, HEALTH_CONNECT_TIMEOUT_MS)) {
+      return false;
+    }
     ResourceManagerUtils client = rm();
-    if (client == null) {
-      // Never built, because the address is unusable or nothing answered
-      // there. That is what down means.
+    if (client == null || client.getClient() == null) {
       return false;
     }
     try {

@@ -37,7 +37,23 @@ async function readJson(response) {
 }
 
 export function getHealth() {
-  return fetch(`${services()}/health/report`).then(readJson)
+  const controller = typeof AbortController === 'function' ? new AbortController() : null
+  const timer = controller ? setTimeout(function () {
+    controller.abort()
+  }, 15000) : null
+  return fetch(`${services()}/health/report`, controller ? { signal: controller.signal } : {})
+    .then(readJson)
+    .catch(function (err) {
+      if (err && err.name === 'AbortError') {
+        throw new Error('Health report timed out')
+      }
+      throw err
+    })
+    .finally(function () {
+      if (timer) {
+        clearTimeout(timer)
+      }
+    })
 }
 
 export function getTypes() {

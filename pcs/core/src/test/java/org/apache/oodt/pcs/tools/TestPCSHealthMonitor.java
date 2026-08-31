@@ -43,6 +43,17 @@ public class TestPCSHealthMonitor {
   private static final String DOWN = "DOWN";
 
   @Test
+  public void aClosedPortIsNotReachableAndDoesNotWaitTheAvroTimeout()
+      throws Exception {
+    long started = System.currentTimeMillis();
+    assertTrue("a closed port must count as down",
+        !PCSHealthMonitor.tcpReachable(new java.net.URL(DEAD_RM),
+            PCSHealthMonitor.HEALTH_CONNECT_TIMEOUT_MS));
+    long elapsed = System.currentTimeMillis() - started;
+    assertTrue("probing a closed port took " + elapsed + "ms", elapsed < 2000L);
+  }
+
+  @Test
   public void constructionDoesNotContactAnyService() throws Exception {
     long started = System.currentTimeMillis();
 
