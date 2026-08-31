@@ -223,6 +223,27 @@ public interface WorkflowEngine {
     }
 
     /**
+     * Stamp the in-memory worker's status so a later persist does not
+     * overwrite a phase the manager already accepted.
+     *
+     * <p>
+     * The thread-pool engine holds a live {@link WorkflowInstance} per
+     * worker. A PGE reports {@code PGE EXEC} by asking the manager to
+     * persist that string, which loads a copy from the instance
+     * repository, writes the copy, and leaves the worker still saying
+     * {@code STARTED}. The next {@link #updateMetadata} persist of the
+     * worker puts {@code STARTED} back — every PGE progress overlay
+     * does this. The queue-based engine has no such worker copy, so
+     * the default is a no-op.
+     * </p>
+     *
+     * @param workflowInstId the instance whose worker should be stamped
+     * @param status the status the manager just accepted
+     */
+    default void syncExecutingStatus(String workflowInstId, String status) {
+    }
+
+    /**
      * The statuses an instance of this engine can be in, from its lifecycle.
      *
      * <p>

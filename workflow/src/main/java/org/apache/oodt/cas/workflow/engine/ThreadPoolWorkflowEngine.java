@@ -297,6 +297,27 @@ public class ThreadPoolWorkflowEngine implements WorkflowEngine, WorkflowStatus 
     return ids;
   }
 
+  /**
+   * Keep the worker's status in step with a phase the manager accepted.
+   *
+   * {@link #updateMetadata} persists the worker object whole. If this is
+   * not called, a PGE's {@code PGE EXEC} lives only on the repository
+   * copy and the next progress overlay writes {@code STARTED} over it.
+   */
+  @Override
+  public synchronized void syncExecutingStatus(String workflowInstId,
+      String status) {
+    if (workflowInstId == null || status == null) {
+      return;
+    }
+    IterativeWorkflowProcessorThread worker =
+        (IterativeWorkflowProcessorThread) workerMap.get(workflowInstId);
+    if (worker == null) {
+      return;
+    }
+    worker.getWorkflowInstance().setStatus(status);
+  }
+
   /*
    * (non-Javadoc)
    * 

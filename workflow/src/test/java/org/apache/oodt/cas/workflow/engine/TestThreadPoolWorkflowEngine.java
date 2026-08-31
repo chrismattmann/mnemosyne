@@ -19,16 +19,22 @@
 package org.apache.oodt.cas.workflow.engine;
 
 //OODT imports
+import org.apache.commons.io.FileUtils;
+import org.apache.oodt.cas.metadata.Metadata;
+import org.apache.oodt.cas.workflow.instrepo.LuceneWorkflowInstanceRepository;
 import org.apache.oodt.cas.workflow.instrepo.MemoryWorkflowInstanceRepository;
 import EDU.oswego.cs.dl.util.concurrent.PooledExecutor;
 import org.apache.oodt.cas.workflow.structs.Graph;
 import org.apache.oodt.cas.workflow.structs.ParentChildWorkflow;
 import org.apache.oodt.cas.workflow.structs.WorkflowInstance;
+import org.apache.oodt.cas.workflow.structs.WorkflowStatus;
 import org.apache.oodt.cas.workflow.structs.WorkflowTask;
 import org.apache.oodt.commons.util.DateConvert;
 
 //JDK imports
+import java.io.File;
 import java.util.Date;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.LogManager;
 
@@ -135,6 +141,122 @@ public class TestThreadPoolWorkflowEngine extends TestCase {
                 new MemoryWorkflowInstanceRepository(20), 10, 4, 1, 5L, false, null);
         engine.shutdown();
         engine.shutdown();
+    }
+
+    /**
+     * Lucene hands back a copy. A PGE status write updates that copy;
+     * the worker still says STARTED. The next metadata persist of the
+     * worker puts STARTED back over PGE EXEC.
+     */
+    public void testUpdateMetadataClobbersUnsyncedPgeStatus() throws Exception {
+        File idx = luceneIdxDir();
+        LuceneWorkflowInstanceRepository repo =
+                new LuceneWorkflowInstanceRepository(idx.getAbsolutePath(), 20);
+        ThreadPoolWorkflowEngine engine = new ThreadPoolWorkflowEngine(
+                repo, 10, 4, 1, 5L, false, null);
+        try {
+            WorkflowInstance workerInst = putStartedWorker(engine, repo);
+
+            WorkflowInstance loaded = repo.getWorkflowInstanceById(workerInst.getId());
+            loaded.setStatus("PGE EXEC");
+            repo.updateWorkflowInstance(loaded);
+            assertEquals("PGE EXEC",
+                    repo.getWorkflowInstanceById(workerInst.getId()).getStatus());
+
+            Metadata met = new Metadata();
+            met.addMetadata("PGETask_Done", "1");
+            assertTrue(engine.updateMetadata(workerInst.getId(), met));
+
+            assertEquals("STARTED",
+                    repo.getWorkflowInstanceById(workerInst.getId()).getStatus());
+        } finally {
+            engine.shutdown();
+            FileUtils.deleteQuietly(idx);
+        }
+    }
+
+    /**
+     * Stamp the worker before the metadata persist and PGE EXEC survives.
+     */
+    public void testSyncExecutingStatusSurvivesMetadataPersist() throws Exception {
+        File idx = luceneIdxDir();
+        LuceneWorkflowInstanceRepository repo =
+                new LuceneWorkflowInstanceRepository(idx.getAbsolutePath(), 20);
+        ThreadPoolWorkflowEngine engine = new ThreadPoolWorkflowEngine(
+                repo, 10, 4, 1, 5L, false, null);
+        try {
+            WorkflowInstance workerInst = putStartedWorker(engine, repo);
+
+            WorkflowInstance loaded = repo.getWorkflowInstanceById(workerInst.getId());
+            loaded.setStatus("PGE EXEC");
+            repo.updateWorkflowInstance(loaded);
+            engine.syncExecutingStatus(workerInst.getId(), "PGE EXEC");
+
+            Metadata met = new Metadata();
+            met.addMetadata("PGETask_Done", "12");
+            met.addMetadata("PGETask_Total", "666");
+            assertTrue(engine.updateMetadata(workerInst.getId(), met));
+
+            WorkflowInstance after = repo.getWorkflowInstanceById(workerInst.getId());
+            assertEquals("PGE EXEC", after.getStatus());
+            assertEquals("12", after.getSharedContext().getMetadata("PGETask_Done"));
+            assertEquals("666", after.getSharedContext().getMetadata("PGETask_Total"));
+        } finally {
+            engine.shutdown();
+            FileUtils.deleteQuietly(idx);
+        }
+    }
+
+    public void testSyncExecutingStatusUnknownInstanceIsHarmless() {
+        ThreadPoolWorkflowEngine engine = new ThreadPoolWorkflowEngine(
+                new MemoryWorkflowInstanceRepository(20), 10, 4, 1, 5L, false, null);
+        try {
+            engine.syncExecutingStatus("no-such-instance", "PGE EXEC");
+            engine.syncExecutingStatus(null, "PGE EXEC");
+            engine.syncExecutingStatus("id", null);
+        } finally {
+            engine.shutdown();
+        }
+    }
+
+    private static File luceneIdxDir() throws Exception {
+        File idx = new File(File.createTempFile("bogus", "txt").getParentFile(),
+                "w1-pge-exec-" + System.nanoTime());
+        assertTrue("could not create " + idx, idx.mkdirs());
+        return idx;
+    }
+
+    /**
+     * A live worker whose instance says STARTED, persisted to Lucene so
+     * a subsequent get returns a copy rather than the worker object.
+     */
+    private static WorkflowInstance putStartedWorker(
+            ThreadPoolWorkflowEngine engine,
+            LuceneWorkflowInstanceRepository repo) throws Exception {
+        WorkflowInstance inst = new WorkflowInstance();
+        ParentChildWorkflow workflow = new ParentChildWorkflow(new Graph());
+        workflow.setId("urn:oodt:testWorkflow");
+        workflow.setName("test.workflow");
+        WorkflowTask task = new WorkflowTask();
+        task.setTaskId("urn:oodt:testTask");
+        task.setTaskName("test");
+        task.setTaskInstanceClassName("org.apache.oodt.cas.workflow.examples.NoOpTask");
+        workflow.getTasks().add(task);
+        inst.setParentChildWorkflow(workflow);
+        inst.setCurrentTaskId(task.getTaskId());
+        inst.setStatus(WorkflowStatus.STARTED);
+        inst.setSharedContext(new Metadata());
+        repo.addWorkflowInstance(inst);
+
+        IterativeWorkflowProcessorThread worker =
+                new IterativeWorkflowProcessorThread(inst, repo, null);
+        java.lang.reflect.Field mapField =
+                ThreadPoolWorkflowEngine.class.getDeclaredField("workerMap");
+        mapField.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        ConcurrentHashMap map = (ConcurrentHashMap) mapField.get(engine);
+        map.put(inst.getId(), worker);
+        return inst;
     }
 
 }
