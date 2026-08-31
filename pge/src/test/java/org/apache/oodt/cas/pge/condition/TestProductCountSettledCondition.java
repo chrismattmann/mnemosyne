@@ -26,18 +26,30 @@ import junit.framework.TestCase;
  */
 public class TestProductCountSettledCondition extends TestCase {
 
-  /** Returns the counts it was given, one per evaluation. */
-  private static class Counts extends ProductCountSettledCondition {
-    private final int[] counts;
-    private int next = 0;
+  /**
+   * A catalog holding a given number of products, the newest of them a given
+   * age. Both are what the condition reads, and neither is remembered
+   * between calls -- the condition is rebuilt for every evaluation, so a
+   * stub that behaved like a sequence would be testing something the real
+   * one cannot do.
+   */
+  private static class Catalog extends ProductCountSettledCondition {
+    private final int count;
+    private final long quietFor;
 
-    Counts(int... counts) {
-      this.counts = counts;
+    Catalog(int count, long quietFor) {
+      this.count = count;
+      this.quietFor = quietFor;
     }
 
     @Override
     protected int countProducts(String urlStr, String typeName) {
-      return next < counts.length ? counts[next++] : counts[counts.length - 1];
+      return count;
+    }
+
+    @Override
+    protected long secondsSinceNewest(String urlStr, String typeName) {
+      return quietFor;
     }
   }
 
@@ -53,103 +65,72 @@ public class TestProductCountSettledCondition extends TestCase {
     return c;
   }
 
-  private boolean[] run(Counts condition, WorkflowConditionConfiguration config,
-      int evaluations) {
-    boolean[] results = new boolean[evaluations];
-    for (int i = 0; i < evaluations; i++) {
-      results[i] = condition.evaluate(new Metadata(), config);
-    }
-    return results;
+  private boolean evaluate(ProductCountSettledCondition condition,
+      WorkflowConditionConfiguration config) {
+    return condition.evaluate(new Metadata(), config);
   }
 
-  /** While the mappers are producing, the count climbs and the gate holds. */
-  public void testAgrowingCountDoesNotPass() {
-    boolean[] r = run(new Counts(10, 25, 40, 60), config(), 4);
-
-    for (int i = 0; i < r.length; i++) {
-      assertFalse("a climbing count means work is still arriving (check "
-          + (i + 1) + ")", r[i]);
-    }
+  /** Still producing: the newest audit landed a moment ago. */
+  public void testAproducerStillIngestingDoesNotPass() {
+    assertFalse("something was ingested 2s ago, the producer is still going",
+        evaluate(new Catalog(120, 2), config()));
   }
 
-  /**
-   * Once it stops climbing for the required checks, the gate opens.
-   *
-   * <p>
-   * What is counted is unchanged <em>transitions</em>, not sightings: seeing
-   * 25 for the first time says nothing, seeing it again is one unchanged
-   * observation, and a second is what the default asks for.
-   * </p>
-   */
-  public void testAsettledCountPasses() {
-    boolean[] r = run(new Counts(10, 25, 25, 25, 25), config(), 5);
-
-    assertFalse("still climbing", r[0]);
-    assertFalse("25 seen for the first time is not evidence of anything",
-        r[1]);
-    assertFalse("one unchanged observation is not a trend", r[2]);
-    assertTrue("two unchanged observations is the default for settled", r[3]);
+  /** Nothing has landed for long enough: the producer has finished. */
+  public void testAquietCatalogPasses() {
+    assertTrue("nothing new for 90s, well past the default 30",
+        evaluate(new Catalog(120, 90), config()));
   }
 
   /**
-   * An empty catalog is not a finished one. Zero is also "not growing", which
-   * is exactly how a countdown gate lets a reduce run against nothing.
+   * An empty catalog is perfectly quiet, and that is not the same as
+   * finished. Without the minimum, a reduce would run before the first
+   * mapper had ingested anything.
    */
   public void testAnemptyCatalogNeverPasses() {
-    boolean[] r = run(new Counts(0, 0, 0, 0, 0), config(), 5);
-
-    for (int i = 0; i < r.length; i++) {
-      assertFalse("nothing has been produced yet (check " + (i + 1) + ")",
-          r[i]);
-    }
+    assertFalse("nothing has been produced yet, however quiet",
+        evaluate(new Catalog(0, 3600), config()));
   }
 
-  /** Below the minimum, holding still is not enough. */
+  /** Below the minimum, quiet is not enough either. */
   public void testBelowTheMinimumItHolds() {
-    boolean[] r = run(new Counts(3, 3, 3, 3),
-        config(ProductCountSettledCondition.MIN_COUNT, "10"), 4);
-
-    for (int i = 0; i < r.length; i++) {
-      assertFalse("3 is stable but below the minimum of 10", r[i]);
-    }
+    assertFalse("3 products is below the minimum of 10",
+        evaluate(new Catalog(3, 3600),
+            config(ProductCountSettledCondition.MIN_COUNT, "10")));
   }
 
-  /** Growth after a pause resets the count: it was not finished after all. */
-  public void testGrowthAfterApauseResetsTheGate() {
-    Counts condition = new Counts(20, 20, 35, 35, 35);
-    boolean[] r = run(condition, config(), 5);
+  /** How long counts as quiet is the pipeline's to choose. */
+  public void testThequietPeriodIsConfigurable() {
+    WorkflowConditionConfiguration patient =
+        config(ProductCountSettledCondition.QUIET_SECONDS, "300");
 
-    assertFalse(r[0]);
-    assertFalse("one unchanged observation", r[1]);
-    assertFalse("it grew again, so it was not settled", r[2]);
-    assertFalse("counting from the new value", r[3]);
-    assertTrue("settled at the higher count", r[4]);
+    assertFalse("60s is quiet by default but not when 300 was asked for",
+        evaluate(new Catalog(120, 60), patient));
+    assertTrue(evaluate(new Catalog(120, 301), patient));
   }
 
-  /** How long to wait for is the caller's to decide. */
-  public void testTherequiredNumberOfStableChecksIsConfigurable() {
-    boolean[] r = run(new Counts(5, 5, 5, 5, 5),
-        config(ProductCountSettledCondition.STABLE_EVALUATIONS, "4"), 5);
-
-    assertFalse(r[2]);
-    assertFalse("three unchanged, four were asked for", r[3]);
-    assertTrue(r[4]);
-  }
-
-  /** A catalog that cannot be counted is not a finished one either. */
-  public void testAcountThatCannotBeReadDoesNotPass() {
-    boolean[] r = run(new Counts(-1, -1, -1), config(), 3);
-
-    for (int i = 0; i < r.length; i++) {
-      assertFalse("waiting on a count we cannot read", r[i]);
-    }
+  /** A catalog that cannot be read is not a finished one. */
+  public void testAcatalogThatCannotBeReadDoesNotPass() {
+    assertFalse("count unreadable", evaluate(new Catalog(-1, 3600), config()));
+    assertFalse("age unreadable", evaluate(new Catalog(120, -1), config()));
   }
 
   /** Without being told what to count, it cannot say yes. */
   public void testItWillNotPassWithoutConfiguration() {
-    WorkflowConditionConfiguration empty =
-        new WorkflowConditionConfiguration();
+    assertFalse(new Catalog(500, 3600).evaluate(new Metadata(),
+        new WorkflowConditionConfiguration()));
+  }
 
-    assertFalse(new Counts(100, 100, 100).evaluate(new Metadata(), empty));
+  /**
+   * The decision must not depend on anything held between calls: a new
+   * condition object is built for every evaluation, so a gate that needed to
+   * see a trend would never open.
+   */
+  public void testAfreshObjectReachesTheSameAnswer() {
+    WorkflowConditionConfiguration c = config();
+
+    assertTrue(evaluate(new Catalog(120, 90), c));
+    assertTrue("a second, unrelated object must decide identically",
+        evaluate(new Catalog(120, 90), c));
   }
 }
