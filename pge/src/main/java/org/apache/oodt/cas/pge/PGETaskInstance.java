@@ -72,6 +72,7 @@ import java.net.URL;
 import java.text.ParseException;
 import java.util.Date;
 import java.util.LinkedList;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.FileHandler;
 import java.util.logging.SimpleFormatter;
@@ -156,10 +157,91 @@ public class PGETaskInstance implements WorkflowTaskInstance {
       }
    }
 
+   /** The state a PGE phase is reported as when the engine does not know it. */
+   protected static final String RUNNING_STATE = "Executing";
+
+   /** Statuses the manager's engine declares; null until asked, empty if it cannot say. */
+   private List<String> supportedStatuses = null;
+
    protected void updateStatus(String status) throws Exception {
-      logger.info("Updating status to workflow as [" + status + "]");
-      if (!getWorkflowManagerClient().updateWorkflowInstanceStatus(workflowInstId, status)) {
+      String reported = reportableStatus(status);
+      if (!reported.equals(status)) {
+         logger.info("Updating status to workflow as [" + reported
+             + "] for PGE phase [" + status + "]");
+      } else {
+         logger.info("Updating status to workflow as [" + status + "]");
+      }
+      if (!getWorkflowManagerClient().updateWorkflowInstanceStatus(workflowInstId, reported)) {
          throw new PGEException("Failed to update workflow status : client returned false");
+      }
+   }
+
+   /**
+    * The status to actually report for a PGE phase.
+    *
+    * <p>
+    * A PGE has phases of its own -- building its config file, staging input,
+    * running, crawling -- and has always published them as the workflow
+    * instance's status. Those names are the older engine's vocabulary, and a
+    * status the running engine's lifecycle cannot categorise is one
+    * WorkflowProcessorQueue drops: it guards on a non-null category, so a PGE
+    * was invisible to the task querier for as long as it ran.
+    * </p>
+    *
+    * <p>
+    * So ask. A manager whose lifecycle declares the phase is told the phase,
+    * which is every deployment on the older engine, so their behaviour is
+    * unchanged by construction rather than by care. A manager whose lifecycle
+    * does not is told the state the phase actually is: all of these are the
+    * task running.
+    * </p>
+    *
+    * <p>
+    * The phase itself is not lost. It belongs on the instance's metadata,
+    * where detail about what a task is doing goes, rather than in the field
+    * the engine uses to decide what to do next.
+    * </p>
+    */
+   protected String reportableStatus(String phase) {
+      if (phase == null) {
+         return null;
+      }
+      if (supportedStatuses == null) {
+         supportedStatuses = loadSupportedStatuses();
+      }
+      if (supportedStatuses.isEmpty() || supportedStatuses.contains(phase)) {
+         // Either the lifecycle knows this phase, or the manager could not
+         // say what it knows. Neither is a reason to start renaming things.
+         return phase;
+      }
+      return RUNNING_STATE;
+   }
+
+   /**
+    * The statuses the manager's engine declares, or empty if it cannot say.
+    *
+    * <p>
+    * Overridable so the decision above can be tested against a known
+    * lifecycle without a manager to ask.
+    * </p>
+    */
+   protected List<String> loadSupportedStatuses() {
+      try {
+         List<?> reported = getWorkflowManagerClient().getSupportedWorkflowStatuses();
+         List<String> statuses = new ArrayList<String>();
+         if (reported != null) {
+            for (Object status : reported) {
+               if (status != null) {
+                  statuses.add(status.toString());
+               }
+            }
+         }
+         return statuses;
+      } catch (Exception e) {
+         // An older manager cannot be asked. Report as this PGE always has.
+         logger.info("Workflow manager did not report its statuses ("
+             + e.getMessage() + "); reporting PGE phases unchanged");
+         return new ArrayList<String>();
       }
    }
 
