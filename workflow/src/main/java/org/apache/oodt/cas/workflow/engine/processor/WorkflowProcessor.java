@@ -365,6 +365,20 @@ public abstract class WorkflowProcessor implements WorkflowProcessorListener,
                   + this.workflowInstance.getId() + "]");
         } else {
           nextState = stateFromSubProcessors();
+          if (nextState == null) {
+            nextState = runningStateIfWorking();
+          }
+        }
+      } else if (currState.getName().equals("PreConditionSuccess")) {
+        // A workflow that declares its own pre-conditions passes through
+        // here, and nothing moved it on again: the chain below had no branch
+        // for this state, so once its children finished it stayed where it
+        // was. It never reached a done category, so it was never given an end
+        // date and was re-dispositioned for ever. A task escapes because the
+        // querier hands it out from this state; a workflow has no such exit.
+        nextState = stateFromSubProcessors();
+        if (nextState == null) {
+          nextState = runningStateIfWorking();
         }
       } else if (currState.getName().equals("PreConditionEval")) {
         // The way back out. A processor waiting on something moves here, and
@@ -408,6 +422,34 @@ public abstract class WorkflowProcessor implements WorkflowProcessorListener,
     }
   }
   
+  /**
+   * "Executing", when this is a workflow whose children are still working.
+   *
+   * <p>
+   * A workflow sat at Queued for as long as its children ran, because the
+   * only way out of Queued was the transition taken once they had all
+   * finished. A phase that had fanned out seventy-five audits and was
+   * watching them complete reported that it was queued -- the lifecycle's
+   * waiting stage, which means it has not started. Nothing reading the
+   * instance could tell work in flight from work not yet begun, and the
+   * obvious question to ask of it, "how is a phase queued while its own
+   * tasks are finishing", had no good answer.
+   * </p>
+   *
+   * @return the running state, or null for a task, which is put into
+   *         Executing by whatever runs it rather than by this
+   */
+  private WorkflowState runningStateIfWorking() {
+    if (this.getSubProcessors() == null || this.getSubProcessors().isEmpty()) {
+      return null;
+    }
+    return this.helper.getLifecycleForProcessor(this).createState(
+        "Executing",
+        "running",
+        "Workflow Processor: nextState: " + "workflow instance: ["
+            + this.workflowInstance.getId() + "] has work in flight");
+  }
+
   /**
    * Turns what the sub-processors have done into this processor's next state.
    *
