@@ -75,6 +75,7 @@ import {
 } from './api.js'
 import { catalogSqlError } from './sqlQuery.js'
 import { productRoute } from './productRef.js'
+import { instancesRequest } from './instancesRequest.js'
 import { loadTypePages } from './catalogPages.js'
 import { instancesQuery, splitHash } from './instanceHash.js'
 import { POLL_MS, shouldPoll } from './pollViews.js'
@@ -502,8 +503,14 @@ export default {
               lifecycleStatuses.value = []
             }
           }
+          // Filter where the instances are, not after a page of them has
+          // arrived. Filtering the page meant paging still walked every
+          // instance in the repository: a workflow with one run sat eight
+          // pages in, behind pages that looked empty because everything on
+          // them belonged to some other workflow.
+          const ask = instancesRequest(r)
           const [page, defs] = await Promise.all([
-            getInstances(r.status || 'ALL', r.page || 1),
+            getInstances(ask.status, ask.page, ask.workflow),
             getWorkflows()
           ])
           instancePayload.value = page
