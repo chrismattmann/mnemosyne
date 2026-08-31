@@ -249,6 +249,47 @@ public class TestQueueBasedEngineEndToEnd extends TestCase {
         other.getWorkflowById(id));
   }
 
+  /**
+   * A workflow added without a name still comes back with one.
+   *
+   * <p>
+   * A name that includes the id can only be built after the id exists, and
+   * the repository is what mints it, so a caller naming its workflow
+   * afterwards names the object it handed over and not the copy that was
+   * kept. Every dynamic workflow was stored nameless, which left an
+   * operations view listing bare uuids with nothing to tell them apart.
+   * </p>
+   */
+  public void testAworkflowAddedWithoutAnameIsGivenOne() throws Exception {
+    Workflow unnamed = new Workflow();
+    unnamed.getTasks().add(
+        engine.getWorkflowRepository().getWorkflowTaskById("urn:oodt:e2e:PhaseWork"));
+
+    String id = engine.getWorkflowRepository().addWorkflow(unnamed);
+    Workflow stored = engine.getWorkflowRepository().getWorkflowById(id);
+
+    assertNotNull(stored);
+    assertNotNull("a stored workflow must be nameable", stored.getName());
+    assertFalse("an empty name is no better than a null one",
+        stored.getName().equals(""));
+    assertTrue("the name should identify which workflow it is, so it carries"
+        + " the id: [" + stored.getName() + "]",
+        stored.getName().contains(id));
+  }
+
+  /** A name the caller did supply is kept as given. */
+  public void testAsuppliedNameIsNotOverwritten() throws Exception {
+    Workflow named = new Workflow();
+    named.setName("Audit of one MIME type");
+    named.getTasks().add(
+        engine.getWorkflowRepository().getWorkflowTaskById("urn:oodt:e2e:PhaseWork"));
+
+    String id = engine.getWorkflowRepository().addWorkflow(named);
+
+    assertEquals("Audit of one MIME type",
+        engine.getWorkflowRepository().getWorkflowById(id).getName());
+  }
+
   // ---- parallel ----------------------------------------------------------
 
   /**
