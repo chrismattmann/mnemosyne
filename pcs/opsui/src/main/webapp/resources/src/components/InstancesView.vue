@@ -30,7 +30,7 @@
         </label>
         <label>
           Workflow
-          <select :value="workflow" @change="$emit('filter-workflow', $event.target.value)">
+          <select class="wide" :value="workflow" @change="$emit('filter-workflow', $event.target.value)">
             <option value="">All workflows</option>
             <option v-for="item in workflowOptions" :key="item.id || item.name" :value="item.name">
               {{ item.name }}
@@ -288,6 +288,19 @@ label {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+}
+
+/*
+ * The workflow list is instance data, so its widest entry decides how wide
+ * the control is: a page holding "task-workflow|<uuid>|urn:drat:RatCodeAudit"
+ * sizes it to seventy-odd characters and pushes the date filter onto a row of
+ * its own. Which instances came back should not rearrange the filters, so the
+ * width is fixed and long names are clipped rather than allowed to spread.
+ */
+.filters select.wide {
+  width: 16rem;
+  max-width: 100%;
+  text-overflow: ellipsis;
 }
 
 .date-field {
