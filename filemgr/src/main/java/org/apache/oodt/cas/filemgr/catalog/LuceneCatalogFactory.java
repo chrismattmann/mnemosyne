@@ -117,6 +117,38 @@ public class LuceneCatalogFactory implements CatalogFactory {
 			"org.apache.oodt.cas.filemgr.catalog.lucene.mergeFactor", VAL3);
 	}
 
+	/**
+	 * Whether this directory already holds a Lucene index.
+	 *
+	 * <p>
+	 * A missing directory and an empty one both mean the same thing here:
+	 * there is no index yet, so one has to be made. Asking Lucene rather
+	 * than asking the filesystem also covers a directory holding files that
+	 * are not an index.
+	 * </p>
+	 */
+	private boolean hasIndex(File indexDir) {
+	    if (!indexDir.exists()) {
+	        return false;
+	    }
+	    Directory dir = null;
+	    try {
+	        dir = FSDirectory.open(indexDir.toPath());
+	        return DirectoryReader.indexExists(dir);
+	    } catch (IOException e) {
+	        LOG.warning("Unable to read the index at [" + indexDir + "]: "
+	            + e.getMessage() + "; treating it as one to create");
+	        return false;
+	    } finally {
+	        if (dir != null) {
+	            try {
+	                dir.close();
+	            } catch (IOException ignored) {
+	            }
+	        }
+	    }
+	}
+
 	/*
 	 * (non-Javadoc)
 	 * 
@@ -124,10 +156,19 @@ public class LuceneCatalogFactory implements CatalogFactory {
 	 */
 	public Catalog createCatalog() {
 	    File indexDir = new File(indexFilePath);
-	    // Create the index if it does not already exist
+	    // Create the index if there is not one there already.
+	    //
+	    // The test used to be whether the directory exists, so a directory
+	    // that exists and holds no index was left exactly as it was found.
+	    // That is an ordinary state -- a fresh volume, a catalog someone has
+	    // just emptied -- and the file manager came up on it, listened, and
+	    // then failed every call with "no segments* file found in
+	    // MMapDirectory". A process that answers nothing while holding its
+	    // port open reads as a service that is up, and the crawl that
+	    // follows reports "Exception connecting to filemgr" once per file.
 	    IndexWriter writer = null;
 		config.setOpenMode(IndexWriterConfig.OpenMode.CREATE_OR_APPEND);
-	    if (!indexDir.exists()) {
+	    if (!hasIndex(indexDir)) {
 	        try {
 				try {
 					Directory indexDir2 = FSDirectory.open(new File( indexFilePath ).toPath());
