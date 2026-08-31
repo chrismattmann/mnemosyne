@@ -117,6 +117,20 @@ public class PrioritizedQueueBasedWorkflowEngine implements WorkflowEngine {
     if (this.runner != null) {
       this.runner.shutdown();
     }
+    // Last, and only once nothing above can still write. An instance
+    // repository that keeps a store open holds it for the life of the
+    // process otherwise: the manager stopped serving, its threads stopped,
+    // and an embedded database went on running a timer and holding its file
+    // lock, keeping the JVM alive with nothing listening on it.
+    WorkflowInstanceRepository repo = getInstanceRepository();
+    if (repo != null) {
+      try {
+        repo.release();
+      } catch (RuntimeException e) {
+        LOG.log(Level.WARNING, "Error releasing the instance repository: "
+            + e.getMessage());
+      }
+    }
   }
 
   /**
