@@ -83,7 +83,6 @@ import java.util.logging.Logger;
 public class LuceneWorkflowInstanceRepository extends
         AbstractPaginatibleInstanceRepository {
     Directory indexDir = null;
-    private DirectoryReader reader;
     /* the path to the index directory for this catalog */
 
     public static final int MERGE_FACTOR = 20;
@@ -119,6 +118,7 @@ public class LuceneWorkflowInstanceRepository extends
     public int getNumWorkflowInstances() throws InstanceRepositoryException {
         IndexSearcher searcher = null;
         int numInsts = -1;
+        DirectoryReader reader = null;
         try {
             reader = DirectoryReader.open(indexDir);
         } catch (IOException e) {
@@ -142,10 +142,10 @@ public class LuceneWorkflowInstanceRepository extends
                             + "] for search: Message: " + e.getMessage());
             throw new InstanceRepositoryException(e.getMessage());
         } finally {
-            if (searcher != null) {
+            if (reader != null) {
                 try {
-                    //TODO Shutdown searcher
-                } catch (Exception ignore) {
+                    reader.close();
+                } catch (IOException ignore) {
                 }
             }
         }
@@ -162,6 +162,7 @@ public class LuceneWorkflowInstanceRepository extends
             throws InstanceRepositoryException {
         IndexSearcher searcher = null;
         int numInsts = -1;
+        DirectoryReader reader = null;
         try {
             reader = DirectoryReader.open(indexDir);
         } catch (IOException e) {
@@ -185,10 +186,10 @@ public class LuceneWorkflowInstanceRepository extends
                             + "] for search: Message: " + e.getMessage());
             throw new InstanceRepositoryException(e.getMessage());
         } finally {
-            if (searcher != null) {
+            if (reader != null) {
                 try {
-                    //TODO Shutdown searcher
-                } catch (Exception ignore) {
+                    reader.close();
+                } catch (IOException ignore) {
                 }
             }
         }
@@ -251,6 +252,7 @@ public class LuceneWorkflowInstanceRepository extends
             throws InstanceRepositoryException {
         IndexSearcher searcher = null;
         WorkflowInstance wInst = null;
+        DirectoryReader reader = null;
         try {
             reader = DirectoryReader.open(indexDir);
         } catch (IOException e) {
@@ -286,10 +288,10 @@ public class LuceneWorkflowInstanceRepository extends
                             + "] for search: Message: " + e.getMessage());
             throw new InstanceRepositoryException(e.getMessage());
         } finally {
-            if (searcher != null) {
+            if (reader != null) {
                 try {
-                    //TODO Shutdown searcher
-                } catch (Exception ignore) {
+                    reader.close();
+                } catch (IOException ignore) {
                 }
             }
         }
@@ -309,6 +311,7 @@ public class LuceneWorkflowInstanceRepository extends
         // which cannot write a null array, so the workflow-filtered instances
         // call failed where the unfiltered one returned an empty page.
         List wInsts = new Vector();
+        DirectoryReader reader = null;
         try {
             reader = DirectoryReader.open(indexDir);
         } catch (IOException e) {
@@ -347,10 +350,10 @@ public class LuceneWorkflowInstanceRepository extends
                             + "] for search: Message: " + e.getMessage());
             throw new InstanceRepositoryException(e.getMessage());
         } finally {
-            if (searcher != null) {
+            if (reader != null) {
                 try {
-                    //TODO Shutdown searcher
-                } catch (Exception ignore) {
+                    reader.close();
+                } catch (IOException ignore) {
                 }
             }
         }
@@ -424,6 +427,7 @@ public class LuceneWorkflowInstanceRepository extends
             throws InstanceRepositoryException {
         IndexSearcher searcher;
         List wInsts = new Vector();
+        DirectoryReader reader = null;
         try {
             reader = DirectoryReader.open(indexDir);
         } catch (IOException e) {
@@ -484,6 +488,7 @@ public class LuceneWorkflowInstanceRepository extends
         // The interface promises a List, and the Memory and DataSource
         // repositories both return an empty one when nothing matches.
         List wInsts = new Vector();
+        DirectoryReader reader = null;
         try {
             reader = DirectoryReader.open(indexDir);
         } catch (IOException e) {
@@ -520,10 +525,10 @@ public class LuceneWorkflowInstanceRepository extends
                             + "] for search: Message: " + e.getMessage());
             throw new InstanceRepositoryException(e.getMessage());
         } finally {
-            if (searcher != null) {
+            if (reader != null) {
                 try {
-                    //TODO Shutdown searcher
-                } catch (Exception ignore) {
+                    reader.close();
+                } catch (IOException ignore) {
                 }
             }
         }
@@ -541,6 +546,7 @@ public class LuceneWorkflowInstanceRepository extends
             throws InstanceRepositoryException {
         List instIds = null;
         IndexSearcher searcher = null;
+        DirectoryReader reader = null;
         try {
             reader = DirectoryReader.open(indexDir);
         } catch (IOException e) {
@@ -604,10 +610,10 @@ public class LuceneWorkflowInstanceRepository extends
                             + "] for search: Message: " + e.getMessage());
             throw new InstanceRepositoryException(e.getMessage());
         } finally {
-            if (searcher != null) {
+            if (reader != null) {
                 try {
-                    //TODO Shutdown searcher
-                } catch (Exception ignore) {
+                    reader.close();
+                } catch (IOException ignore) {
                 }
             }
         }
@@ -617,14 +623,16 @@ public class LuceneWorkflowInstanceRepository extends
 
     private synchronized void removeWorkflowInstanceDocument(
             WorkflowInstance inst) throws InstanceRepositoryException {
-        IndexReader reader = null;
+        // One reader, opened once. This opened one into a local and a second
+        // into the field, and closed whichever the field held, so every call
+        // left one behind.
+        DirectoryReader reader = null;
         try {
             reader = DirectoryReader.open(indexDir);
         } catch (IOException e) {
             e.printStackTrace();
         }
         try {
-            reader = DirectoryReader.open(indexDir);
             IndexWriterConfig config = new IndexWriterConfig(new StandardAnalyzer());
 
             config.setOpenMode(IndexWriterConfig.OpenMode.CREATE_OR_APPEND);
@@ -1031,15 +1039,13 @@ public class LuceneWorkflowInstanceRepository extends
 
 
     /**
-     * Close the index directory, and whatever reader is open on it.
+     * Close the index directory.
      *
      * <p>
      * The directory is opened once, in the constructor, and held for the life
      * of this repository: an FSDirectory is a handle on the index, and until
      * it is closed the process is still using that directory as far as the
-     * operating system is concerned. Readers are opened per query onto the
-     * same field, so at most one is outstanding here, and it is the last one
-     * opened.
+     * operating system is concerned.
      * </p>
      *
      * <p>
@@ -1050,15 +1056,9 @@ public class LuceneWorkflowInstanceRepository extends
      */
     @Override
     public void release() {
-        if (reader != null) {
-            try {
-                reader.close();
-            } catch (IOException e) {
-                LOG.log(Level.WARNING, "Unable to close the index reader at ["
-                    + idxFilePath + "]: " + e.getMessage());
-            }
-            reader = null;
-        }
+        // Only the directory. Readers belong to the call that opened them and
+        // are closed before it returns, so there is never one outstanding for
+        // this to find.
         if (indexDir != null) {
             try {
                 indexDir.close();
