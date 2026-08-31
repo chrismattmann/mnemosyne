@@ -135,6 +135,12 @@ public interface WorkflowManagerClient extends Closeable, Serializable {
     java.util.List getExecutingWorkflowInstanceIds()
             throws Exception;
 
+    /**
+     * Statuses the manager's engine can report, from its lifecycle.
+     */
+    java.util.List getSupportedWorkflowStatuses()
+            throws Exception;
+
     URL getWorkflowManagerUrl();
 
     boolean isAlive();

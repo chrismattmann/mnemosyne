@@ -26,6 +26,7 @@ import org.apache.oodt.cas.workflow.engine.runner.EngineRunner;
 import org.apache.oodt.cas.workflow.instrepo.WorkflowInstanceRepository;
 import org.apache.oodt.cas.workflow.lifecycle.WorkflowLifecycle;
 import org.apache.oodt.cas.workflow.lifecycle.WorkflowLifecycleManager;
+import org.apache.oodt.cas.workflow.lifecycle.WorkflowLifecycleStage;
 import org.apache.oodt.cas.workflow.lifecycle.WorkflowState;
 import org.apache.oodt.cas.workflow.repository.WorkflowRepository;
 import org.apache.oodt.cas.workflow.structs.HighestFIFOPrioritySorter;
@@ -39,6 +40,8 @@ import org.apache.oodt.cas.workflow.structs.exceptions.InstanceRepositoryExcepti
 
 import java.net.URL;
 import java.util.Calendar;
+import java.util.List;
+import java.util.Vector;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -121,6 +124,40 @@ public class PrioritizedQueueBasedWorkflowEngine implements WorkflowEngine {
    */
   public WorkflowRepository getWorkflowRepository() {
     return this.modelRepo;
+  }
+
+  /**
+   * The statuses this engine's lifecycle declares, in the order the lifecycle
+   * lists them, so a reader is offered stages before the states inside them.
+   *
+   * <p>
+   * Duplicates are dropped: a status can appear in more than one lifecycle,
+   * and a filter wants it once.
+   * </p>
+   */
+  @Override
+  public List<String> getSupportedStatuses() {
+    List<String> statuses = new Vector<String>();
+    if (this.lifecycle == null) {
+      return statuses;
+    }
+    WorkflowLifecycle cycle = this.lifecycle.getDefaultLifecycle();
+    if (cycle == null) {
+      return statuses;
+    }
+    for (Object o : cycle.getStages()) {
+      WorkflowLifecycleStage stage = (WorkflowLifecycleStage) o;
+      if (stage.getStates() == null) {
+        continue;
+      }
+      for (Object s : stage.getStates()) {
+        String name = ((WorkflowState) s).getName();
+        if (name != null && !name.equals("") && !statuses.contains(name)) {
+          statuses.add(name);
+        }
+      }
+    }
+    return statuses;
   }
 
   /*

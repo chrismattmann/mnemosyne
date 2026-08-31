@@ -25,7 +25,7 @@
         <label>
           Status
           <select :value="status" @change="$emit('status', $event.target.value)">
-            <option v-for="item in statuses" :key="item" :value="item">{{ item }}</option>
+            <option v-for="item in statusList" :key="item" :value="item">{{ item }}</option>
           </select>
         </label>
         <label>
@@ -106,9 +106,13 @@ import SortHead from './SortHead.vue'
 import { formatWallClock, parseStamp, sortRows, toggleSort, wallClockMs } from '../sort.js'
 import { instanceMatches, workflowFilterOptions } from '../instanceFilter.js'
 import { instanceAbandoned, instanceLive } from '../workflowGraph.js'
+import { statusOptions } from '../statusOptions.js'
 
-const STATUSES = [
-  'ALL', 'QUEUED', 'RSUBMIT', 'BUILDING CONFIG FILE', 'PGE EXEC', 'CRAWLING',
+// Only for a workflow manager too old to be asked what its lifecycle
+// declares. A deployment's own statuses are used when it reports them; see
+// statusOptions.
+const BUILT_IN_STATUSES = [
+  'QUEUED', 'RSUBMIT', 'BUILDING CONFIG FILE', 'PGE EXEC', 'CRAWLING',
   'STAGING INPUT', 'FINISHED', 'STARTED', 'PAUSED', 'Executing', 'Success',
   'Failure', 'Stopped', 'Loaded', 'Blocked'
 ]
@@ -119,6 +123,9 @@ export default {
   props: {
     payload: { type: Object, default: null },
     status: { type: String, default: 'ALL' },
+    // What the deployment's lifecycle declares. Empty means it could not be
+    // asked, and the built-in list is used instead.
+    statuses: { type: Array, default: () => [] },
     workflow: { type: String, default: '' },
     since: { type: String, default: '' },
     workflows: { type: Array, default: () => [] },
@@ -171,12 +178,17 @@ export default {
       return sortRows(filtered.value, getters[sort.value] || getters.workflow, dir.value)
     })
     const workflowOptions = computed(() => workflowFilterOptions(instances.value, props.workflows))
-    const statuses = computed(() => {
+    // Named statusList because the reported statuses arrive as a prop called
+    // statuses; this is what the filter actually offers.
+    const statusList = computed(() => {
+      const options = statusOptions(props.statuses, BUILT_IN_STATUSES)
       const current = props.status
-      if (current && STATUSES.indexOf(current) === -1) {
-        return [current].concat(STATUSES)
+      // A status already being filtered on stays selectable even if the
+      // lifecycle does not name it -- a link can arrive with one.
+      if (current && options.indexOf(current) === -1) {
+        return [current].concat(options)
       }
-      return STATUSES
+      return options
     })
 
     function shouldTick(inst) {
@@ -216,7 +228,7 @@ export default {
     }
 
     return {
-      statuses,
+      statusList,
       instances,
       rows,
       workflowOptions,

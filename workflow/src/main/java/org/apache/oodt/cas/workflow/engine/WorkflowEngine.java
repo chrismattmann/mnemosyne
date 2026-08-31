@@ -203,4 +203,21 @@ public interface WorkflowEngine {
         return java.util.Collections.emptyList();
     }
 
+    /**
+     * The statuses an instance of this engine can be in, from its lifecycle.
+     *
+     * <p>
+     * A reader filtering instances by status has to be offered the statuses
+     * this engine actually produces. A list written into a client is a list
+     * for whichever engine the author had in mind: on the other one it offers
+     * states that never occur and omits the ones that do, and a status that
+     * differs only in case silently matches nothing.
+     * </p>
+     *
+     * @return the statuses, in lifecycle order, or empty if none are declared
+     */
+    default java.util.List<String> getSupportedStatuses() {
+        return java.util.Collections.emptyList();
+    }
+
 }
