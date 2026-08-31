@@ -13,4 +13,8 @@ test('instancesQuery omits empty filters', () => {
   assert.equal(instancesQuery('', ''), '')
   assert.equal(instancesQuery('SplitWorkflow', ''), '?workflow=SplitWorkflow')
   assert.equal(instancesQuery('SplitWorkflow', '2026-08-27'), '?workflow=SplitWorkflow&since=2026-08-27')
+  assert.equal(instancesQuery('', '', 'wall', 'desc'), '?sort=wall&dir=desc')
+  assert.equal(instancesQuery('', '', 'start'), '?sort=start&dir=asc')
+  // A direction alone would order nothing; it stays out of the link.
+  assert.equal(instancesQuery('', '', '', 'desc'), '')
 })

@@ -29,13 +29,18 @@ export function splitHash(raw) {
   return { path: value.slice(0, q), query: query }
 }
 
-export function instancesQuery(workflow, since) {
+export function instancesQuery(workflow, since, sort, dir) {
   const params = new URLSearchParams()
   if (workflow) {
     params.set('workflow', workflow)
   }
   if (since) {
     params.set('since', since)
+  }
+  // In the hash so a sorted view is a link someone can send.
+  if (sort) {
+    params.set('sort', sort)
+    params.set('dir', dir === 'desc' ? 'desc' : 'asc')
   }
   const encoded = params.toString()
   return encoded ? '?' + encoded : ''

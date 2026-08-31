@@ -79,12 +79,16 @@ export function getPedigree(filename) {
   return fetch(`${services()}/pedigree/report/${encodeURIComponent(filename)}`).then(readJson)
 }
 
-export function getInstances(status, page, workflow) {
+export function getInstances(status, page, workflow, sort, dir) {
   const params = new URLSearchParams()
   params.set('status', status || 'ALL')
   params.set('page', String(page || 1))
   if (workflow) {
     params.set('workflow', workflow)
+  }
+  if (sort) {
+    params.set('sort', sort)
+    params.set('dir', dir === 'desc' ? 'desc' : 'asc')
   }
   return fetch(`${services()}/workflow/instances?${params}`).then(readJson)
 }

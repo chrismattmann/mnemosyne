@@ -24,20 +24,20 @@ test('a workflow filter travels with the request', () => {
   // happens afterwards, on whatever that page happened to contain.
   assert.deepEqual(
     instancesRequest({ view: 'instances', workflow: 'urn:drat:PartitionPhase' }),
-    { status: 'ALL', page: 1, workflow: 'urn:drat:PartitionPhase' }
+    { status: 'ALL', page: 1, workflow: 'urn:drat:PartitionPhase', sort: '', dir: '' }
   )
 })
 
 test('status and page travel too', () => {
   assert.deepEqual(
     instancesRequest({ status: 'Success', page: 3, workflow: 'urn:x:Y' }),
-    { status: 'Success', page: 3, workflow: 'urn:x:Y' }
+    { status: 'Success', page: 3, workflow: 'urn:x:Y', sort: '', dir: '' }
   )
 })
 
 test('no filter asks for everything', () => {
   assert.deepEqual(instancesRequest({ view: 'instances' }),
-    { status: 'ALL', page: 1, workflow: '' })
+    { status: 'ALL', page: 1, workflow: '', sort: '', dir: '' })
 })
 
 test('a missing or nonsense page is the first one', () => {
@@ -53,5 +53,28 @@ test('a page arriving as a string is still a page', () => {
 
 test('no route at all is survivable', () => {
   assert.deepEqual(instancesRequest(null),
-    { status: 'ALL', page: 1, workflow: '' })
+    { status: 'ALL', page: 1, workflow: '', sort: '', dir: '' })
+})
+
+test('a sort travels with the request', () => {
+  // Sorting the page after it arrives orders the twenty rows that happened
+  // to come back, so the longest wall clock in the deployment stays hidden
+  // on some other page.
+  assert.deepEqual(
+    instancesRequest({ view: 'instances', sort: 'wall', dir: 'desc' }),
+    { status: 'ALL', page: 1, workflow: '', sort: 'wall', dir: 'desc' }
+  )
+})
+
+test('a sort with no direction is ascending', () => {
+  const ask = instancesRequest({ sort: 'start' })
+  assert.equal(ask.dir, 'asc')
+})
+
+test('a nonsense direction is ascending', () => {
+  assert.equal(instancesRequest({ sort: 'start', dir: 'sideways' }).dir, 'asc')
+})
+
+test('a direction with no column to point at is not sent', () => {
+  assert.equal(instancesRequest({ dir: 'desc' }).dir, '')
 })
