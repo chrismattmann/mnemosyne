@@ -168,10 +168,10 @@ public class WorkflowResource extends PCSService {
    *
    * <p>
    * The manager pages but cannot order, so ordering means reading the set and
-   * arranging it here. That is the same shape the workflow filter already
-   * uses, and it carries the same admission: past RECENT_INSTANCE_LIMIT the
-   * answer is over a capped set, and the response says so rather than
-   * implying the order is global.
+   * arranging it here. Every ordered instance is then pageable: a sort
+   * rearranges the table, it does not shorten it, so the page count is the
+   * one the unordered view shows and the last page holds the same instances,
+   * at the other end of the order.
    * </p>
    */
   private String orderedInstances(WorkflowManagerClient client, String status,
@@ -198,20 +198,13 @@ public class WorkflowResource extends PCSService {
       }
     }
 
-    boolean truncated = matched.size() > RECENT_INSTANCE_LIMIT;
-
     Set executing = executingIds(client);
     List<Map<String, Object>> encoded = new ArrayList<Map<String, Object>>();
     for (int i = 0; i < matched.size(); i++) {
       encoded.add(encodeInstance(matched.get(i), executing));
     }
-    // Ordered before the cap, so a capped answer is still the top of the
-    // whole set rather than the top of an arbitrary slice of it.
     Collections.sort(encoded,
         InstanceOrder.by(sort, dir, System.currentTimeMillis()));
-    if (truncated) {
-      encoded = encoded.subList(0, RECENT_INSTANCE_LIMIT);
-    }
 
     int totalPages = (encoded.size() + ORDERED_PAGE_SIZE - 1)
         / ORDERED_PAGE_SIZE;
@@ -237,12 +230,11 @@ public class WorkflowResource extends PCSService {
     body.put("page", Integer.valueOf(pageNum));
     body.put("totalPages", Integer.valueOf(totalPages));
     body.put("pageSize", Integer.valueOf(page.size()));
-    // What the order was taken over, and what survived the cap. A view that
-    // says "top by wall clock" while holding a slice should be able to say
-    // which slice.
+    // What the order was taken over. Everything ordered is reachable, so
+    // this is also what the pages add up to.
     body.put("total", Integer.valueOf(matched.size()));
     body.put("shown", Integer.valueOf(encoded.size()));
-    body.put("truncated", Boolean.valueOf(truncated));
+    body.put("truncated", Boolean.FALSE);
     body.put("instances", page);
     JSONObject response = new JSONObject();
     response.put("page", body);
@@ -281,6 +273,7 @@ public class WorkflowResource extends PCSService {
       }
     }
     Collections.sort(matched, START_DESC);
+    int total = matched.size();
     boolean truncated = matched.size() > RECENT_INSTANCE_LIMIT;
     if (truncated) {
       matched = matched.subList(0, RECENT_INSTANCE_LIMIT);
@@ -296,6 +289,10 @@ public class WorkflowResource extends PCSService {
     body.put("page", Integer.valueOf(1));
     body.put("totalPages", Integer.valueOf(1));
     body.put("pageSize", Integer.valueOf(insts.size()));
+    // This path really does cap, so it says what it cut and what it kept --
+    // the view renders the difference rather than leaving it to be guessed.
+    body.put("total", Integer.valueOf(total));
+    body.put("shown", Integer.valueOf(insts.size()));
     body.put("truncated", Boolean.valueOf(truncated));
     body.put("instances", insts);
     JSONObject response = new JSONObject();
