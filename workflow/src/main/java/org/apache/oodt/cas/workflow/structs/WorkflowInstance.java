@@ -151,7 +151,11 @@ public class WorkflowInstance {
   public void setStatus(String status) {
     WorkflowState state = new WorkflowState();
     state.setName(status);
-    this.state = state;
+    // Through setState, so there is one way for this instance's state to
+    // change. Assigning the field directly meant a status set by name
+    // skipped whatever setState does -- recording when the instance
+    // finished, for one -- and the two paths drifted apart silently.
+    setState(state);
     logger.debug("Workflow state updated to: {}", state.getName());
   }
 
