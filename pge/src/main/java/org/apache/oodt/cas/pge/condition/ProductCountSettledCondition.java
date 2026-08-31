@@ -196,6 +196,37 @@ public class ProductCountSettledCondition implements WorkflowConditionInstance {
    *
    * @return the age in seconds, or -1 if it could not be determined
    */
+  /**
+   * When a product arrived.
+   *
+   * <p>
+   * The file manager records this as CAS.ProductReceivedTime in the
+   * product's metadata, which is where every catalog puts it and where the
+   * rest of the platform reads it from. Product.getProductReceivedTime() is
+   * a field on the struct that only the Solr catalog ever fills, so asking
+   * it first meant this condition could not tell the time under a Lucene or
+   * a database catalog: it logged that the newest product carried no receive
+   * time, returned -1 on every evaluation, and the gate it guards never
+   * opened. The struct is still consulted, second, for the catalog that does
+   * set it.
+   * </p>
+   */
+  protected String receivedTimeOf(FileManagerClient client, Product product) {
+    try {
+      Metadata met = client.getMetadata(product);
+      if (met != null) {
+        String received = met.getMetadata("CAS.ProductReceivedTime");
+        if (received != null && received.trim().length() > 0) {
+          return received;
+        }
+      }
+    } catch (Exception e) {
+      LOG.log(Level.WARNING, "Unable to read metadata for ["
+          + product.getProductName() + "]: " + e.getMessage());
+    }
+    return product.getProductReceivedTime();
+  }
+
   protected long secondsSinceNewest(String urlStr, String typeName) {
     FileManagerClient client = null;
     try {
@@ -208,7 +239,7 @@ public class ProductCountSettledCondition implements WorkflowConditionInstance {
       if (newest == null || newest.isEmpty()) {
         return -1;
       }
-      String received = newest.get(0).getProductReceivedTime();
+      String received = receivedTimeOf(client, newest.get(0));
       if (received == null || received.trim().length() == 0) {
         // Ingested without a receive time. Nothing to measure against, and
         // guessing "long ago" would open the gate on no evidence.
