@@ -253,6 +253,12 @@ public class AvroTypeFactory {
         if (product.getProductStructure() != null)
             avroProduct.setProductStructure(product.getProductStructure());
 
+        // The catalog knows when a product arrived; without this the answer
+        // survived only as far as the first RPC call. A condition that waits
+        // for a producer to go quiet asks exactly this, and got nothing.
+        if (product.getProductReceivedTime() != null)
+            avroProduct.setProductReceivedTime(product.getProductReceivedTime());
+
         //referince
         List<Reference> references = product.getProductReferences();
         if (references != null){
@@ -281,6 +287,9 @@ public class AvroTypeFactory {
         if (avroPoduct.getReferences() != null)
             product.setProductReferences(getReferences(avroPoduct.getReferences()));
         product.setProductId(avroPoduct.getProductId());
+        // setProductRecievedTime, with the typo it has always had.
+        if (avroPoduct.getProductReceivedTime() != null)
+            product.setProductRecievedTime(avroPoduct.getProductReceivedTime());
         if (avroPoduct.getRootRef() != null)
             product.setRootRef(getReference(avroPoduct.getRootRef()));
         return product;

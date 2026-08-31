@@ -11,6 +11,7 @@
     {"name":"productStructure","type":["null","string"]},
     {"name":"references","type":[{"type":"array","items":"AvroReference"},"null"]},
     {"name":"transferStatus","type":["null","string"]},
-    {"name":"rootRef","type":["null","AvroReference"]}
+    {"name":"rootRef","type":["null","AvroReference"]},
+    {"name":"productReceivedTime","type":["null","string"],"default":null}
   ]
 }
