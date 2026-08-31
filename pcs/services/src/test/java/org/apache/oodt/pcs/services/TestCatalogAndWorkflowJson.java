@@ -16,6 +16,9 @@
  */
 package org.apache.oodt.pcs.services;
 
+import java.io.File;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
@@ -388,6 +391,27 @@ public class TestCatalogAndWorkflowJson extends TestCase {
     assertEquals("32", props.get("TranslateBatchSize"));
     assertEquals("Filename", ((List<?>) row.get("requiredMetFields")).get(0));
     assertEquals("urn:bt:Ready", ((Map<?, ?>) ((List<?>) row.get("preConditions")).get(0)).get("id"));
+    assertNull(row.get("pgeConfig"));
+  }
+
+  public void testEncodeTaskPeeksPgeConfig() throws Exception {
+    File xml = File.createTempFile("pge-encode-", ".xml");
+    xml.deleteOnExit();
+    Files.write(xml.toPath(),
+        ("<pgeConfig><exe shell=\"/bin/bash\"><cmd>index-imagespace-fgbg.sh</cmd></exe></pgeConfig>")
+            .getBytes(StandardCharsets.UTF_8));
+    WorkflowTaskConfiguration config = new WorkflowTaskConfiguration();
+    config.addConfigProperty("PGETask_ConfigFilePath", xml.getAbsolutePath());
+    WorkflowTask task = new WorkflowTask();
+    task.setTaskId("urn:memex:IndexImageSpaceFgBg");
+    task.setTaskName("IndexImageSpaceFgBg");
+    task.setTaskInstanceClassName("org.apache.oodt.cas.pge.StdPGETaskInstance");
+    task.setTaskConfig(config);
+    Map<String, Object> row = WorkflowResource.encodeTask(task);
+    Map<?, ?> pge = (Map<?, ?>) row.get("pgeConfig");
+    assertEquals(xml.getAbsolutePath(), pge.get("path"));
+    assertEquals("/bin/bash", pge.get("shell"));
+    assertEquals("index-imagespace-fgbg.sh", ((List<?>) pge.get("commands")).get(0));
   }
 
   public void testPedigreeSkipsUnknownPlaceholders() {

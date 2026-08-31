@@ -507,7 +507,16 @@ public class WorkflowResource extends PCSService {
     row.put("id", nullToEmpty(task.getTaskId()));
     row.put("name", nullToEmpty(task.getTaskName()));
     row.put("className", nullToEmpty(task.getTaskInstanceClassName()));
-    row.put("properties", encodeTaskProperties(task.getTaskConfig()));
+    Map<String, String> properties = encodeTaskProperties(task.getTaskConfig());
+    row.put("properties", properties);
+    // StdPGETaskInstance (and any task that names a PgeConfig.xml) already
+    // lists PGETask_ConfigFilePath in properties. Peek that file here so the
+    // task page can show the <cmd> lines the engine will run, the way product
+    // Peek shows the first bytes of a file.
+    Map<String, Object> pgeConfig = PgeConfigPeek.of(properties);
+    if (pgeConfig != null) {
+      row.put("pgeConfig", pgeConfig);
+    }
     row.put("requiredMetFields", encodeStringList(task.getRequiredMetFields()));
     row.put("preConditions", encodeConditionList(task.getPreConditions()));
     row.put("postConditions", encodeConditionList(task.getPostConditions()));
