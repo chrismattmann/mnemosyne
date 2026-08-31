@@ -85,6 +85,23 @@ public class TestDataSourceRepositoryRelease extends TestCase {
     holdsNothing.release();
   }
 
+  /**
+   * The Lucene repository holds an index directory from the moment it is
+   * built, and a reader on it from the first query. Both are handles on the
+   * index that outlive every call that opened them.
+   */
+  public void testLuceneReleaseClosesTheIndex() throws Exception {
+    File dir = Files.createTempDirectory("winst-lucene").toFile();
+    LuceneWorkflowInstanceRepository repo =
+        new LuceneWorkflowInstanceRepository(dir.getAbsolutePath(), 20);
+
+    repo.release();
+
+    // Closed twice is the shape a shutdown can actually take, since nothing
+    // stops a manager being told to stop more than once.
+    repo.release();
+  }
+
   private DataSourceWorkflowInstanceRepository repository() {
     DataSource ds = DatabaseConnectionBuilder.buildDataSource("sa", "",
         "org.hsqldb.jdbc.JDBCDriver", url);

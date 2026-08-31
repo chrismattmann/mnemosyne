@@ -1029,4 +1029,44 @@ public class LuceneWorkflowInstanceRepository extends
         return condList;
     }
 
+
+    /**
+     * Close the index directory, and whatever reader is open on it.
+     *
+     * <p>
+     * The directory is opened once, in the constructor, and held for the life
+     * of this repository: an FSDirectory is a handle on the index, and until
+     * it is closed the process is still using that directory as far as the
+     * operating system is concerned. Readers are opened per query onto the
+     * same field, so at most one is outstanding here, and it is the last one
+     * opened.
+     * </p>
+     *
+     * <p>
+     * Same reason as the database repository's: whatever a repository keeps
+     * open, it keeps for as long as the process lives unless something says
+     * otherwise, and the manager's shutdown is the moment to say it.
+     * </p>
+     */
+    @Override
+    public void release() {
+        if (reader != null) {
+            try {
+                reader.close();
+            } catch (IOException e) {
+                LOG.log(Level.WARNING, "Unable to close the index reader at ["
+                    + idxFilePath + "]: " + e.getMessage());
+            }
+            reader = null;
+        }
+        if (indexDir != null) {
+            try {
+                indexDir.close();
+            } catch (IOException e) {
+                LOG.log(Level.WARNING, "Unable to close the index directory ["
+                    + idxFilePath + "]: " + e.getMessage());
+            }
+            indexDir = null;
+        }
+    }
 }
