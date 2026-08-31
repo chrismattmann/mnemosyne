@@ -130,8 +130,14 @@ public class TaskQuerier implements Runnable {
             + processor.getWorkflowInstance().getId() + "]: state: "
             + processor.getWorkflowInstance().getState());
 
+        // A task that is executing must not be handed out again. A workflow
+        // that is executing is a different thing: it is not the work, it is
+        // what gives the queue its next child, and it now reports Executing
+        // while those children run. Excluding it here would stop a sequential
+        // workflow after its first task.
         if (!processor.isAnyCategory("done", "holding")
-            && !processor.isAnyState("Executing")
+            && !(processor instanceof TaskProcessor
+                 && processor.isAnyState("Executing"))
             && processor.getRunnableWorkflowProcessors().size() > 0) {
           for (TaskProcessor tp : processor.getRunnableWorkflowProcessors()) {
             WorkflowState state = lifecycle.createState("WaitingOnResources",
