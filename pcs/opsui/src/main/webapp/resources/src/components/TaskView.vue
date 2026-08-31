@@ -45,6 +45,19 @@
       </table>
     </article>
 
+    <article v-if="pgeConfig" class="card">
+      <h3>PGE script</h3>
+      <p class="muted break">{{ pgeConfig.path }}</p>
+      <p v-if="pgeMeta" class="muted">{{ pgeMeta }}</p>
+      <p v-if="pgeConfig.error" class="muted">{{ pgeConfig.error }}</p>
+      <pre v-else-if="pgeCommands" class="peek">{{ pgeCommands }}</pre>
+      <p v-else class="empty">No &lt;cmd&gt; elements in this PgeConfig.xml.</p>
+      <details v-if="pgeConfig.xml" class="xml">
+        <summary>PgeConfig.xml</summary>
+        <pre class="peek">{{ pgeConfig.xml }}</pre>
+      </details>
+    </article>
+
     <article v-if="required.length" class="card">
       <h3>Required metadata</h3>
       <ul>
@@ -90,12 +103,31 @@ export default {
     const properties = computed(() => task.value.properties || {})
     const propKeys = computed(() => Object.keys(properties.value))
     const required = computed(() => task.value.requiredMetFields || [])
+    const pgeConfig = computed(() => task.value.pgeConfig || null)
+    const pgeCommands = computed(() => {
+      const cmds = pgeConfig.value && pgeConfig.value.commands
+      return Array.isArray(cmds) ? cmds.join('\n') : ''
+    })
+    const pgeMeta = computed(() => {
+      const cfg = pgeConfig.value
+      if (!cfg) {
+        return ''
+      }
+      const parts = []
+      if (cfg.shell) {
+        parts.push('shell ' + cfg.shell)
+      }
+      if (cfg.dir) {
+        parts.push('dir ' + cfg.dir)
+      }
+      return parts.join(' · ')
+    })
     const conditions = computed(() => {
       const pre = (task.value.preConditions || []).map((c) => Object.assign({ phase: 'Pre' }, c))
       const post = (task.value.postConditions || []).map((c) => Object.assign({ phase: 'Post' }, c))
       return pre.concat(post)
     })
-    return { task, properties, propKeys, required, conditions }
+    return { task, properties, propKeys, required, pgeConfig, pgeCommands, pgeMeta, conditions }
   }
 }
 </script>
@@ -129,5 +161,32 @@ th {
 ul {
   margin: 0;
   padding-left: 1.2rem;
+}
+
+.peek {
+  margin: 0;
+  max-height: 16rem;
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.78rem;
+  white-space: pre-wrap;
+  word-break: break-all;
+  background: #f5f0ea;
+  padding: 0.7rem 0.8rem;
+  border-radius: 4px;
+}
+
+.xml {
+  margin-top: 0.7rem;
+}
+
+.xml summary {
+  cursor: pointer;
+  color: var(--copper);
+  font-size: 0.9rem;
+}
+
+.xml .peek {
+  margin-top: 0.5rem;
 }
 </style>
