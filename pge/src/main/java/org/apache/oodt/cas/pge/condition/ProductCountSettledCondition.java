@@ -45,11 +45,18 @@ import java.util.logging.Logger;
  *
  * <p>
  * So this waits for two things in order: at least {@code MinCount} products
- * of {@code ProductTypeName} to exist, and then for the newest of them to
- * have been ingested at least {@code QuietSeconds} ago. The first stops the
- * reduce running against an empty catalog; the second stops it running
- * against a half-finished one. Both matter -- an empty catalog is also
- * perfectly quiet.
+ * of {@code ProductTypeName} to exist, and then the count to stop changing
+ * for {@code QuietSeconds}. The first stops the reduce running against an
+ * empty catalog; the second stops it running against a half-finished one.
+ * Both matter -- an empty catalog is also perfectly still.
+ * </p>
+ *
+ * <p>
+ * Only the count is read, because it is the only thing that can be relied on
+ * here: the file manager client returns products from
+ * {@code getTopNProducts} with a null receive time, so a gate built on when
+ * the newest arrived waits for ever against a catalog that finished long
+ * ago.
  * </p>
  *
  * <p>
@@ -134,15 +141,35 @@ public class ProductCountSettledCondition implements WorkflowConditionInstance {
     long maxWaitSeconds = intProperty(config, MAX_WAIT_SECONDS,
         DEFAULT_MAX_WAIT_SECONDS);
 
-    long gaveUpAt = now() + (maxWaitSeconds * 1000L);
+    long startedAt = now();
+    long gaveUpAt = startedAt + (maxWaitSeconds * 1000L);
+    // What the count was when it last changed, and when that was. Local to
+    // this call: waiting is what makes the comparison possible without
+    // remembering anything between evaluations.
+    int lastCount = -1;
+    long lastChangedAt = startedAt;
+
     while (true) {
-      if (settled(urlStr, typeName, minCount, quietSeconds)) {
-        return true;
+      int count = countProducts(urlStr, typeName);
+
+      if (count >= 0 && count != lastCount) {
+        lastCount = count;
+        lastChangedAt = now();
       }
+
+      if (count >= minCount) {
+        long quietFor = (now() - lastChangedAt) / 1000L;
+        if (quietFor >= quietSeconds) {
+          LOG.log(Level.FINE, "[" + typeName + "] settled at " + count
+              + " after " + quietFor + "s unchanged");
+          return true;
+        }
+      }
+
       if (now() >= gaveUpAt) {
-        LOG.log(Level.WARNING, "[" + typeName + "] had not gone quiet for "
-            + quietSeconds + "s within " + maxWaitSeconds
-            + "s; the producer has not finished");
+        LOG.log(Level.WARNING, "[" + typeName + "] was still at " + count
+            + " and had not held still for " + quietSeconds + "s within "
+            + maxWaitSeconds + "s; the producer has not finished");
         return false;
       }
       if (!pause(pollSeconds)) {
@@ -151,22 +178,6 @@ public class ProductCountSettledCondition implements WorkflowConditionInstance {
         return false;
       }
     }
-  }
-
-  /** Whether the producer looks finished right now. */
-  private boolean settled(String urlStr, String typeName, int minCount,
-      long quietSeconds) {
-    int count = countProducts(urlStr, typeName);
-    if (count < 0 || count < minCount) {
-      return false;
-    }
-    long quietFor = secondsSinceNewest(urlStr, typeName);
-    if (quietFor < 0) {
-      return false;
-    }
-    LOG.log(Level.FINE, "[" + typeName + "] at " + count + ", newest "
-        + quietFor + "s ago, needs " + quietSeconds);
-    return quietFor >= quietSeconds;
   }
 
   /** Overridable so a test does not have to sleep. */
@@ -183,61 +194,6 @@ public class ProductCountSettledCondition implements WorkflowConditionInstance {
   /** Overridable so a test can move time without waiting for it. */
   protected long now() {
     return System.currentTimeMillis();
-  }
-
-  /**
-   * Seconds since the newest product of the type was received.
-   *
-   * <p>
-   * Overridable for the same reason as the count: the decision is about
-   * elapsed time, which is worth testing without a catalog to put products
-   * in.
-   * </p>
-   *
-   * @return the age in seconds, or -1 if it could not be determined
-   */
-  protected long secondsSinceNewest(String urlStr, String typeName) {
-    FileManagerClient client = null;
-    try {
-      client = RpcCommunicationFactory.createClient(new URL(urlStr));
-      ProductType type = client.getProductTypeByName(typeName);
-      if (type == null) {
-        return -1;
-      }
-      List<Product> newest = client.getTopNProducts(1, type);
-      if (newest == null || newest.isEmpty()) {
-        return -1;
-      }
-      String received = newest.get(0).getProductReceivedTime();
-      if (received == null || received.trim().length() == 0) {
-        // Ingested without a receive time. Nothing to measure against, and
-        // guessing "long ago" would open the gate on no evidence.
-        LOG.log(Level.WARNING, "Newest [" + typeName + "] carries no receive"
-            + " time; cannot tell whether the producer has finished");
-        return -1;
-      }
-      Date when = DateConvert.isoParse(received.trim());
-      long seconds = (System.currentTimeMillis() - when.getTime()) / 1000L;
-      // A clock skew between this process and whatever ingested is not a
-      // reason to declare the producer finished.
-      return seconds < 0 ? 0 : seconds;
-    } catch (Exception e) {
-      LOG.log(Level.WARNING, "Unable to read the newest [" + typeName
-          + "] at [" + urlStr + "]: " + e.getMessage());
-      return -1;
-    } finally {
-      closeQuietly(client);
-    }
-  }
-
-  private void closeQuietly(FileManagerClient client) {
-    if (client != null) {
-      try {
-        client.close();
-      } catch (Exception ignored) {
-        // nothing useful to do about a client that will not close
-      }
-    }
   }
 
   /**

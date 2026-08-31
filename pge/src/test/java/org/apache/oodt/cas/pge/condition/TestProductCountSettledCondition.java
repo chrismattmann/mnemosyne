@@ -33,23 +33,27 @@ public class TestProductCountSettledCondition extends TestCase {
    * stub that behaved like a sequence would be testing something the real
    * one cannot do.
    */
+  /**
+   * A catalog whose count climbs while the producer works and then holds.
+   * Time only moves when the condition pauses, so the test does not wait.
+   */
   private static class Catalog extends ProductCountSettledCondition {
-    private final int count;
-    private long quietFor;
-    /* How many polls before the producer goes quiet. */
-    private int quietAfterPolls = 0;
+    private final int[] counts;
+    private int next = 0;
     int polls = 0;
     private long clock = 0;
 
-    Catalog(int count, long quietFor) {
-      this.count = count;
-      this.quietFor = quietFor;
+    Catalog(int... counts) {
+      this.counts = counts;
     }
 
-    Catalog goesQuietAfter(int polls, long quietFor) {
-      this.quietAfterPolls = polls;
-      this.quietFor = quietFor;
-      return this;
+    @Override
+    protected int countProducts(String urlStr, String typeName) {
+      int value = next < counts.length ? counts[next] : counts[counts.length - 1];
+      if (next < counts.length) {
+        next++;
+      }
+      return value;
     }
 
     @Override
@@ -62,17 +66,6 @@ public class TestProductCountSettledCondition extends TestCase {
     @Override
     protected long now() {
       return clock;
-    }
-
-    @Override
-    protected int countProducts(String urlStr, String typeName) {
-      return count;
-    }
-
-    @Override
-    protected long secondsSinceNewest(String urlStr, String typeName) {
-      // Before the producer settles, something landed a moment ago.
-      return polls >= quietAfterPolls ? quietFor : 0;
     }
   }
 
@@ -93,94 +86,94 @@ public class TestProductCountSettledCondition extends TestCase {
     return condition.evaluate(new Metadata(), config);
   }
 
-  /** Still producing: the newest audit landed a moment ago. */
-  public void testAproducerStillIngestingDoesNotPass() {
-    assertFalse("something was ingested 2s ago, the producer is still going",
-        evaluate(new Catalog(120, 2), config()));
+  /** A count that is still climbing has not settled. */
+  public void testAgrowingCountDoesNotPass() {
+    Catalog climbing = new Catalog(10, 25, 40, 60, 85, 110);
+
+    assertFalse("a climbing count means work is still arriving",
+        evaluate(climbing, config(
+            ProductCountSettledCondition.QUIET_SECONDS, "10",
+            ProductCountSettledCondition.POLL_SECONDS, "5",
+            ProductCountSettledCondition.MAX_WAIT_SECONDS, "25")));
   }
 
-  /** Nothing has landed for long enough: the producer has finished. */
-  public void testAquietCatalogPasses() {
-    assertTrue("nothing new for 90s, well past the default 30",
-        evaluate(new Catalog(120, 90), config()));
+  /** Once it stops changing for long enough, the gate opens. */
+  public void testAcountThatStopsChangingPasses() {
+    Catalog settles = new Catalog(10, 25, 25, 25, 25, 25);
+
+    assertTrue("the count held still, so the producer has finished",
+        evaluate(settles, config(
+            ProductCountSettledCondition.QUIET_SECONDS, "10",
+            ProductCountSettledCondition.POLL_SECONDS, "5")));
   }
 
   /**
-   * An empty catalog is perfectly quiet, and that is not the same as
-   * finished. Without the minimum, a reduce would run before the first
+   * An empty catalog is perfectly still, and that is not the same as
+   * finished. Without the minimum a reduce would run before the first
    * mapper had ingested anything.
    */
   public void testAnemptyCatalogNeverPasses() {
-    assertFalse("nothing has been produced yet, however quiet",
-        evaluate(new Catalog(0, 3600), config()));
+    Catalog empty = new Catalog(0, 0, 0, 0, 0, 0);
+
+    assertFalse("nothing has been produced yet, however still",
+        evaluate(empty, config(
+            ProductCountSettledCondition.QUIET_SECONDS, "10",
+            ProductCountSettledCondition.POLL_SECONDS, "5",
+            ProductCountSettledCondition.MAX_WAIT_SECONDS, "30")));
   }
 
-  /** Below the minimum, quiet is not enough either. */
+  /** Below the minimum, holding still is not enough either. */
   public void testBelowTheMinimumItHolds() {
-    assertFalse("3 products is below the minimum of 10",
-        evaluate(new Catalog(3, 3600),
-            config(ProductCountSettledCondition.MIN_COUNT, "10")));
+    Catalog few = new Catalog(3, 3, 3, 3, 3, 3);
+
+    assertFalse("3 is stable but below the minimum of 10",
+        evaluate(few, config(
+            ProductCountSettledCondition.MIN_COUNT, "10",
+            ProductCountSettledCondition.QUIET_SECONDS, "10",
+            ProductCountSettledCondition.POLL_SECONDS, "5",
+            ProductCountSettledCondition.MAX_WAIT_SECONDS, "30")));
   }
 
-  /** How long counts as quiet is the pipeline's to choose. */
-  public void testThequietPeriodIsConfigurable() {
-    WorkflowConditionConfiguration patient =
-        config(ProductCountSettledCondition.QUIET_SECONDS, "300");
+  /** It waits, because the contract has no room for "not yet". */
+  public void testItWaitsForTheProducer() {
+    Catalog settles = new Catalog(10, 25, 40, 40, 40, 40);
 
-    assertFalse("60s is quiet by default but not when 300 was asked for",
-        evaluate(new Catalog(120, 60), patient));
-    assertTrue(evaluate(new Catalog(120, 301), patient));
+    assertTrue(evaluate(settles, config(
+        ProductCountSettledCondition.QUIET_SECONDS, "10",
+        ProductCountSettledCondition.POLL_SECONDS, "5")));
+    assertTrue("it should have looked more than once, not decided immediately",
+        settles.polls > 1);
   }
 
-  /** A catalog that cannot be read is not a finished one. */
-  public void testAcatalogThatCannotBeReadDoesNotPass() {
-    assertFalse("count unreadable", evaluate(new Catalog(-1, 3600), config()));
-    assertFalse("age unreadable", evaluate(new Catalog(120, -1), config()));
-  }
+  /** A count that cannot be read is not a finished producer. */
+  public void testAcountThatCannotBeReadDoesNotPass() {
+    Catalog unreadable = new Catalog(-1, -1, -1, -1);
 
-  /**
-   * The gate waits rather than reporting "not yet".
-   *
-   * <p>
-   * A condition gets one evaluation: returning false fails the attempt and
-   * leaves the instance in a state TaskProcessor will not offer again. So a
-   * gate that needs to wait has to do the waiting itself.
-   * </p>
-   */
-  public void testItWaitsForTheProducerRatherThanFailing() {
-    Catalog catalog = new Catalog(120, 90).goesQuietAfter(3, 90);
-
-    assertTrue("it should wait for the producer, not give up on it",
-        evaluate(catalog, config()));
-    assertEquals("and it should have looked more than once", 3, catalog.polls);
-  }
-
-  /** It does not wait for ever: a producer that never stops has not finished. */
-  public void testItGivesUpAfterTheLimit() {
-    Catalog neverQuiet = new Catalog(120, 0);
-
-    assertFalse("nothing ever went quiet, so the producer has not finished",
-        evaluate(neverQuiet,
-            config(ProductCountSettledCondition.MAX_WAIT_SECONDS, "30",
-                   ProductCountSettledCondition.POLL_SECONDS, "10")));
+    assertFalse("waiting on a catalog we cannot read",
+        evaluate(unreadable, config(
+            ProductCountSettledCondition.QUIET_SECONDS, "10",
+            ProductCountSettledCondition.POLL_SECONDS, "5",
+            ProductCountSettledCondition.MAX_WAIT_SECONDS, "20")));
   }
 
   /** Without being told what to count, it cannot say yes. */
   public void testItWillNotPassWithoutConfiguration() {
-    assertFalse(new Catalog(500, 3600).evaluate(new Metadata(),
+    assertFalse(new Catalog(500, 500, 500).evaluate(new Metadata(),
         new WorkflowConditionConfiguration()));
   }
 
   /**
-   * The decision must not depend on anything held between calls: a new
-   * condition object is built for every evaluation, so a gate that needed to
-   * see a trend would never open.
+   * Nothing is remembered between calls: a new condition object is built for
+   * every evaluation, so a gate needing to see a trend across them never
+   * opens. The trend is observed inside one call instead.
    */
   public void testAfreshObjectReachesTheSameAnswer() {
-    WorkflowConditionConfiguration c = config();
+    WorkflowConditionConfiguration c = config(
+        ProductCountSettledCondition.QUIET_SECONDS, "10",
+        ProductCountSettledCondition.POLL_SECONDS, "5");
 
-    assertTrue(evaluate(new Catalog(120, 90), c));
+    assertTrue(evaluate(new Catalog(40, 40, 40, 40), c));
     assertTrue("a second, unrelated object must decide identically",
-        evaluate(new Catalog(120, 90), c));
+        evaluate(new Catalog(40, 40, 40, 40), c));
   }
 }
