@@ -74,6 +74,7 @@ import {
   getResources, getTask, getTypeProducts, getTypes, getWorkflow, getWorkflows, queryCatalog
 } from './api.js'
 import { catalogSqlError } from './sqlQuery.js'
+import { productRoute } from './productRef.js'
 import { loadTypePages } from './catalogPages.js'
 import { instancesQuery, splitHash } from './instanceHash.js'
 import { POLL_MS, shouldPoll } from './pollViews.js'
@@ -278,18 +279,18 @@ export default {
       return false
     }
 
+    // Resolved here rather than at each call site. Only one of them guarded
+    // for a path, so the same click worked from the status page and failed
+    // from a workflow instance, where InputFiles hands over absolute paths.
     function openProduct(id) {
-      go({ view: 'product', id })
+      const route = productRoute(id)
+      if (route) {
+        go(route)
+      }
     }
 
     function openProductByPath(id) {
-      if (!id) {
-        return
-      }
-      const name = String(id).split('/').filter(Boolean).pop()
-      if (name) {
-        go({ view: 'product', id: name })
-      }
+      openProduct(id)
     }
 
     function openLatestFile(id) {
