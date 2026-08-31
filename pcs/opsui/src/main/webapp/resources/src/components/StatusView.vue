@@ -41,7 +41,11 @@
       <div class="split">
         <article class="card">
           <h3>Jobs</h3>
-          <p v-if="!jobs.length" class="empty">No job counts yet.</p>
+          <p v-if="!jobsKnown" class="empty">
+            Workflow manager unreachable, so how many jobs are in each state is
+            not known.
+          </p>
+          <p v-else-if="!jobs.length" class="empty">No job counts yet.</p>
           <table v-else>
             <thead>
               <tr>
@@ -198,6 +202,16 @@ export default {
     })
 
     const jobs = computed(() => (props.report && props.report.jobHealth) || [])
+    // Counting jobs means asking the workflow manager. With the manager down
+    // there is nothing to ask and the list arrives empty, which reads exactly
+    // like a deployment with no jobs -- and a table of zeroes would state
+    // that there is no work at the moment we cannot see any of it. A service
+    // too old to say either way is taken at its word, so nothing changes for
+    // one that does not send this.
+    const jobsKnown = computed(() => {
+      const report = props.report || {}
+      return report.jobHealthAvailable !== false
+    })
     const jobSort = ref('')
     const jobDir = ref('asc')
     const sortedJobs = computed(() => {
@@ -243,7 +257,7 @@ export default {
     })
 
     return {
-      up, onDemandPill, onDemandLabel, crawlCount, avgTime, generated, ago, daemons, stubs, jobs, sortedJobs,
+      up, onDemandPill, onDemandLabel, crawlCount, avgTime, generated, ago, daemons, stubs, jobs, jobsKnown, sortedJobs,
       jobSort, jobDir, sortJobs, crawlers, files, filesEmpty
     }
   }
