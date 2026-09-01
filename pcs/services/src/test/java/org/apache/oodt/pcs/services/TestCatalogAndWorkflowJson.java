@@ -160,6 +160,22 @@ public class TestCatalogAndWorkflowJson extends TestCase {
     assertEquals("split", peeked.get("message"));
   }
 
+  public void testPgeProgressPrefersJobDirFileOverStaleKeys() throws Exception {
+    File dir = File.createTempFile("jobdir", "stale");
+    dir.delete();
+    dir.mkdir();
+    Files.write(new File(dir, ".progress").toPath(),
+        "done=653\ntotal=653\nmsg=bg CLIP\n".getBytes(StandardCharsets.UTF_8));
+    Metadata met = new Metadata();
+    met.addMetadata("PGETask_Done", "0");
+    met.addMetadata("PGETask_Total", "653");
+    met.addMetadata("PGETask_Progress", "jaccard");
+    met.addMetadata("JobDir", dir.getAbsolutePath());
+    Map<String, Object> peeked = PgeProgressPeek.of(met);
+    assertEquals(Integer.valueOf(653), peeked.get("done"));
+    assertEquals("bg CLIP", peeked.get("message"));
+  }
+
   public void testEncodeInstanceProductsSkipsNulls() {
     assertEquals(0, WorkflowResource.encodeInstanceProducts(null, null).size());
     Product product = new Product();

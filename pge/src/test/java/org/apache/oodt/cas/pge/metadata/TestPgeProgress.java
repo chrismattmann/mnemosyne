@@ -57,4 +57,26 @@ public class TestPgeProgress extends TestCase {
     assertTrue(a.sameAs(b));
     assertFalse(a.sameAs(new PgeProgress(Integer.valueOf(2), Integer.valueOf(2), "encoded")));
   }
+
+  public void testClearFromDropsBothKeyStyles() {
+    Metadata met = new Metadata();
+    met.addMetadata("PGETask_Progress", "jaccard");
+    met.addMetadata("PGETask/Progress", "jaccard");
+    met.addMetadata("PGETask_Done", "0");
+    met.addMetadata("PGETask/Done", "0");
+    met.addMetadata("PGETask_Total", "653");
+    met.addMetadata("Filename", "keep-me");
+    PgeProgress.clearFrom(met);
+    assertNull(PgeProgress.fromMetadata(met));
+    assertEquals("keep-me", met.getMetadata("Filename"));
+  }
+
+  public void testApplyToOverwritesStaleKeys() {
+    Metadata met = new Metadata();
+    met.addMetadata("PGETask_Progress", "jaccard");
+    met.addMetadata("PGETask_Done", "0");
+    new PgeProgress(Integer.valueOf(653), Integer.valueOf(653), "bg CLIP").applyTo(met);
+    assertEquals("bg CLIP", met.getMetadata("PGETask_Progress"));
+    assertEquals("653", met.getMetadata("PGETask_Done"));
+  }
 }

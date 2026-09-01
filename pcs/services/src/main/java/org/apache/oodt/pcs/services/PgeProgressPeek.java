@@ -27,10 +27,10 @@ import java.util.Map;
 import org.apache.oodt.cas.metadata.Metadata;
 
 /**
- * PGE progress for OPSUI. Prefers the instance metadata the watcher
- * stamps (W1 and W2). If those keys are missing, peeks {@code JobDir/.progress}
- * the same way task Peek reads PgeConfig.xml — opt-in; a PGE that never
- * writes the file simply has no bar.
+ * PGE progress for OPSUI. Prefers {@code JobDir/.progress} when that file
+ * exists — it belongs to the current task. Metadata keys are a fallback
+ * (watcher stamps, or a PGE whose JobDir was not persisted). A previous
+ * task's {@code PGETask_*} keys otherwise hide a later task's bar.
  */
 final class PgeProgressPeek {
 
@@ -40,11 +40,11 @@ final class PgeProgressPeek {
   }
 
   static Map<String, Object> of(Metadata met) {
-    Map<String, Object> fromMet = fromKeys(met);
-    if (fromMet != null) {
-      return fromMet;
+    Map<String, Object> fromFile = fromFile(jobDir(met));
+    if (fromFile != null) {
+      return fromFile;
     }
-    return fromFile(jobDir(met));
+    return fromKeys(met);
   }
 
   static Map<String, Object> fromKeys(Metadata met) {
