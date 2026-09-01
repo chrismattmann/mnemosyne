@@ -92,7 +92,12 @@ public class TaskProcessor extends WorkflowProcessor {
         calendar.setTime(this.getWorkflowInstance().getState().getStartTime());
         long elapsedTime = ((System.currentTimeMillis() - calendar
             .getTimeInMillis()) / 1000) / INT;
-        if (elapsedTime >= requiredBlockTimeElapse) {
+        // The wait being over is not the same as the reason for it being
+        // over. This offered a blocked task once its back-off had elapsed
+        // whatever its conditions said, so a task bailed because its gate had
+        // not opened ran anyway a couple of minutes later -- which is a gate
+        // that delays rather than one that holds.
+        if (elapsedTime >= requiredBlockTimeElapse && this.passedPreConditions()) {
           tps.add(this);
         }
       } else if (this.isAnyState("Loaded", "Queued", "PreConditionSuccess") && 
