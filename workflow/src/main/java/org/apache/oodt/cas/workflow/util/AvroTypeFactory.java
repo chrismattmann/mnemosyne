@@ -224,6 +224,11 @@ public class AvroTypeFactory {
                 ? getAvroMetadata(workflowInstance.getSharedContext()) : new HashMap<String, Object>());
         if (workflowInstance.getPriority() != null)
             avroWorkflowInstance.setPriority(workflowInstance.getPriority().getValue());
+
+        // How many times this was put off. Counted by the engine and stored
+        // by both repositories, but absent from this record, so it reached
+        // anything asking over RPC as the zero it was initialised with.
+        avroWorkflowInstance.setTimesBlocked(workflowInstance.getTimesBlocked());
         return avroWorkflowInstance;
     }
 
@@ -251,6 +256,8 @@ public class AvroTypeFactory {
             workflowInstance.setSharedContext(getMetadata(avroWorkflowInstance.getSharedContext()));
         if (avroWorkflowInstance.getPriority() != null)
             workflowInstance.setPriority(Priority.getPriority(avroWorkflowInstance.getPriority()));
+
+        workflowInstance.setTimesBlocked(avroWorkflowInstance.getTimesBlocked());
         return workflowInstance;
     }
 

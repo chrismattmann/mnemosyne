@@ -505,6 +505,11 @@ public class WorkflowResource extends PCSService {
         LOG.fine("No current task name for instance " + inst.getId());
       }
     }
+    // How many times this was put off. On the detail page already; here so
+    // the table can show it and be ordered by it, which is the question that
+    // wants asking of a whole run rather than of one instance: what kept
+    // being deferred.
+    row.put("timesBlocked", Integer.valueOf(inst.getTimesBlocked()));
     row.put("startDateTime", nullToEmpty(inst.getStartDateTimeIsoStr()));
     row.put("endDateTime", nullToEmpty(inst.getEndDateTimeIsoStr()));
     row.put("currentTaskStartDateTime",

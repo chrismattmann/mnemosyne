@@ -59,6 +59,7 @@
           <SortHead field="start" :sort="sort" :dir="dir" @sort="onSort">Started</SortHead>
           <SortHead field="end" :sort="sort" :dir="dir" @sort="onSort">Ended</SortHead>
           <SortHead field="wall" :sort="sort" :dir="dir" @sort="onSort">Wall clock</SortHead>
+          <SortHead field="blocked" :sort="sort" :dir="dir" @sort="onSort">Deferred</SortHead>
         </tr>
       </thead>
       <tbody>
@@ -95,6 +96,9 @@
           <td>{{ inst.startDateTime || '—' }}</td>
           <td>{{ inst.endDateTime || '—' }}</td>
           <td class="mono">{{ formatWallClock(inst.wallMs) }}</td>
+          <td class="mono" :title="inst.timesBlocked ? 'Looked at and left waiting ' + inst.timesBlocked + ' times' : ''">
+            {{ inst.timesBlocked || '—' }}
+          </td>
         </tr>
       </tbody>
     </table>
@@ -176,7 +180,10 @@ export default {
       task: (row) => row.currentTaskName || row.currentTaskId || '',
       start: (row) => parseStamp(row.startDateTime),
       end: (row) => parseStamp(row.endDateTime),
-      wall: (row) => row.wallMs
+      wall: (row) => row.wallMs,
+      // Zero is an answer, not an absence: it was never put off. Reported as
+      // a dash and sorted as the number it is.
+      blocked: (row) => (typeof row.timesBlocked === 'number' ? row.timesBlocked : 0)
     }
     const filtered = computed(() => {
       return instances.value.filter((inst) => instanceMatches(inst, props.workflow, props.since))

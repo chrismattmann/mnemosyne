@@ -486,6 +486,29 @@ public class WorkflowInstance {
   /**
    * @param timesBlocked the timesBlocked to set
    */
+  /**
+   * Record that this instance was put off rather than run.
+   *
+   * <p>
+   * The count is of deferrals, not of time: each one is an occasion when the
+   * instance was looked at, found not ready, and left for later. How fast it
+   * rises therefore depends on how often the engine looks, so it compares
+   * within a deployment and not across them. How long something waited is a
+   * different question, and the wall clock already answers it.
+   * </p>
+   *
+   * <p>
+   * Both engines record the same event through here: W1 when a pass round its
+   * pre-condition wait loop finds the conditions still unsatisfied, W2 when a
+   * disposition leaves a processor waiting on the same. Nothing incremented
+   * this before, in either engine, so the field was written to a database
+   * column, stored in a Lucene index, and shown in the UI, always as zero.
+   * </p>
+   */
+  public void recordBlocked() {
+    this.timesBlocked++;
+  }
+
   public void setTimesBlocked(int timesBlocked) {
     this.timesBlocked = timesBlocked;
   }

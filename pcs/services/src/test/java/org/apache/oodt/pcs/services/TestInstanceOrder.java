@@ -29,8 +29,37 @@ public class TestInstanceOrder extends TestCase {
 
   private static final long NOW = 1750000000000L;
 
+  public void testOrderingByHowOftenSomethingWasDeferred() {
+    List<Map<String, Object>> rows = new ArrayList<Map<String, Object>>();
+    rows.add(blocked("never", 0));
+    rows.add(blocked("often", 12));
+    rows.add(blocked("once", 1));
+
+    Collections.sort(rows, InstanceOrder.by("blocked", "desc", NOW));
+
+    assertEquals("often", rows.get(0).get("workflowName"));
+    assertEquals("once", rows.get(1).get("workflowName"));
+    assertEquals("never", rows.get(2).get("workflowName"));
+  }
+
+  /**
+   * Zero is an answer here, unlike a missing end date: the instance ran
+   * without ever being put off. So it sorts among the numbers rather than
+   * with the unknowns.
+   */
+  public void testNeverDeferredSortsAsZeroNotAsUnknown() {
+    Map<String, Object> never = blocked("never", 0);
+    assertEquals(Integer.valueOf(0),
+        InstanceOrder.sortKey(never, "blocked", NOW));
+
+    Map<String, Object> missing = new HashMap<String, Object>();
+    assertEquals("an instance that does not report it has not been deferred",
+        Integer.valueOf(0), InstanceOrder.sortKey(missing, "blocked", NOW));
+  }
+
   public void testOnlyKnownColumnsOrder() {
     assertTrue(InstanceOrder.isSortable("wall"));
+    assertTrue(InstanceOrder.isSortable("blocked"));
     assertTrue(InstanceOrder.isSortable("start"));
     assertFalse(InstanceOrder.isSortable("id"));
     assertFalse(InstanceOrder.isSortable(null));
@@ -130,6 +159,13 @@ public class TestInstanceOrder extends TestCase {
   public void testAnUnparseableStampIsUnknownRatherThanZero() {
     Map<String, Object> inst = inst("Success", "not a date", null);
     assertNull(InstanceOrder.sortKey(inst, "start", NOW));
+  }
+
+  private static Map<String, Object> blocked(String name, int times) {
+    Map<String, Object> row = new HashMap<String, Object>();
+    row.put("workflowName", name);
+    row.put("timesBlocked", Integer.valueOf(times));
+    return row;
   }
 
   private static Map<String, Object> row(String key, Object value) {
