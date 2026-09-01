@@ -292,6 +292,12 @@ public abstract class WorkflowProcessor implements WorkflowProcessorListener,
   public synchronized List<TaskProcessor> getRunnableWorkflowProcessors() {
     Vector<TaskProcessor> runnableTasks = new Vector<TaskProcessor>();
 
+    // Why this is not being handed out, recorded where it is already known.
+    // The reason was computed here and discarded, so everything downstream
+    // had to guess at it from a status and an executing set -- and could not
+    // tell an instance nobody is running from one waiting its turn.
+    recordWaitingOn();
+
     // evaluate pre-conditions
     if (!this.passedPreConditions()) {
       // Conditions can gate this processor without being held by it: they run
@@ -556,6 +562,60 @@ public abstract class WorkflowProcessor implements WorkflowProcessorListener,
       List<WorkflowProcessor> prerequisites) {
     this.prerequisites = prerequisites != null
         ? prerequisites : new Vector<WorkflowProcessor>();
+  }
+
+  /**
+   * Write down why this processor is not running, if it is not.
+   *
+   * <p>
+   * Costs nothing to record: the querier already persists the instance on the
+   * pass that asks, so the reason rides a write that was happening anyway.
+   * It is only set when it changes, so a processor waiting quietly does not
+   * generate work.
+   * </p>
+   */
+  protected void recordWaitingOn() {
+    String reason = null;
+    if (!this.passedPreConditions()) {
+      reason = "condition:" + firstUnmetCondition();
+    } else if (this.prerequisites != null && !this.prerequisites.isEmpty()) {
+      for (WorkflowProcessor prerequisite : this.prerequisites) {
+        if (prerequisite.getWorkflowInstance() != null
+            && prerequisite.getWorkflowInstance().getState() != null
+            && prerequisite.getWorkflowInstance().getState().getCategory() != null
+            && !"done".equals(prerequisite.getWorkflowInstance().getState()
+                .getCategory().getName())) {
+          reason = "task:" + prerequisite.getWorkflowInstance().getId();
+          break;
+        }
+      }
+    }
+    String current = this.workflowInstance.getWaitingOn();
+    if (reason == null ? current != null : !reason.equals(current)) {
+      this.workflowInstance.setWaitingOn(reason);
+    }
+  }
+
+  /**
+   * Which condition is holding this, for the record. The first that has not
+   * passed: a caller wants to know what to go and look at, and that is the
+   * one the processor itself is stopped on.
+   */
+  private String firstUnmetCondition() {
+    if (this.getPreConditions() != null
+        && this.getPreConditions().getSubProcessors() != null) {
+      for (WorkflowProcessor condition : this.getPreConditions()
+          .getSubProcessors()) {
+        WorkflowInstance inst = condition.getWorkflowInstance();
+        if (inst != null && inst.getState() != null
+            && inst.getState().getCategory() != null
+            && !"done".equals(inst.getState().getCategory().getName())) {
+          return inst.getCurrentTaskId() != null
+              ? inst.getCurrentTaskId() : inst.getId();
+        }
+      }
+    }
+    return "unknown";
   }
 
   /**

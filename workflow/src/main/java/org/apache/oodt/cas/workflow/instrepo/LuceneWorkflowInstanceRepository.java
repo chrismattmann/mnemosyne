@@ -706,6 +706,10 @@ public class LuceneWorkflowInstanceRepository extends
         
         doc.add(new Field("workflow_inst_timesblocked", 
             String.valueOf(workflowInst.getTimesBlocked()), StringField.TYPE_STORED));
+        if (workflowInst.getWaitingOn() != null) {
+          doc.add(new Field("workflow_inst_waitingon",
+              workflowInst.getWaitingOn(), StringField.TYPE_STORED));
+        }
         
         // will leave this for back compat, but will also store 
         // category 
@@ -877,6 +881,7 @@ public class LuceneWorkflowInstanceRepository extends
         // first read all the instance info
         inst.setId(doc.get("workflow_inst_id"));
         
+        inst.setWaitingOn(doc.get("workflow_inst_waitingon"));
         inst.setTimesBlocked(Integer.parseInt(doc.get("workflow_inst_timesblocked") != 
           null ? doc.get("workflow_inst_timesblocked"):"0"));
         

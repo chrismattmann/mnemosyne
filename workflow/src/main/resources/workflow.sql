@@ -61,7 +61,8 @@ end_date_time varchar(255),
 current_task_start_date_time varchar(255),
 current_task_end_date_time varchar(255),
 priority float,
-times_blocked int DEFAULT 0);
+times_blocked int DEFAULT 0,
+waiting_on varchar(255) DEFAULT NULL);
 
 -- An alternative definition, for quoteFields -- string versions of
 -- current_task_id and workflow_id. Commented out: it was live SQL creating a
@@ -78,7 +79,8 @@ times_blocked int DEFAULT 0);
 -- current_task_start_date_time varchar(255),
 -- current_task_end_date_time varchar(255),
 -- priority float,
--- times_blocked int DEFAULT 0);
+-- times_blocked int DEFAULT 0,
+waiting_on varchar(255) DEFAULT NULL);
 
 CREATE TABLE workflow_instance_metadata
 (workflow_instance_id int NOT NULL,

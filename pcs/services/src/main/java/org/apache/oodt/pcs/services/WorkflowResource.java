@@ -527,6 +527,12 @@ public class WorkflowResource extends PCSService {
     // wants asking of a whole run rather than of one instance: what kept
     // being deferred.
     row.put("timesBlocked", Integer.valueOf(inst.getTimesBlocked()));
+    // Why it is not running, when it is not. Reported so a reader can tell an
+    // instance waiting its turn from one nobody is running, rather than
+    // inferring it from a status and an executing set.
+    if (inst.getWaitingOn() != null && inst.getWaitingOn().length() > 0) {
+      row.put("waitingOn", inst.getWaitingOn());
+    }
     row.put("startDateTime", nullToEmpty(inst.getStartDateTimeIsoStr()));
     row.put("endDateTime", nullToEmpty(inst.getEndDateTimeIsoStr()));
     row.put("currentTaskStartDateTime",

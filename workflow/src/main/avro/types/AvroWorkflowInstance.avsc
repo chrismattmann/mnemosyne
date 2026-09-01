@@ -15,6 +15,7 @@
     {"name":"currentTaskEndDateTimeIsoStr","type":["null","string"]},
     {"name":"sharedContext","type":{"type":"map","values":["string",{"type":"array","items":"string"}]}},
     {"name":"priority","type":["null","double"]},
-    {"name":"timesBlocked","type":"int","default":0}
+    {"name":"timesBlocked","type":"int","default":0},
+    {"name":"waitingOn","type":["null","string"],"default":null}
   ]
 }

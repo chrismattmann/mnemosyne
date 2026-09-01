@@ -229,6 +229,11 @@ public class AvroTypeFactory {
         // by both repositories, but absent from this record, so it reached
         // anything asking over RPC as the zero it was initialised with.
         avroWorkflowInstance.setTimesBlocked(workflowInstance.getTimesBlocked());
+
+        // Why it is not running, so a caller can tell deferred from lost
+        // without assembling the answer from two places.
+        if (workflowInstance.getWaitingOn() != null)
+            avroWorkflowInstance.setWaitingOn(workflowInstance.getWaitingOn());
         return avroWorkflowInstance;
     }
 
@@ -258,6 +263,8 @@ public class AvroTypeFactory {
             workflowInstance.setPriority(Priority.getPriority(avroWorkflowInstance.getPriority()));
 
         workflowInstance.setTimesBlocked(avroWorkflowInstance.getTimesBlocked());
+        if (avroWorkflowInstance.getWaitingOn() != null)
+            workflowInstance.setWaitingOn(avroWorkflowInstance.getWaitingOn());
         return workflowInstance;
     }
 

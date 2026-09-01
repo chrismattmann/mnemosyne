@@ -95,6 +95,8 @@ public class WorkflowInstance {
 
   private int timesBlocked;
 
+  private String waitingOn;
+
   /**
    * Default Constructor.
    * 
@@ -505,6 +507,37 @@ public class WorkflowInstance {
    * column, stored in a Lucene index, and shown in the UI, always as zero.
    * </p>
    */
+  /**
+   * Why this instance is not running, or null when it is.
+   *
+   * <p>
+   * Whether something has been abandoned used to be inferred: not in the
+   * engine's executing set, not finished, therefore lost. That is a guess
+   * assembled from two places, and it cannot tell an instance nobody is
+   * running from one deliberately waiting its turn -- so a queue full of
+   * orderly waiting read as a deployment full of abandoned work.
+   * </p>
+   *
+   * <p>
+   * Recorded here, the reason survives a restart, which is when the question
+   * is actually asked. The repository answers what the instance was waiting
+   * for; the engine answers whether it still holds it. Between them there is
+   * no guessing left: a reason with an engine behind it is deferred, and the
+   * same reason with nothing behind it is abandoned, and now says what it was
+   * waiting for when it was lost.
+   * </p>
+   *
+   * @return a short reason such as "condition:urn:drat:MapsDone" or
+   *         "task:urn:drat:RepoCrawler", or null
+   */
+  public String getWaitingOn() {
+    return waitingOn;
+  }
+
+  public void setWaitingOn(String waitingOn) {
+    this.waitingOn = waitingOn;
+  }
+
   public void recordBlocked() {
     this.timesBlocked++;
   }
