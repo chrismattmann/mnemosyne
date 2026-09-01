@@ -575,6 +575,10 @@ public class WorkflowProcessorQueue {
         // handle its tasks
         List<WorkflowProcessor> taskProcessors =
             new Vector<WorkflowProcessor>();
+        boolean sequential = inst.getParentChildWorkflow().getGraph() != null
+            && "sequential".equals(inst.getParentChildWorkflow().getGraph()
+                .getExecutionType());
+        WorkflowProcessor previousTask = null;
         for (WorkflowTask task : inst.getParentChildWorkflow().getTasks()) {
           WorkflowInstance instance = new WorkflowInstance();
           WorkflowState taskWorkflowState = lifecycle.getDefaultLifecycle()
@@ -619,7 +623,25 @@ public class WorkflowProcessorQueue {
             condProcessor.getListeners().add(processor);
             taskGates.add(condProcessor);
           }
+          // In a sequential workflow, the task before this one gates it.
+          //
+          // The parent decides what to hand out, but it is not the only thing
+          // handing work out: every task is persisted as an instance of its
+          // own and the querier finds each one independently, so the parent's
+          // ordering governs nothing once they exist. Sequential meant only
+          // that the tasks were created in order, and they then all ran at
+          // once -- a pipeline of four phases started all four within two
+          // seconds, each reading what the one before it had not yet
+          // produced.
+          //
+          // The mechanism is the one already used to make a sequential block
+          // of conditions run in order: a prerequisite the querier honours
+          // wherever it finds the instance.
+          if (sequential && previousTask != null) {
+            taskGates.add(previousTask);
+          }
           subProcessor.setPrerequisites(taskGates);
+          previousTask = subProcessor;
           taskProcessors.add(subProcessor);
           // The parent listens to the child, so a child finishing is acted on
           // at once instead of on the querier's next pass. The parent still

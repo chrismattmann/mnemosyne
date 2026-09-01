@@ -53,12 +53,39 @@ public class SequentialProcessor extends WorkflowProcessor {
     // do nothing
   }
 
+  /**
+   * The next thing to hand out, which is nothing while something is running.
+   *
+   * <p>
+   * This walked past a child that was executing and offered the one after
+   * it. The intent was not to hand out something already running, but for a
+   * sequential workflow the effect of skipping it is to start the next step
+   * alongside the step it is supposed to follow. Nothing showed while only
+   * tasks could be Executing, because a workflow between this and its tasks
+   * reported Queued for as long as its tasks ran. Once workflows reported
+   * that they were running, a pipeline whose first phase took a while ran
+   * every phase at once: a crawl, and the partitioning of what the crawl had
+   * not yet ingested, and the aggregate of what the partitioning had not yet
+   * produced, all within two seconds.
+   * </p>
+   *
+   * <p>
+   * Reaching a child that is not done means it is either running, in which
+   * case there is nothing to hand out until it finishes, or waiting to be
+   * handed out, in which case it is the one. Either way the walk stops at the
+   * first child that is not done -- which is what sequential means.
+   * </p>
+   */
   private WorkflowProcessor getNext() {
     for (WorkflowProcessor wp : this.getSubProcessors()) {
-      if (!wp.getWorkflowInstance().getState().getCategory().getName()
-             .equals("done") && !wp.getWorkflowInstance().getState().getName().equals("Executing")) {
-        return wp;
+      if (wp.getWorkflowInstance().getState().getCategory().getName()
+             .equals("done")) {
+        continue;
       }
+      if (wp.getWorkflowInstance().getState().getName().equals("Executing")) {
+        return null;
+      }
+      return wp;
     }
     return null;
   }
