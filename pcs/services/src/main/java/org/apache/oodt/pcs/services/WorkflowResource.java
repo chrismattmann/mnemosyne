@@ -419,7 +419,24 @@ public class WorkflowResource extends PCSService {
           }
         }
       }
-      return json("statuses", out);
+      // The names alone do not say which of them mean the work is over, so
+      // anything deciding that had to keep a list, and a list written for one
+      // engine's vocabulary is wrong about the other's. The stage each status
+      // sits in comes along so nobody has to.
+      Map<String, String> categories = new LinkedHashMap<String, String>();
+      try {
+        Map<String, String> reported = client.getWorkflowStatusCategories();
+        if (reported != null) {
+          categories.putAll(reported);
+        }
+      } catch (Exception tooOldToAsk) {
+        LOG.fine("This workflow manager does not report status categories");
+      }
+
+      JSONObject response = new JSONObject();
+      response.put("statuses", out);
+      response.put("categories", categories);
+      return response.toString();
     } finally {
       closeQuietly(client);
     }

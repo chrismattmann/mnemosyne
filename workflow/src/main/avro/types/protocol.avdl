@@ -78,6 +78,10 @@ import schema "AvroWorkflowInstancePage.avsc";
     array<string> getExecutingWorkflowInstanceIds() throws OodtError;
 
     array<string> getSupportedWorkflowStatuses() throws OodtError;
+
+    // Which lifecycle stage each status belongs to, so a caller can tell
+    // which of them mean the work is over without carrying a list of its own.
+    map<string> getWorkflowStatusCategories() throws OodtError;
     array<AvroWorkflow> getWorkflows() throws OodtError;
     AvroWorkflowTask getTaskById(string taskId) throws OodtError;
     AvroWorkflowCondition getConditionById(string conditionId) throws OodtError;

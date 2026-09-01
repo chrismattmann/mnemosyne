@@ -41,6 +41,8 @@ import org.apache.oodt.cas.workflow.structs.exceptions.InstanceRepositoryExcepti
 import java.net.URL;
 import java.util.Calendar;
 import java.util.List;
+import java.util.Map;
+import java.util.LinkedHashMap;
 import java.util.Vector;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -150,6 +152,34 @@ public class PrioritizedQueueBasedWorkflowEngine implements WorkflowEngine {
    * </p>
    */
   @Override
+  /**
+   * The stage each status sits in, from the same walk that lists the
+   * statuses. A stage is the category: "done" is the one that means over.
+   */
+  public Map<String, String> getStatusCategories() {
+    Map<String, String> categories = new LinkedHashMap<String, String>();
+    if (this.lifecycle == null) {
+      return categories;
+    }
+    WorkflowLifecycle cycle = this.lifecycle.getDefaultLifecycle();
+    if (cycle == null) {
+      return categories;
+    }
+    for (Object o : cycle.getStages()) {
+      WorkflowLifecycleStage stage = (WorkflowLifecycleStage) o;
+      if (stage.getStates() == null) {
+        continue;
+      }
+      for (Object s : stage.getStates()) {
+        String name = ((WorkflowState) s).getName();
+        if (name != null && !name.equals("") && !categories.containsKey(name)) {
+          categories.put(name, stage.getName());
+        }
+      }
+    }
+    return categories;
+  }
+
   public List<String> getSupportedStatuses() {
     List<String> statuses = new Vector<String>();
     if (this.lifecycle == null) {

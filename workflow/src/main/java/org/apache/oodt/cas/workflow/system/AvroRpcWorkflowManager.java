@@ -527,6 +527,15 @@ public class AvroRpcWorkflowManager implements WorkflowManager,org.apache.oodt.c
      * written for whichever engine its author had in mind.
      */
     @Override
+    public java.util.Map<String, String> getWorkflowStatusCategories()
+            throws AvroRemoteException {
+        java.util.Map<String, String> categories = engine.getStatusCategories();
+        return categories == null
+                ? new java.util.LinkedHashMap<String, String>()
+                : new java.util.LinkedHashMap<String, String>(categories);
+    }
+
+    @Override
     public List<String> getSupportedWorkflowStatuses() throws AvroRemoteException {
         java.util.List<String> statuses = engine.getSupportedStatuses();
         if (statuses == null || statuses.isEmpty()) {

@@ -262,6 +262,18 @@ public class AvroRpcWorkflowManagerClient implements WorkflowManagerClient {
         return ids == null ? new Vector() : new Vector(ids);
     }
 
+    public java.util.Map<String, String> getWorkflowStatusCategories()
+            throws Exception {
+        java.util.Map<String, String> out =
+                new java.util.LinkedHashMap<String, String>();
+        java.util.Map<String, String> categories =
+                proxy.getWorkflowStatusCategories();
+        if (categories != null) {
+            out.putAll(categories);
+        }
+        return out;
+    }
+
     public List getSupportedWorkflowStatuses() throws Exception {
         List statuses = proxy.getSupportedWorkflowStatuses();
         return statuses == null ? new Vector() : new Vector(statuses);

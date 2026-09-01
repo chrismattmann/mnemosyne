@@ -260,4 +260,30 @@ public interface WorkflowEngine {
         return java.util.Collections.emptyList();
     }
 
+    /**
+     * Which stage of the lifecycle each status belongs to.
+     *
+     * <p>
+     * The names alone do not say which of them mean the work is over, so
+     * everything reading them had to decide for itself, and did it by
+     * carrying a list. A list written against one engine's vocabulary is
+     * wrong about the other's: none of W1's status names appear in W2's, so a
+     * reader taught the first treats every state of the second as one it does
+     * not recognise.
+     * </p>
+     *
+     * <p>
+     * Empty from an engine with no lifecycle to read, which is the honest
+     * answer for one whose statuses are fixed constants rather than
+     * declared. A caller that gets nothing back is being told to fall back on
+     * what it already knew.
+     * </p>
+     *
+     * @return status name to stage name, or empty if this engine has no
+     *         lifecycle
+     */
+    default java.util.Map<String, String> getStatusCategories() {
+        return java.util.Collections.emptyMap();
+    }
+
 }
