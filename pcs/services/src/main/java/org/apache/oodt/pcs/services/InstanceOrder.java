@@ -94,7 +94,7 @@ final class InstanceOrder {
     return "workflow".equals(field) || "product".equals(field)
         || "status".equals(field) || "task".equals(field)
         || "start".equals(field) || "end".equals(field)
-        || "wall".equals(field);
+        || "wall".equals(field) || "blocked".equals(field);
   }
 
   @SuppressWarnings("rawtypes")
@@ -122,6 +122,15 @@ final class InstanceOrder {
     }
     if ("wall".equals(field)) {
       return wallClockMillis(inst, now);
+    }
+    if ("blocked".equals(field)) {
+      // Zero is an answer here, not an absence: it was never put off. So it
+      // sorts as the number it is rather than with the unknowns.
+      Object value = inst.get("timesBlocked");
+      if (value instanceof Number) {
+        return Integer.valueOf(((Number) value).intValue());
+      }
+      return Integer.valueOf(0);
     }
     return null;
   }
