@@ -141,6 +141,15 @@ public interface WorkflowManagerClient extends Closeable, Serializable {
     java.util.List getSupportedWorkflowStatuses()
             throws Exception;
 
+    /**
+     * Which lifecycle stage each status belongs to. Empty from a manager
+     * whose engine has no lifecycle, and from one too old to be asked.
+     */
+    default java.util.Map<String, String> getWorkflowStatusCategories()
+            throws Exception {
+        return java.util.Collections.emptyMap();
+    }
+
     URL getWorkflowManagerUrl();
 
     boolean isAlive();
