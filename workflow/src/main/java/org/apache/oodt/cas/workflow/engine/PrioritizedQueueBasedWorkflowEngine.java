@@ -41,6 +41,11 @@ import org.apache.oodt.cas.workflow.structs.exceptions.InstanceRepositoryExcepti
 import java.net.URL;
 import java.util.Calendar;
 import java.util.List;
+import org.apache.oodt.cas.workflow.engine.processor.WorkflowProcessor;
+import org.apache.oodt.cas.workflow.engine.runner.AsynchronousLocalEngineRunner;
+import java.util.Set;
+import java.util.LinkedHashSet;
+import java.util.Collection;
 import java.util.Map;
 import java.util.LinkedHashMap;
 import java.util.Vector;
@@ -133,6 +138,47 @@ public class PrioritizedQueueBasedWorkflowEngine implements WorkflowEngine {
             + e.getMessage());
       }
     }
+  }
+
+  /**
+   * The instances this engine is running: the tasks its runner has in hand,
+   * and the workflows above them that are running by virtue of those tasks.
+   *
+   * <p>
+   * This engine never implemented it and inherited the interface's empty
+   * answer, so everything asking "is this instance running" was told no about
+   * every instance. What reads that is the report of whether an instance has
+   * been abandoned -- a workflow the engine is not running and has not
+   * finished -- and with the answer always no, every live instance in the
+   * deployment was reported as abandoned, and none of them showed a wall
+   * clock. The feature has worked on the thread pool engine and done nothing
+   * here since it was written.
+   * </p>
+   *
+   * <p>
+   * A workflow is not handed to a runner: it runs by having children that
+   * are. Reporting only what the runner holds would leave every phase of a
+   * pipeline looking abandoned while its own tasks ran, so a workflow in a
+   * running state counts as running here too.
+   * </p>
+   */
+  public Collection<String> getExecutingInstanceIds() {
+    Set<String> executing = new LinkedHashSet<String>();
+    if (this.runner instanceof AsynchronousLocalEngineRunner) {
+      executing.addAll(((AsynchronousLocalEngineRunner) this.runner)
+          .getExecutingInstanceIds());
+    }
+    for (WorkflowProcessor processor : this.processorQueue.getProcessors()) {
+      WorkflowInstance inst = processor.getWorkflowInstance();
+      if (inst == null || inst.getState() == null
+          || inst.getState().getCategory() == null) {
+        continue;
+      }
+      if ("running".equals(inst.getState().getCategory().getName())) {
+        executing.add(inst.getId());
+      }
+    }
+    return executing;
   }
 
   /**

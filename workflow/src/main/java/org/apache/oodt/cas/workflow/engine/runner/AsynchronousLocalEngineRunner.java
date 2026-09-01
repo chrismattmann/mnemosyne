@@ -101,6 +101,8 @@ public class AsynchronousLocalEngineRunner extends AbstractEngineRunnerBase {
           WorkflowState state = lifecycle.createState("Failure", "done", msg);
           taskProcessor.setState(state);
           persist(taskProcessor.getWorkflowInstance());
+        } finally {
+          workerMap.remove(taskProcessor.getWorkflowInstance().getId());
         }
 
       }
@@ -119,12 +121,31 @@ public class AsynchronousLocalEngineRunner extends AbstractEngineRunnerBase {
 
     };
 
-    String id = "";
-    synchronized (id) {
-      id = UUID.randomUUID().toString();
-      this.workerMap.put(id, worker);
+    // Keyed by the instance being run, and removed when the run ends.
+    //
+    // It was keyed by a fresh UUID and never cleared, so it grew for the life
+    // of the process and could not answer the one question worth asking of
+    // it: which instances is this engine running? Nothing asked, because the
+    // engine returned the interface's empty default instead, and so anything
+    // reading "is this instance running" was told no about every instance --
+    // which is how live work came to be reported as abandoned, and why none
+    // of it had a wall clock.
+    synchronized (this.workerMap) {
+      this.workerMap.put(taskProcessor.getWorkflowInstance().getId(), worker);
       this.executor.execute(worker);
     }
+  }
+
+  /**
+   * The instances this runner is running right now.
+   *
+   * <p>
+   * A task that is blocked is still running: a redirector waiting for the
+   * workflow it started has a thread, has begun, and has not finished.
+   * </p>
+   */
+  public java.util.Collection<String> getExecutingInstanceIds() {
+    return new java.util.ArrayList<String>(this.workerMap.keySet());
   }
 
   /*
