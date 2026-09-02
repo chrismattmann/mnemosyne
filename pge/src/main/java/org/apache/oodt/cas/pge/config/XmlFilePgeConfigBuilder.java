@@ -18,6 +18,8 @@ package org.apache.oodt.cas.pge.config;
 
 //OODT static imports
 import com.google.common.collect.Lists;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import org.apache.oodt.cas.metadata.Metadata;
 import org.apache.oodt.cas.pge.exceptions.PGEException;
@@ -42,6 +44,10 @@ import static org.apache.oodt.cas.pge.util.XmlHelper.*;
  * @author bfoster (Brian Foster)
  */
 public class XmlFilePgeConfigBuilder implements PgeConfigBuilder {
+
+   private static final Logger LOG =
+         LoggerFactory.getLogger(XmlFilePgeConfigBuilder.class);
+
 
    private final List<String> missingMetadataKeys;
 
@@ -183,6 +189,21 @@ public class XmlFilePgeConfigBuilder implements PgeConfigBuilder {
          // their values which should be staged.
          for (String metKey : getStageFilesMetKeys(fileStagingElem, metadata)) {
             List<String> files = metadata.getAllMetadata(metKey);
+            if (files == null || files.isEmpty()) {
+               // A key the configuration names and this run does not carry.
+               // getAllMetadata answers null for a key that is not there, and
+               // staging it threw a NullPointerException out of the config
+               // builder -- which fails the PGE before it runs, so the task
+               // that was going to produce something produces nothing at all.
+               //
+               // In DRAT that lost one audit out of seventy-eight, and the run
+               // reported success: the aggregate was over the logs that did
+               // get written, and nothing said one was missing. Nothing to
+               // stage is not a failure; it is nothing to stage.
+               LOG.debug("No files to stage for metadata key [" + metKey
+                     + "]; nothing to do for it");
+               continue;
+            }
             fileStagingInfo.addFilePaths(files);
 
             // Generate paths which the files will be staged to.

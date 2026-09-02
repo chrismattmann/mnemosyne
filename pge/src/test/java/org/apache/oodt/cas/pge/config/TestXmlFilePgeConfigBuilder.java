@@ -125,4 +125,49 @@ public class TestXmlFilePgeConfigBuilder extends TestCase {
       assertEquals(true, outputDirs.get(0).isCreateBeforeExe());
       assertEquals("/tmp/output", outputDirs.get(0).getPath());
    }
+
+   /**
+    * A staging key this run does not carry is not a failure.
+    *
+    * <p>
+    * A configuration can name a metadata key to stage that a particular run
+    * has no values for. getAllMetadata answers null for a key that is not
+    * there, and staging that threw a NullPointerException out of the builder
+    * -- which fails the PGE before it runs a thing.
+    * </p>
+    *
+    * <p>
+    * In DRAT that cost one audit out of seventy-eight, and the run still
+    * reported success: the aggregate covered the logs that were written and
+    * nothing reported the one that was not.
+    * </p>
+    */
+   public void testAStagingKeyWithNoValuesIsNotAFailure() throws IOException {
+      XmlFilePgeConfigBuilder builder = new XmlFilePgeConfigBuilder();
+      PgeMetadata pgeMetadata = new PgeMetadata();
+      pgeMetadata.replaceMetadata(CONFIG_FILE_PATH,
+            "src/test/resources/pge-config-absent-staging-key.xml");
+      pgeMetadata.replaceMetadata("INPUT_FILE_1", "src/test/resources/data-file-1.txt");
+      pgeMetadata.replaceMetadata("INPUT_FILE_2", "src/test/resources/data-file-2.txt");
+      pgeMetadata.replaceMetadata("WORKING_DIR", "/tmp");
+      pgeMetadata.markAsDynamicMetadataKey();
+      pgeMetadata.commitMarkedDynamicMetadataKeys();
+
+      PgeConfig pgeConfig = builder.build(pgeMetadata);
+
+      assertNotNull("the config could not be built at all", pgeConfig);
+      assertNotNull(pgeConfig.getFileStagingInfo());
+      assertTrue("a key with no values staged something",
+            pgeConfig.getFileStagingInfo().getFilePaths().isEmpty());
+   }
+
+   /** Nothing to add is not an error, whoever is asking. */
+   public void testAddingNothingToStageIsHarmless() {
+      FileStagingInfo staging = new FileStagingInfo("/tmp/staging");
+      staging.addFilePaths(null);
+      staging.addProductIds(null);
+      assertTrue(staging.getFilePaths().isEmpty());
+      assertTrue(staging.getProductIds().isEmpty());
+   }
+
 }
