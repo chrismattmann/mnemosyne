@@ -69,6 +69,17 @@ public final class PgeProgress {
 
   public Metadata toMetadata() {
     Metadata met = new Metadata();
+    applyTo(met);
+    return met;
+  }
+
+  /**
+   * Overlay these values onto {@code met}. Does not remove other keys.
+   */
+  public void applyTo(Metadata met) {
+    if (met == null) {
+      return;
+    }
     if (done != null) {
       putBoth(met, PgeTaskMetKeys.PROGRESS_DONE, String.valueOf(done));
     }
@@ -78,7 +89,20 @@ public final class PgeProgress {
     if (message.length() > 0) {
       putBoth(met, PgeTaskMetKeys.PROGRESS_MESSAGE, message);
     }
-    return met;
+  }
+
+  /**
+   * Drop both key styles for done / total / message. A later PGE inherits
+   * the previous task's stamps in the shared context; W1
+   * {@code updateMetadata} then writes them back over this task's bar.
+   */
+  public static void clearFrom(Metadata met) {
+    if (met == null) {
+      return;
+    }
+    removeBoth(met, PgeTaskMetKeys.PROGRESS_DONE);
+    removeBoth(met, PgeTaskMetKeys.PROGRESS_TOTAL);
+    removeBoth(met, PgeTaskMetKeys.PROGRESS_MESSAGE);
   }
 
   public static PgeProgress fromMetadata(Metadata met) {
@@ -139,6 +163,11 @@ public final class PgeProgress {
   private static void putBoth(Metadata met, PgeTaskMetKeys key, String value) {
     met.replaceMetadata(key.name, value);
     met.replaceMetadata(key.legacyName, value);
+  }
+
+  private static void removeBoth(Metadata met, PgeTaskMetKeys key) {
+    met.removeMetadata(key.name);
+    met.removeMetadata(key.legacyName);
   }
 
   private static String first(Metadata met, String... keys) {

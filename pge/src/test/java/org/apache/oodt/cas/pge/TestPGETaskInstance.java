@@ -33,6 +33,7 @@ import org.apache.oodt.cas.pge.config.MockPgeConfigBuilder;
 import org.apache.oodt.cas.pge.config.OutputDir;
 import org.apache.oodt.cas.pge.config.PgeConfig;
 import org.apache.oodt.cas.pge.metadata.PgeMetadata;
+import org.apache.oodt.cas.pge.metadata.PgeProgress;
 import org.apache.oodt.cas.pge.metadata.PgeTaskMetKeys;
 import org.apache.oodt.cas.pge.metadata.PgeTaskStatus;
 import org.apache.oodt.cas.pge.writers.MockDynamicConfigFileWriter;
@@ -40,6 +41,7 @@ import org.apache.oodt.cas.workflow.metadata.CoreMetKeys;
 import org.apache.oodt.cas.workflow.structs.WorkflowTaskConfiguration;
 import org.apache.oodt.cas.workflow.system.AvroRpcWorkflowManagerClient;
 import org.apache.oodt.cas.workflow.system.WorkflowManagerClient;
+import org.easymock.Capture;
 import org.junit.After;
 import org.junit.Test;
 import org.w3c.dom.Document;
@@ -55,6 +57,8 @@ import java.io.FileFilter;
 import java.io.FileInputStream;
 import java.io.StringReader;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -67,13 +71,17 @@ import java.util.logging.Logger;
 
 import static org.apache.oodt.cas.pge.metadata.PgeTaskMetKeys.*;
 import static org.apache.oodt.cas.pge.metadata.PgeTaskStatus.CRAWLING;
+import static org.easymock.EasyMock.capture;
 import static org.easymock.EasyMock.createMock;
+import static org.easymock.EasyMock.eq;
 import static org.easymock.EasyMock.expect;
+import static org.easymock.EasyMock.newCapture;
 import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.verify;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.junit.Assume.assumeTrue;
@@ -627,6 +635,196 @@ public class TestPGETaskInstance {
 
       verify(pc);
       verify(pgeTask.julLogger);
+   }
+
+  /**
+    * The watcher publishes, and leaves the task's own metadata alone.
+    *
+    * <p>
+    * That object belongs to the thread running the task, which hands it to
+    * the W1 TaskJob end-persist; {@code stopProgressWatcher} joins with a
+    * one-second bound, so a watcher parked in a slow workflow manager call
+    * can still be running when that happens. {@code Metadata} is not
+    * thread-safe, so the overlay is the task thread's job, not the watcher's.
+    * </p>
+    */
+  @Test
+   public void testReportProgressPublishesWithoutTouchingTaskMetadata()
+         throws Exception {
+      PGETaskInstance pgeTask = createTestInstance();
+      File exe = new File(pgeTask.pgeConfig.getExeDir());
+      Files.write(new File(exe, PgeProgress.FILE_NAME).toPath(),
+            "done=653\ntotal=653\nmsg=bg CLIP\n".getBytes(StandardCharsets.UTF_8));
+
+      Metadata taskMet = staleJaccardMetadata();
+      pgeTask.workflowMetadata = taskMet;
+      pgeTask.pgeMetadata.replaceMetadata("JobDir", exe.getAbsolutePath());
+
+      Capture<Metadata> posted = newCapture();
+      WorkflowManagerClient client = createMock(WorkflowManagerClient.class);
+      expect(client.getWorkflowInstanceMetadata(pgeTask.getWorkflowInstId()))
+            .andReturn(staleJaccardMetadata());
+      expect(client.updateMetadataForWorkflow(eq(pgeTask.getWorkflowInstId()),
+            capture(posted))).andReturn(true);
+      replay(client);
+      pgeTask.setWmClient(client);
+
+      pgeTask.reportProgress();
+
+      assertEquals("the watcher wrote into the task's metadata", "jaccard",
+            taskMet.getMetadata("PGETask_Progress"));
+      Metadata sent = posted.getValue();
+      assertEquals("bg CLIP", sent.getMetadata("PGETask_Progress"));
+      assertEquals("653", sent.getMetadata("PGETask_Done"));
+      assertEquals(exe.getAbsolutePath(), sent.getMetadata("JobDir"));
+      verify(client);
+
+      // The task thread picks it up once the watcher has been stopped.
+      pgeTask.adoptProgressIntoTaskMetadata();
+      assertEquals("bg CLIP", taskMet.getMetadata("PGETask_Progress"));
+      assertEquals("653", taskMet.getMetadata("PGETask_Done"));
+      assertEquals("filelist_chunk_0.txt", taskMet.getMetadata("Filename"));
+      assertEquals(exe.getAbsolutePath(), taskMet.getMetadata("JobDir"));
+   }
+
+   /**
+    * A task that inherited no stale stamps starts without a round-trip.
+    *
+    * <p>
+    * Binding used to fetch and re-post the shared context for every PGE, so a
+    * fan-out paid two calls per task against the same workflow manager whose
+    * handler pool is the thing that falls over under load. Only the manager's
+    * copy of stale keys needs the network, and only when there are some.
+    * </p>
+    */
+  @Test
+   public void testBindWithNothingInheritedCostsNoCalls() throws Exception {
+      PGETaskInstance pgeTask = createTestInstance();
+      File exe = new File(pgeTask.pgeConfig.getExeDir());
+      Metadata taskMet = new Metadata();
+      taskMet.addMetadata("Filename", "filelist_chunk_0.txt");
+      pgeTask.workflowMetadata = taskMet;
+      pgeTask.pgeMetadata.replaceMetadata("JobDir", exe.getAbsolutePath());
+
+      WorkflowManagerClient client = createMock(WorkflowManagerClient.class);
+      replay(client);
+      pgeTask.setWmClient(client);
+
+      pgeTask.bindProgressContext();
+
+      verify(client);
+      assertEquals("filelist_chunk_0.txt", taskMet.getMetadata("Filename"));
+   }
+
+   /**
+    * A previous run's progress file does not outrank the task that follows.
+    *
+    * <p>
+    * The peek prefers {@code JobDir/.progress} over the metadata keys, so a
+    * reused {@code exeDir} that still holds a finished file would draw a
+    * completed bar for a task that has only just begun.
+    * </p>
+    */
+  @Test
+   public void testBindDiscardsAPreviousRunsProgressFile() throws Exception {
+      PGETaskInstance pgeTask = createTestInstance();
+      File exe = new File(pgeTask.pgeConfig.getExeDir());
+      File progress = new File(exe, PgeProgress.FILE_NAME);
+      Files.write(progress.toPath(),
+            "done=653\ntotal=653\nmsg=bg CLIP\n".getBytes(StandardCharsets.UTF_8));
+      assertTrue(progress.exists());
+
+      Metadata taskMet = new Metadata();
+      pgeTask.workflowMetadata = taskMet;
+      pgeTask.pgeMetadata.replaceMetadata("JobDir", exe.getAbsolutePath());
+
+      WorkflowManagerClient client = createMock(WorkflowManagerClient.class);
+      replay(client);
+      pgeTask.setWmClient(client);
+
+      pgeTask.bindProgressContext();
+
+      assertFalse("a previous run's progress file was left for this task",
+            progress.exists());
+      verify(client);
+   }
+
+  @Test
+   public void testBindProgressContextDropsInheritedJaccard() throws Exception {
+      PGETaskInstance pgeTask = createTestInstance();
+      File exe = new File(pgeTask.pgeConfig.getExeDir());
+      Metadata taskMet = staleJaccardMetadata();
+      pgeTask.workflowMetadata = taskMet;
+      pgeTask.pgeMetadata.replaceMetadata("JobDir", exe.getAbsolutePath());
+
+      Capture<Metadata> posted = newCapture();
+      WorkflowManagerClient client = createMock(WorkflowManagerClient.class);
+      expect(client.getWorkflowInstanceMetadata(pgeTask.getWorkflowInstId()))
+            .andReturn(staleJaccardMetadata());
+      expect(client.updateMetadataForWorkflow(eq(pgeTask.getWorkflowInstId()),
+            capture(posted))).andReturn(true);
+      replay(client);
+      pgeTask.setWmClient(client);
+
+      pgeTask.bindProgressContext();
+
+      assertNull(taskMet.getMetadata("PGETask_Progress"));
+      assertNull(taskMet.getMetadata("PGETask_Done"));
+      assertEquals("filelist_chunk_0.txt", taskMet.getMetadata("Filename"));
+      Metadata sent = posted.getValue();
+      assertNull(sent.getMetadata("PGETask_Progress"));
+      assertEquals(exe.getAbsolutePath(), sent.getMetadata("JobDir"));
+      verify(client);
+   }
+
+  @Test
+   public void testUpdateDynamicMetadataDoesNotRestoreJaccard() throws Exception {
+      PGETaskInstance pgeTask = createTestInstance();
+      File exe = new File(pgeTask.pgeConfig.getExeDir());
+      Files.write(new File(exe, PgeProgress.FILE_NAME).toPath(),
+            "done=653\ntotal=653\nmsg=bg CLIP\n".getBytes(StandardCharsets.UTF_8));
+
+      Metadata incoming = staleJaccardMetadata();
+      pgeTask.pgeMetadata = pgeTask.createPgeMetadata(incoming,
+            new WorkflowTaskConfiguration());
+      pgeTask.pgeMetadata.replaceMetadata("JobDir", exe.getAbsolutePath());
+      pgeTask.workflowMetadata = incoming;
+
+      Capture<Metadata> progressPosted = newCapture();
+      WorkflowManagerClient progressClient = createMock(WorkflowManagerClient.class);
+      expect(progressClient.getWorkflowInstanceMetadata(pgeTask.getWorkflowInstId()))
+            .andReturn(staleJaccardMetadata());
+      expect(progressClient.updateMetadataForWorkflow(
+            eq(pgeTask.getWorkflowInstId()), capture(progressPosted))).andReturn(true);
+      replay(progressClient);
+      pgeTask.setWmClient(progressClient);
+      pgeTask.reportProgress();
+      verify(progressClient);
+
+      Capture<Metadata> dynPosted = newCapture();
+      WorkflowManagerClient dynClient = createMock(WorkflowManagerClient.class);
+      expect(dynClient.updateMetadataForWorkflow(eq(pgeTask.getWorkflowInstId()),
+            capture(dynPosted))).andReturn(true);
+      replay(dynClient);
+      pgeTask.setWmClient(dynClient);
+      pgeTask.updateDynamicMetadata();
+
+      Metadata sent = dynPosted.getValue();
+      assertEquals("bg CLIP", sent.getMetadata("PGETask_Progress"));
+      assertEquals("653", sent.getMetadata("PGETask_Done"));
+      assertEquals("filelist_chunk_0.txt", sent.getMetadata("Filename"));
+      assertEquals(exe.getAbsolutePath(), sent.getMetadata("JobDir"));
+      assertEquals("bg CLIP", incoming.getMetadata("PGETask_Progress"));
+      verify(dynClient);
+   }
+
+   private static Metadata staleJaccardMetadata() {
+      Metadata met = new Metadata();
+      met.addMetadata("PGETask_Progress", "jaccard");
+      met.addMetadata("PGETask_Done", "0");
+      met.addMetadata("PGETask_Total", "653");
+      met.addMetadata("Filename", "filelist_chunk_0.txt");
+      return met;
    }
 
    private PGETaskInstance createTestInstance() throws Exception {

@@ -110,7 +110,17 @@ public class PGETaskInstance implements WorkflowTaskInstance {
    private String workflowInstId;
    protected PgeMetadata pgeMetadata;
    protected PgeConfig pgeConfig;
-   private PgeProgress lastProgress;
+   /**
+    * The metadata object {@link #run} was given. W1 TaskJob persists this
+    * at task end (replace), so progress and JobDir have to live on it or
+    * a previous task's {@code PGETask_*} stamps come back.
+    */
+   protected Metadata workflowMetadata;
+   /**
+    * Written by the progress watcher and read by the thread running the
+    * task, so it is published rather than left to chance.
+    */
+   private volatile PgeProgress lastProgress;
    static final long PROGRESS_POLL_MS = 2000L;
 
    protected PGETaskInstance() {}
@@ -120,10 +130,12 @@ public class PGETaskInstance implements WorkflowTaskInstance {
       logger.debug("Starting PGE Task instance...");
       try {
          // Initialize CAS-PGE.
+         workflowMetadata = metadata;
          pgeMetadata = createPgeMetadata(metadata, config);
          pgeConfig = createPgeConfig();
          runPropertyAdders();
          workflowInstId = getWorkflowInstanceId();
+         bindProgressContext();
 
          // use workflow ID specific logger from now on
          logger = LoggerFactory.getLogger(PGETaskInstance.class.getName() + "." + workflowInstId);
@@ -246,11 +258,60 @@ public class PGETaskInstance implements WorkflowTaskInstance {
    }
 
    /**
-    * While the script runs, copy {@code .progress} into the instance metadata
+    * Drop a previous task's {@code PGETask_*} stamps and persist this task's
+    * {@code JobDir} so OPSUI peeks the current {@code .progress} file.
+    */
+   protected void bindProgressContext() {
+      // Whether anything stale was actually inherited decides below whether
+      // this costs a round-trip at all.
+      boolean inherited = PgeProgress.fromMetadata(workflowMetadata) != null;
+      PgeProgress.clearFrom(workflowMetadata);
+      copyJobDir(workflowMetadata);
+      discardPreviousProgressFile();
+      if (inherited) {
+         // Only the shared context held by the workflow manager still has the
+         // previous task's stamps at this point, and only clearing those needs
+         // the network. A task that inherited nothing -- the common case, and
+         // every first task in a workflow -- starts without two extra calls
+         // against a manager whose handler pool is worth not spending.
+         persistProgress(null);
+      }
+   }
+
+   /**
+    * Remove a previous run's {@code .progress} before this one starts.
+    *
+    * <p>
+    * The peek prefers this file over the metadata keys, so leaving one behind
+    * hands the next task a finished bar to display: an {@code exeDir} that is
+    * reused -- a retry, or one not templated per instance -- would show
+    * 653/653 for a task that has not started, which is the bug this change
+    * exists to fix, pointed the other way. Clearing the keys is not enough
+    * while the file outranks them.
+    * </p>
+    */
+   protected void discardPreviousProgressFile() {
+      if (pgeConfig == null || pgeConfig.getExeDir() == null) {
+         return;
+      }
+      File stale = new File(pgeConfig.getExeDir(), PgeProgress.FILE_NAME);
+      if (stale.exists() && !stale.delete()) {
+         logger.warn("Could not remove a previous run's progress file: {}",
+               stale.getAbsolutePath());
+      }
+   }
+
+   /**
+    * While the script runs, publish {@code .progress} to the workflow manager
     * so OPSUI can draw a bar. Scripts that never write the file are a no-op.
-    * Reads the current shared context, overlays the progress keys, and writes
-    * the whole map back: W1 {@code updateMetadata} replaces the context, W2
-    * can merge; either way existing keys survive.
+    *
+    * <p>
+    * This thread only ever touches metadata of its own: it posts the current
+    * shared context back with the progress keys overlaid, and records what it
+    * saw in {@link #lastProgress}. The metadata object {@link #run} was given
+    * belongs to the thread running the task, which copies the last progress
+    * onto it in {@link #adoptProgressIntoTaskMetadata} once this watcher has
+    * been stopped.
     */
    protected Thread startProgressWatcher() {
       Thread watcher = new Thread(new Runnable() {
@@ -292,6 +353,38 @@ public class PGETaskInstance implements WorkflowTaskInstance {
       if (next == null || next.sameAs(lastProgress)) {
          return;
       }
+      persistProgress(next);
+      lastProgress = next;
+   }
+
+   /**
+    * Copy the progress last seen onto the metadata object {@link #run} was
+    * given, for the W1 TaskJob end-persist to carry.
+    *
+    * <p>
+    * Only the thread running the task calls this. The watcher used to write
+    * into that object itself, but {@code stopProgressWatcher} joins with a
+    * one-second bound -- a bound, not a guarantee -- so a watcher parked in a
+    * workflow manager call outlives the join and would still be writing while
+    * this thread hands the same object to the end-persist. {@code Metadata}
+    * is not thread-safe, and a workflow manager that answers slowly is
+    * exactly the condition that makes the overlap likely rather than rare.
+    * </p>
+    */
+   protected void adoptProgressIntoTaskMetadata() {
+      PgeProgress snapshot = lastProgress;
+      if (snapshot != null) {
+         snapshot.applyTo(workflowMetadata);
+      }
+      copyJobDir(workflowMetadata);
+   }
+
+   /**
+    * Overlay progress and this task's JobDir onto the live shared context.
+    * {@code progress} may be null: that is bind, which only clears stale
+    * keys and publishes JobDir.
+    */
+   protected void persistProgress(PgeProgress progress) {
       try {
          WorkflowManagerClient client = getWorkflowManagerClient();
          Metadata current = null;
@@ -303,11 +396,28 @@ public class PGETaskInstance implements WorkflowTaskInstance {
          if (current == null) {
             current = new Metadata();
          }
-         current.replaceMetadata(next.toMetadata());
+         PgeProgress.clearFrom(current);
+         copyJobDir(current);
+         if (progress != null) {
+            progress.applyTo(current);
+         }
          client.updateMetadataForWorkflow(workflowInstId, current);
-         lastProgress = next;
       } catch (Exception e) {
          logger.warn("Could not report PGE progress: {}", e.getMessage());
+      }
+   }
+
+   protected void copyJobDir(Metadata met) {
+      if (met == null || pgeMetadata == null) {
+         return;
+      }
+      String jobDir = pgeMetadata.getMetadata("JobDir");
+      if (jobDir != null && jobDir.length() > 0) {
+         met.replaceMetadata("JobDir", jobDir);
+      }
+      String outputDir = pgeMetadata.getMetadata("JobOutputDir");
+      if (outputDir != null && outputDir.length() > 0) {
+         met.replaceMetadata("JobOutputDir", outputDir);
       }
    }
 
@@ -567,6 +677,7 @@ public class PGETaskInstance implements WorkflowTaskInstance {
          } finally {
             stopProgressWatcher(progressWatcher);
             reportProgress();
+            adoptProgressIntoTaskMetadata();
          }
 
          long endTime = System.currentTimeMillis();
@@ -736,8 +847,20 @@ public class PGETaskInstance implements WorkflowTaskInstance {
    protected void updateDynamicMetadata() throws Exception {
       logger.debug("Updating dynamic metadata ...");
       pgeMetadata.commitMarkedDynamicMetadataKeys();
+      Metadata dynamic = pgeMetadata.asMetadata(PgeMetadata.Type.DYNAMIC);
+      PgeProgress.clearFrom(dynamic);
+      copyJobDir(dynamic);
+      PgeProgress snapshot = lastProgress;
+      if (snapshot == null && pgeConfig != null && pgeConfig.getExeDir() != null) {
+         snapshot = PgeProgress.readFile(new File(pgeConfig.getExeDir(), PgeProgress.FILE_NAME));
+      }
+      if (snapshot != null) {
+         snapshot.applyTo(dynamic);
+         snapshot.applyTo(workflowMetadata);
+      }
+      copyJobDir(workflowMetadata);
       getWorkflowManagerClient()
-              .updateMetadataForWorkflow(workflowInstId, pgeMetadata.asMetadata(PgeMetadata.Type.DYNAMIC));
+              .updateMetadataForWorkflow(workflowInstId, dynamic);
    }
 
    public String getWorkflowInstId() {
