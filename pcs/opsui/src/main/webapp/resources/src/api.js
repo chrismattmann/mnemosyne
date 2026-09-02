@@ -19,6 +19,15 @@ import { concatBytes, decodePeek, PEEK_BYTES } from './productPeek.js'
 
 const services = () => `${window.location.origin}/pcs/services`
 
+// Instance progress is polled every few seconds. A GET without this can
+// be served from the HTTP cache, so the bar sticks (500 / 653) until a
+// hard refresh. Product bytes still use the default cache.
+const LIVE = { cache: 'no-store' }
+
+function liveGet(url, extra) {
+  return fetch(url, Object.assign({}, LIVE, extra || {}))
+}
+
 async function readJson(response) {
   const text = await response.text()
   let body = {}
@@ -41,7 +50,7 @@ export function getHealth() {
   const timer = controller ? setTimeout(function () {
     controller.abort()
   }, 15000) : null
-  return fetch(`${services()}/health/report`, controller ? { signal: controller.signal } : {})
+  return liveGet(`${services()}/health/report`, controller ? { signal: controller.signal } : {})
     .then(readJson)
     .catch(function (err) {
       if (err && err.name === 'AbortError') {
@@ -57,13 +66,13 @@ export function getHealth() {
 }
 
 export function getTypes() {
-  return fetch(`${services()}/catalog/types`).then(readJson)
+  return liveGet(`${services()}/catalog/types`).then(readJson)
 }
 
 export function getTypeProducts(name, page) {
   const params = new URLSearchParams()
   params.set('page', String(page || 1))
-  return fetch(`${services()}/catalog/types/${encodeURIComponent(name)}/products?${params}`)
+  return liveGet(`${services()}/catalog/types/${encodeURIComponent(name)}/products?${params}`)
     .then(readJson)
 }
 
@@ -90,11 +99,11 @@ export function getInstances(status, page, workflow, sort, dir) {
     params.set('sort', sort)
     params.set('dir', dir === 'desc' ? 'desc' : 'asc')
   }
-  return fetch(`${services()}/workflow/instances?${params}`).then(readJson)
+  return liveGet(`${services()}/workflow/instances?${params}`).then(readJson)
 }
 
 export function getInstance(id) {
-  return fetch(`${services()}/workflow/instances/${encodeURIComponent(id)}`).then(readJson)
+  return liveGet(`${services()}/workflow/instances/${encodeURIComponent(id)}`).then(readJson)
 }
 
 export function getStatuses() {
@@ -128,7 +137,7 @@ export function queryCatalog(sql) {
 }
 
 export function getResources() {
-  return fetch(`${services()}/resource/overview`).then(readJson)
+  return liveGet(`${services()}/resource/overview`).then(readJson)
 }
 
 export async function peekProduct(id, maxBytes) {
