@@ -24,6 +24,7 @@ import junit.framework.TestCase;
 import org.apache.oodt.cas.workflow.lifecycle.WorkflowLifecycleManager;
 import org.apache.oodt.cas.workflow.lifecycle.WorkflowState;
 import org.apache.oodt.cas.workflow.structs.Graph;
+import org.apache.oodt.cas.workflow.structs.WorkflowCondition;
 import org.apache.oodt.cas.workflow.structs.ParentChildWorkflow;
 import org.apache.oodt.cas.workflow.structs.WorkflowInstance;
 
@@ -116,6 +117,15 @@ public class TestWaitingOnNames extends TestCase {
     inst.setCurrentTaskId(taskId);
     Graph graph = new Graph();
     graph.setExecutionType(executionType);
+    if ("condition".equals(executionType)) {
+      // The engine synthesises a task to run a condition and gives it a
+      // "-task" id; the condition itself is what a reader recognises.
+      WorkflowCondition cond = new WorkflowCondition();
+      cond.setConditionId(taskId);
+      cond.setConditionName(taskId);
+      graph.setCond(cond);
+      inst.setCurrentTaskId(taskId + "-task");
+    }
     inst.setParentChildWorkflow(new ParentChildWorkflow(graph));
     TaskProcessor processor = new TaskProcessor(lifecycle, inst);
     // After construction: the processor's constructor puts every instance

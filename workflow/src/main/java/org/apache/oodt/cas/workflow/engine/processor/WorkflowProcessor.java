@@ -22,6 +22,7 @@ import org.apache.oodt.cas.workflow.engine.ChangeType;
 import org.apache.oodt.cas.workflow.lifecycle.WorkflowLifecycleManager;
 import org.apache.oodt.cas.workflow.lifecycle.WorkflowStateTransitioner;
 import org.apache.oodt.cas.workflow.lifecycle.WorkflowState;
+import org.apache.oodt.cas.workflow.structs.Graph;
 import org.apache.oodt.cas.workflow.structs.WorkflowInstance;
 
 //JDK imports
@@ -635,13 +636,24 @@ public abstract class WorkflowProcessor implements WorkflowProcessorListener,
    */
   private String nameOfGate(WorkflowProcessor gate) {
     WorkflowInstance inst = gate.getWorkflowInstance();
-    String name = inst.getCurrentTaskId() != null ? inst.getCurrentTaskId()
+    Graph graph = inst.getParentChildWorkflow() != null
+        ? inst.getParentChildWorkflow().getGraph() : null;
+
+    if (graph != null && "condition".equals(graph.getExecutionType())) {
+      // The condition's own id, not the id of the task synthesised to run it:
+      // that one carries a "-task" suffix this deployment never wrote, and
+      // the point of the reason is to name something a reader recognises.
+      if (graph.getCond() != null && graph.getCond().getConditionId() != null) {
+        return "condition:" + graph.getCond().getConditionId();
+      }
+      return "condition:" + gateId(inst);
+    }
+    return "task:" + gateId(inst);
+  }
+
+  private String gateId(WorkflowInstance inst) {
+    return inst.getCurrentTaskId() != null ? inst.getCurrentTaskId()
         : inst.getId();
-    boolean condition = inst.getParentChildWorkflow() != null
-        && inst.getParentChildWorkflow().getGraph() != null
-        && "condition".equals(
-            inst.getParentChildWorkflow().getGraph().getExecutionType());
-    return (condition ? "condition:" : "task:") + name;
   }
 
   private String firstUnmetCondition() {
