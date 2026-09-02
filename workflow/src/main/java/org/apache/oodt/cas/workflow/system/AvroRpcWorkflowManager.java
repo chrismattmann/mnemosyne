@@ -75,6 +75,16 @@ public class AvroRpcWorkflowManager implements WorkflowManager,org.apache.oodt.c
 
     private Server server;
     private volatile Thread shutdownHook;
+
+    /**
+     * Guards the shutdown. Deliberately not this manager's own monitor: the
+     * RPC handlers that write instances are synchronized on that, so locking
+     * the shutdown on it would make stopping the manager wait behind an
+     * in-flight update -- and an update that cannot finish is precisely the
+     * condition under which someone is trying to stop it.
+     */
+    private final Object shutdownLock = new Object();
+
     private final WorkflowEngine engine;
     private WorkflowRepository repo;
 
@@ -163,8 +173,23 @@ public class AvroRpcWorkflowManager implements WorkflowManager,org.apache.oodt.c
     /**
      * The shutdown itself, without touching the hook -- so the hook can call
      * it without trying to remove itself while it is running.
+     *
+     * <p>
+     * Runs once and only once. Two shutdown hooks reach this method -- this
+     * class registers one, and {@code WorkflowManagerStarter} registers
+     * another that calls {@link #shutdown()} -- and the JVM runs every hook
+     * concurrently. Unsynchronised, both arrived here together and both read
+     * the same non-null server before either cleared it, so both called close
+     * on it: one thread went into Jetty's lifecycle stop holding its monitor
+     * while the other blocked on that same monitor, and the manager was left
+     * with a closed port and a process that never exited. That is a workflow
+     * manager that cannot be stopped, which strands whatever was waiting to
+     * reuse what it held. Serialised, the second caller finds the server
+     * already gone and reports that it had nothing to do.
+     * </p>
      */
     private boolean shutdownInternal() {
+      synchronized (shutdownLock) {
         logger.debug("Shutting down");
         // The engine starts threads of its own and was never told to stop, so
         // shutting the manager down left them running for the life of the
@@ -185,6 +210,7 @@ public class AvroRpcWorkflowManager implements WorkflowManager,org.apache.oodt.c
         } else {
             return false;
         }
+      }
     }
 
     @Override
