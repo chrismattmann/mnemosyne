@@ -292,12 +292,6 @@ public abstract class WorkflowProcessor implements WorkflowProcessorListener,
   public synchronized List<TaskProcessor> getRunnableWorkflowProcessors() {
     Vector<TaskProcessor> runnableTasks = new Vector<TaskProcessor>();
 
-    // Why this is not being handed out, recorded where it is already known.
-    // The reason was computed here and discarded, so everything downstream
-    // had to guess at it from a status and an executing set -- and could not
-    // tell an instance nobody is running from one waiting its turn.
-    recordWaitingOn();
-
     // evaluate pre-conditions
     if (!this.passedPreConditions()) {
       // Conditions can gate this processor without being held by it: they run
@@ -574,7 +568,17 @@ public abstract class WorkflowProcessor implements WorkflowProcessorListener,
    * generate work.
    * </p>
    */
-  protected void recordWaitingOn() {
+  /**
+   * Work out why this processor is not being handed out, and record it.
+   *
+   * @return whether the reason changed, so a caller that can reach the
+   *         repository knows whether this is worth a write. The value is only
+   *         useful to anything outside this JVM once it has been persisted,
+   *         and every pass recomputes the same answer for a processor that
+   *         goes on waiting -- persisting each of those would be one write per
+   *         processor per pass for a value that had not moved.
+   */
+  public boolean recordWaitingOn() {
     String reason = null;
     if (!this.passedPreConditions()) {
       reason = "condition:" + firstUnmetCondition();
@@ -593,7 +597,9 @@ public abstract class WorkflowProcessor implements WorkflowProcessorListener,
     String current = this.workflowInstance.getWaitingOn();
     if (reason == null ? current != null : !reason.equals(current)) {
       this.workflowInstance.setWaitingOn(reason);
+      return true;
     }
+    return false;
   }
 
   /**
