@@ -22,6 +22,7 @@ import org.apache.oodt.cas.workflow.engine.ChangeType;
 import org.apache.oodt.cas.workflow.lifecycle.WorkflowLifecycleManager;
 import org.apache.oodt.cas.workflow.lifecycle.WorkflowStateTransitioner;
 import org.apache.oodt.cas.workflow.lifecycle.WorkflowState;
+import org.apache.oodt.cas.workflow.structs.Graph;
 import org.apache.oodt.cas.workflow.structs.WorkflowInstance;
 
 //JDK imports
@@ -556,6 +557,120 @@ public abstract class WorkflowProcessor implements WorkflowProcessorListener,
       List<WorkflowProcessor> prerequisites) {
     this.prerequisites = prerequisites != null
         ? prerequisites : new Vector<WorkflowProcessor>();
+  }
+
+  /**
+   * Write down why this processor is not running, if it is not.
+   *
+   * <p>
+   * Costs nothing to record: the querier already persists the instance on the
+   * pass that asks, so the reason rides a write that was happening anyway.
+   * It is only set when it changes, so a processor waiting quietly does not
+   * generate work.
+   * </p>
+   */
+  /**
+   * Work out why this processor is not being handed out, and record it.
+   *
+   * @return whether the reason changed, so a caller that can reach the
+   *         repository knows whether this is worth a write. The value is only
+   *         useful to anything outside this JVM once it has been persisted,
+   *         and every pass recomputes the same answer for a processor that
+   *         goes on waiting -- persisting each of those would be one write per
+   *         processor per pass for a value that had not moved.
+   */
+  public boolean recordWaitingOn() {
+    String reason = null;
+    // The prerequisites are asked first, and named for what they are. A
+    // condition a processor waits on is dispatched as a prerequisite of its
+    // own, so that is what holds gated work -- and asking preConditions first
+    // answered "condition:unknown" for every one of them, because the
+    // preConditions structure those look in is not the one they are in. A
+    // reason that cannot name what it is waiting for is no better than the
+    // status it was meant to explain.
+    WorkflowProcessor unmet = firstUnmetPrerequisite();
+    if (unmet != null) {
+      reason = nameOfGate(unmet);
+    } else if (!this.passedPreConditions()) {
+      reason = "condition:" + firstUnmetCondition();
+    }
+    String current = this.workflowInstance.getWaitingOn();
+    if (reason == null ? current != null : !reason.equals(current)) {
+      this.workflowInstance.setWaitingOn(reason);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Which condition is holding this, for the record. The first that has not
+   * passed: a caller wants to know what to go and look at, and that is the
+   * one the processor itself is stopped on.
+   */
+  /**
+   * The first prerequisite that has not succeeded, or null when none is
+   * outstanding. Not-succeeded rather than not-done, to match
+   * {@link #passedPreConditions}: a prerequisite that failed is done and
+   * still gates this processor for good, and saying so beats saying nothing.
+   */
+  private WorkflowProcessor firstUnmetPrerequisite() {
+    if (this.prerequisites == null) {
+      return null;
+    }
+    for (WorkflowProcessor prerequisite : this.prerequisites) {
+      WorkflowInstance inst = prerequisite.getWorkflowInstance();
+      if (inst == null) {
+        continue;
+      }
+      WorkflowState state = inst.getState();
+      if (state == null || !"Success".equals(state.getName())) {
+        return prerequisite;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * What to call a gate: the condition or task it stands for, taken from the
+   * kind of work its graph says it is rather than from the shape of its id.
+   */
+  private String nameOfGate(WorkflowProcessor gate) {
+    WorkflowInstance inst = gate.getWorkflowInstance();
+    Graph graph = inst.getParentChildWorkflow() != null
+        ? inst.getParentChildWorkflow().getGraph() : null;
+
+    if (graph != null && "condition".equals(graph.getExecutionType())) {
+      // The condition's own id, not the id of the task synthesised to run it:
+      // that one carries a "-task" suffix this deployment never wrote, and
+      // the point of the reason is to name something a reader recognises.
+      if (graph.getCond() != null && graph.getCond().getConditionId() != null) {
+        return "condition:" + graph.getCond().getConditionId();
+      }
+      return "condition:" + gateId(inst);
+    }
+    return "task:" + gateId(inst);
+  }
+
+  private String gateId(WorkflowInstance inst) {
+    return inst.getCurrentTaskId() != null ? inst.getCurrentTaskId()
+        : inst.getId();
+  }
+
+  private String firstUnmetCondition() {
+    if (this.getPreConditions() != null
+        && this.getPreConditions().getSubProcessors() != null) {
+      for (WorkflowProcessor condition : this.getPreConditions()
+          .getSubProcessors()) {
+        WorkflowInstance inst = condition.getWorkflowInstance();
+        if (inst != null && inst.getState() != null
+            && inst.getState().getCategory() != null
+            && !"done".equals(inst.getState().getCategory().getName())) {
+          return inst.getCurrentTaskId() != null
+              ? inst.getCurrentTaskId() : inst.getId();
+        }
+      }
+    }
+    return "unknown";
   }
 
   /**

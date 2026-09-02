@@ -181,6 +181,12 @@ public class IterativeWorkflowProcessorThread implements WorkflowStatus, CoreMet
           // deferral the queue engine records when it leaves a processor
           // waiting on its conditions.
           workflowInst.recordBlocked();
+          // And what it is waiting for, so the same question can be answered
+          // about a W1 instance as about a W2 one: this engine writes the
+          // reason where the other engine writes it, into the instance the
+          // repository holds.
+          workflowInst.setWaitingOn("condition:" + task.getTaskId());
+          persistWorkflowInstance();
 
           // if we're not paused, go ahead and pause us now
           if (!isPaused()) {
@@ -200,6 +206,8 @@ public class IterativeWorkflowProcessorThread implements WorkflowStatus, CoreMet
             break;
           }
         }
+        // Out of the loop, so it is not waiting for anything any more.
+        workflowInst.setWaitingOn(null);
 
         // check to see if we've been killed
         if (isStopped()) {

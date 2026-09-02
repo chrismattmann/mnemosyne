@@ -57,6 +57,13 @@ public final class DbStructFactory {
             throws SQLException {
         WorkflowInstance workflowInst = new WorkflowInstance();
         workflowInst.setTimesBlocked(rs.getInt("times_blocked"));
+        // Absent on a schema that predates it, which is not an error: the
+        // instance simply does not record why it was waiting.
+        try {
+            workflowInst.setWaitingOn(rs.getString("waiting_on"));
+        } catch (SQLException noSuchColumn) {
+            workflowInst.setWaitingOn(null);
+        }
         workflowInst.setStatus(rs.getString("workflow_instance_status"));
         workflowInst.setId(rs.getString("workflow_instance_id"));
         workflowInst.setCurrentTaskId(rs.getString("current_task_id"));

@@ -130,6 +130,19 @@ public class TaskQuerier implements Runnable {
             + processor.getWorkflowInstance().getId() + "]: state: "
             + processor.getWorkflowInstance().getState());
 
+        // Why this processor is not being handed out, worked out where the
+        // answer is known and written down where anything can read it. It
+        // used to be computed inside getRunnableWorkflowProcessors and left
+        // in memory: a processor gated on its conditions never reaches that
+        // call, and nothing outside this JVM reads engine memory -- the REST
+        // layer, a restart, and every other engine read the repository. So
+        // the reason existed and no one could see it. Every processor is
+        // looked at here, once a pass, which is the one place that holds
+        // both the answer and a way to store it.
+        if (processor.recordWaitingOn()) {
+          persist(processor.getWorkflowInstance());
+        }
+
         // A task that is executing must not be handed out again. A workflow
         // that is executing is a different thing: it is not the work, it is
         // what gives the queue its next child, and it now reports Executing

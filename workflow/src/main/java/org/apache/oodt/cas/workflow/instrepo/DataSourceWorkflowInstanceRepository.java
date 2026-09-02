@@ -27,6 +27,7 @@ import org.apache.oodt.cas.workflow.util.DbStructFactory;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.sql.Connection;
+import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.PreparedStatement;
@@ -61,6 +62,67 @@ public class DataSourceWorkflowInstanceRepository extends
 
     /* should we quote fields or not */
     private boolean quoteFields = false;
+
+    /** Whether this database has the column; see hasWaitingOnColumn. */
+    private Boolean waitingOnColumn = null;
+
+    /**
+     * Whether the instance table can record why an instance is waiting.
+     *
+     * <p>
+     * Asked of the database rather than assumed, so a deployment whose schema
+     * predates the column keeps working and simply does not record the
+     * reason. The alternative is an INSERT that names a column that is not
+     * there, which fails every write on a deployment that has not run a
+     * migration -- a hard stop in exchange for a field that is only ever
+     * additional information.
+     * </p>
+     */
+    private synchronized boolean hasWaitingOnColumn() {
+        if (waitingOnColumn != null) {
+            return waitingOnColumn.booleanValue();
+        }
+        waitingOnColumn = Boolean.FALSE;
+        Connection conn = null;
+        ResultSet columns = null;
+        try {
+            conn = dataSource.getConnection();
+            DatabaseMetaData meta = conn.getMetaData();
+            for (String table : new String[] { "workflow_instances",
+                    "WORKFLOW_INSTANCES" }) {
+                columns = meta.getColumns(null, null, table, null);
+                while (columns.next()) {
+                    if ("waiting_on".equalsIgnoreCase(
+                            columns.getString("COLUMN_NAME"))) {
+                        waitingOnColumn = Boolean.TRUE;
+                    }
+                }
+                columns.close();
+                columns = null;
+                if (waitingOnColumn.booleanValue()) {
+                    break;
+                }
+            }
+        } catch (Exception e) {
+            LOG.log(Level.WARNING, "Unable to read the instance table's "
+                + "columns: " + e.getMessage() + "; the reason an instance is "
+                + "waiting will not be recorded");
+        } finally {
+            if (columns != null) {
+                try {
+                    columns.close();
+                } catch (SQLException ignored) {
+                }
+            }
+            if (conn != null) {
+                try {
+                    conn.close();
+                } catch (SQLException ignored) {
+                }
+            }
+        }
+        return waitingOnColumn.booleanValue();
+    }
 
     public DataSourceWorkflowInstanceRepository(DataSource ds,
             boolean quoteFields, int pageSize) {
@@ -99,7 +161,10 @@ public class DataSourceWorkflowInstanceRepository extends
             startWorkflowSql = "INSERT INTO workflow_instances "
                     + "(workflow_instance_status, workflow_id, current_task_id,"
                     + "start_date_time, end_date_time, current_task_start_date_time,"
-                    + "current_task_end_date_time, priority, times_blocked) " + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                    + "current_task_end_date_time, priority, times_blocked"
+                    + (hasWaitingOnColumn() ? ", waiting_on) " : ") ")
+                    + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?"
+                    + (hasWaitingOnColumn() ? ", ?)" : ")");
 
             // Bound, not concatenated: an apostrophe in any of these closed
             // the literal it sat in and took the statement with it.
@@ -115,6 +180,9 @@ public class DataSourceWorkflowInstanceRepository extends
             insert.setString(7, wInst.getCurrentTaskEndDateTimeIsoStr());
             insert.setDouble(8, wInst.getPriority().getValue());
             insert.setInt(9, wInst.getTimesBlocked());
+            if (hasWaitingOnColumn()) {
+                insert.setString(10, wInst.getWaitingOn());
+            }
             insert.execute();
 
             // The id comes back from the insert that generated it.
@@ -277,7 +345,9 @@ public class DataSourceWorkflowInstanceRepository extends
                     + "workflow_id=?, start_date_time=?, end_date_time=?, "
                     + "current_task_start_date_time=?, "
                     + "current_task_end_date_time=?, priority=?, "
-                    + "times_blocked=? WHERE workflow_instance_id = ?";
+                    + "times_blocked=?"
+                    + (hasWaitingOnColumn() ? ", waiting_on=?" : "")
+                    + " WHERE workflow_instance_id = ?";
 
             LOG.log(Level.FINE, "updateStatusSql: Executing: "
                     + updateStatusSql);
@@ -291,7 +361,12 @@ public class DataSourceWorkflowInstanceRepository extends
             update.setString(7, wInst.getCurrentTaskEndDateTimeIsoStr());
             update.setDouble(8, wInst.getPriority().getValue());
             update.setInt(9, wInst.getTimesBlocked());
-            update.setString(10, wInst.getId());
+            int idParam = 10;
+            if (hasWaitingOnColumn()) {
+                update.setString(10, wInst.getWaitingOn());
+                idParam = 11;
+            }
+            update.setString(idParam, wInst.getId());
             update.execute();
             conn.commit();
 
