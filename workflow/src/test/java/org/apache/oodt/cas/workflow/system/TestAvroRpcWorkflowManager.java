@@ -226,4 +226,88 @@ public class TestAvroRpcWorkflowManager extends TestCase{
                 page.getPageSize() > 0);
     }
 
+
+    /**
+     * Both shutdown hooks run at once, and the manager still stops.
+     *
+     * <p>
+     * This class registers one hook and {@code WorkflowManagerStarter}
+     * registers another that calls {@link AvroRpcWorkflowManager#shutdown()};
+     * the JVM runs every hook concurrently. Unsynchronised, both read the
+     * same non-null server before either cleared it and both closed it, one
+     * of them inside Jetty's lifecycle stop while the other blocked on that
+     * monitor -- a manager with a closed port and a process that would not
+     * exit. Here the two paths are driven together deliberately: exactly one
+     * reports having done the shutdown, and both return.
+     * </p>
+     */
+    @Test
+    public void testConcurrentShutdownHooksBothReturn() throws Exception {
+        java.lang.reflect.Field field =
+                AvroRpcWorkflowManager.class.getDeclaredField("shutdownHook");
+        field.setAccessible(true);
+        final Thread hook = (Thread) field.get(wmgr);
+        assertNotNull("no shutdown hook was registered", hook);
+        // Registered for the real exit; this test runs it by hand instead.
+        Runtime.getRuntime().removeShutdownHook(hook);
+
+        final java.util.concurrent.CountDownLatch go =
+                new java.util.concurrent.CountDownLatch(1);
+        final java.util.concurrent.atomic.AtomicInteger closedIt =
+                new java.util.concurrent.atomic.AtomicInteger();
+        final java.util.concurrent.atomic.AtomicInteger hookClosed =
+                new java.util.concurrent.atomic.AtomicInteger();
+        final java.util.concurrent.CountDownLatch done =
+                new java.util.concurrent.CountDownLatch(2);
+
+        Thread viaShutdown = new Thread(new Runnable() {
+            public void run() {
+                try {
+                    go.await();
+                    if (wmgr.shutdown()) {
+                        closedIt.incrementAndGet();
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } finally {
+                    done.countDown();
+                }
+            }
+        });
+        Thread viaHook = new Thread(new Runnable() {
+            public void run() {
+                try {
+                    go.await();
+                    java.lang.reflect.Method m = AvroRpcWorkflowManager.class
+                            .getDeclaredMethod("shutdownInternal");
+                    m.setAccessible(true);
+                    if (Boolean.TRUE.equals(m.invoke(wmgr))) {
+                        hookClosed.incrementAndGet();
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                } finally {
+                    done.countDown();
+                }
+            }
+        });
+
+        viaShutdown.start();
+        viaHook.start();
+        go.countDown();
+
+        assertTrue("a shutdown hook never returned -- the manager cannot be "
+                + "stopped", done.await(60, java.util.concurrent.TimeUnit.SECONDS));
+        viaShutdown.join(5000L);
+        viaHook.join(5000L);
+        assertFalse("the shutdown thread is still running", viaShutdown.isAlive());
+        assertFalse("the hook thread is still running", viaHook.isAlive());
+        assertEquals("more than one caller closed the same server", 1,
+                closedIt.get() + hookClosed.get());
+        assertFalse("the manager is still serving after shutdown",
+                wmgr.shutdown());
+    }
+
 }
