@@ -52,7 +52,20 @@ public class FileStagingInfo {
       filePaths.add(filePath);
    }
 
+   /**
+    * Adds paths to stage. Nothing to add is not an error.
+    *
+    * <p>
+    * This took whatever it was handed straight to addAll, and a caller
+    * reading a metadata key that is not there hands it null -- so a
+    * configuration naming a key a particular run does not carry threw here,
+    * out of the config builder, before the task had done anything.
+    * </p>
+    */
    public void addFilePaths(List<String> filePaths) {
+      if (filePaths == null) {
+         return;
+      }
       this.filePaths.addAll(filePaths);
    }
 
@@ -64,7 +77,11 @@ public class FileStagingInfo {
       productIds.add(productId);
    }
 
+   /** Adds product ids to stage. Nothing to add is not an error. */
    public void addProductIds(List<String> productIdsInc) {
+      if (productIdsInc == null) {
+         return;
+      }
       productIds.addAll(productIdsInc);
    }
 
