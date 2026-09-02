@@ -580,19 +580,18 @@ public abstract class WorkflowProcessor implements WorkflowProcessorListener,
    */
   public boolean recordWaitingOn() {
     String reason = null;
-    if (!this.passedPreConditions()) {
+    // The prerequisites are asked first, and named for what they are. A
+    // condition a processor waits on is dispatched as a prerequisite of its
+    // own, so that is what holds gated work -- and asking preConditions first
+    // answered "condition:unknown" for every one of them, because the
+    // preConditions structure those look in is not the one they are in. A
+    // reason that cannot name what it is waiting for is no better than the
+    // status it was meant to explain.
+    WorkflowProcessor unmet = firstUnmetPrerequisite();
+    if (unmet != null) {
+      reason = nameOfGate(unmet);
+    } else if (!this.passedPreConditions()) {
       reason = "condition:" + firstUnmetCondition();
-    } else if (this.prerequisites != null && !this.prerequisites.isEmpty()) {
-      for (WorkflowProcessor prerequisite : this.prerequisites) {
-        if (prerequisite.getWorkflowInstance() != null
-            && prerequisite.getWorkflowInstance().getState() != null
-            && prerequisite.getWorkflowInstance().getState().getCategory() != null
-            && !"done".equals(prerequisite.getWorkflowInstance().getState()
-                .getCategory().getName())) {
-          reason = "task:" + prerequisite.getWorkflowInstance().getId();
-          break;
-        }
-      }
     }
     String current = this.workflowInstance.getWaitingOn();
     if (reason == null ? current != null : !reason.equals(current)) {
@@ -607,6 +606,44 @@ public abstract class WorkflowProcessor implements WorkflowProcessorListener,
    * passed: a caller wants to know what to go and look at, and that is the
    * one the processor itself is stopped on.
    */
+  /**
+   * The first prerequisite that has not succeeded, or null when none is
+   * outstanding. Not-succeeded rather than not-done, to match
+   * {@link #passedPreConditions}: a prerequisite that failed is done and
+   * still gates this processor for good, and saying so beats saying nothing.
+   */
+  private WorkflowProcessor firstUnmetPrerequisite() {
+    if (this.prerequisites == null) {
+      return null;
+    }
+    for (WorkflowProcessor prerequisite : this.prerequisites) {
+      WorkflowInstance inst = prerequisite.getWorkflowInstance();
+      if (inst == null) {
+        continue;
+      }
+      WorkflowState state = inst.getState();
+      if (state == null || !"Success".equals(state.getName())) {
+        return prerequisite;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * What to call a gate: the condition or task it stands for, taken from the
+   * kind of work its graph says it is rather than from the shape of its id.
+   */
+  private String nameOfGate(WorkflowProcessor gate) {
+    WorkflowInstance inst = gate.getWorkflowInstance();
+    String name = inst.getCurrentTaskId() != null ? inst.getCurrentTaskId()
+        : inst.getId();
+    boolean condition = inst.getParentChildWorkflow() != null
+        && inst.getParentChildWorkflow().getGraph() != null
+        && "condition".equals(
+            inst.getParentChildWorkflow().getGraph().getExecutionType());
+    return (condition ? "condition:" : "task:") + name;
+  }
+
   private String firstUnmetCondition() {
     if (this.getPreConditions() != null
         && this.getPreConditions().getSubProcessors() != null) {
