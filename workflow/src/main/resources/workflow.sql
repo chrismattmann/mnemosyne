@@ -80,7 +80,7 @@ waiting_on varchar(255) DEFAULT NULL);
 -- current_task_end_date_time varchar(255),
 -- priority float,
 -- times_blocked int DEFAULT 0,
-waiting_on varchar(255) DEFAULT NULL);
+-- waiting_on varchar(255) DEFAULT NULL);
 
 CREATE TABLE workflow_instance_metadata
 (workflow_instance_id int NOT NULL,

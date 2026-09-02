@@ -29,6 +29,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.io.File;
+import java.nio.file.Files;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.Vector;
@@ -59,13 +60,19 @@ public class TestShippedSchemaAcceptsAnInstance {
 
     @Before
     public void setUp() throws Exception {
-        File tempFile = File.createTempFile("foo", "bar");
-        tempFile.deleteOnExit();
-        String tmpDirPath = tempFile.getParentFile().getAbsolutePath();
+        // A directory of its own, per run. This used to be a fixed name in
+        // the system temp directory, so the database a previous run left
+        // behind was the one this test read: the tables were already there,
+        // and a schema that had stopped loading at all still passed. It took
+        // a clean CI runner to notice, which is the one place the leftover
+        // never exists.
+        File dbDir = Files.createTempDirectory("shipped-schema").toFile();
+        dbDir.deleteOnExit();
 
         ds = DatabaseConnectionBuilder.buildDataSource("sa", "",
                 "org.hsqldb.jdbcDriver",
-                "jdbc:hsqldb:file:" + tmpDirPath + "/testShippedSchema;shutdown=true");
+                "jdbc:hsqldb:file:" + new File(dbDir, "testShippedSchema")
+                        .getAbsolutePath() + ";shutdown=true");
 
         // The schema as shipped, from src/main/resources.
         SqlScript schema = new SqlScript("src/main/resources/workflow.sql", ds);
