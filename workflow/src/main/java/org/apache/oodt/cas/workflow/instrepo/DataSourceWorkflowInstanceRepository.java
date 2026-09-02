@@ -431,8 +431,8 @@ public class DataSourceWorkflowInstanceRepository extends
                 workflowInst = DbStructFactory.getWorkflowInstance(rs);
                 // add its metadata
                 workflowInst
-                        .setSharedContext(getWorkflowInstanceMetadata(workflowInst
-                                .getId()));
+                        .setSharedContext(getWorkflowInstanceMetadata(conn,
+                                workflowInst.getId()));
             }
 
         } catch (Exception e) {
@@ -509,8 +509,8 @@ public class DataSourceWorkflowInstanceRepository extends
                         .getWorkflowInstance(rs);
                 // add its metadata
                 workflowInst
-                        .setSharedContext(getWorkflowInstanceMetadata(workflowInst
-                                .getId()));
+                        .setSharedContext(getWorkflowInstanceMetadata(conn,
+                                workflowInst.getId()));
                 workflowInsts.add(workflowInst);
             }
 
@@ -594,8 +594,8 @@ public class DataSourceWorkflowInstanceRepository extends
                         .getWorkflowInstance(rs);
                 // add its metadata
                 workflowInst
-                        .setSharedContext(getWorkflowInstanceMetadata(workflowInst
-                                .getId()));
+                        .setSharedContext(getWorkflowInstanceMetadata(conn,
+                                workflowInst.getId()));
                 workflowInsts.add(workflowInst);
             }
 
@@ -947,16 +947,26 @@ public class DataSourceWorkflowInstanceRepository extends
         return wInstIds;
     }
 
-    private Metadata getWorkflowInstanceMetadata(String workflowInstId)
-            throws InstanceRepositoryException {
-        Connection conn = null;
+    /**
+     * Reads an instance's metadata over a connection the caller already holds.
+     *
+     * <p>
+     * The caller passes its own connection because every caller of this method
+     * is part-way through reading instances and is holding one. Taking a
+     * second connection per instance exhausts the pool: with the pool's
+     * default of eight, eight readers each holding one and each asking for
+     * another wait on each other for good, and a thread holding this
+     * repository's monitor while it waits takes every writer down with it.
+     * </p>
+     */
+    private Metadata getWorkflowInstanceMetadata(Connection conn,
+            String workflowInstId) throws InstanceRepositoryException {
         Statement statement = null;
         ResultSet rs = null;
 
         Metadata met = new Metadata();
 
         try {
-            conn = dataSource.getConnection();
             statement = conn.createStatement();
 
             String getWorkflowSql = "SELECT * from workflow_instance_metadata "
@@ -975,15 +985,6 @@ public class DataSourceWorkflowInstanceRepository extends
             LOG.log(Level.WARNING,
                     "Exception getting workflow instance metadata. Message: "
                             + e.getMessage());
-            try {
-                if (conn != null) {
-                    conn.rollback();
-                }
-            } catch (SQLException e2) {
-                LOG.log(Level.SEVERE,
-                        "Unable to rollback getWorkflowInstancesMetadata "
-                                + "transaction. Message: " + e2.getMessage());
-            }
             throw new InstanceRepositoryException(e.getMessage());
         } finally {
 
@@ -1002,15 +1003,7 @@ public class DataSourceWorkflowInstanceRepository extends
                 }
 
             }
-
-            if (conn != null) {
-                try {
-                    conn.close();
-
-                } catch (SQLException ignore) {
-                }
-
-            }
+            // The connection belongs to the caller, so it is not closed here.
         }
 
         return met;
