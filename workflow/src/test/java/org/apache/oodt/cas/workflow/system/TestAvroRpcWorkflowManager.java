@@ -73,6 +73,65 @@ public class TestAvroRpcWorkflowManager extends TestCase{
         assertEquals(2, workflowInsts.size());
     }
 
+
+    /**
+     * An instance the repository has no model for does not fail the listing.
+     *
+     * <p>
+     * The queue engine builds workflows of its own while a run is going -- one
+     * per condition, one per task it wraps -- and the manager's repository has
+     * never seen them. Listing by status used to answer that by registering
+     * the instance's own workflow, which is rejected when it carries no tasks,
+     * and the failure was rethrown: one instance nobody could describe emptied
+     * the entire response.
+     * </p>
+     *
+     * <p>
+     * Every caller then read that as "nothing is running". DRAT's Proteus
+     * decides whether the mappers have finished exactly that way, and an empty
+     * answer told it to reduce while they were still running.
+     * </p>
+     */
+    @Test
+    public void testAnInstanceWithNoModelDoesNotEmptyTheListing() throws Exception {
+        // An instance whose workflow this repository cannot describe: an id
+        // that was never defined, and no tasks to define it from.
+        org.apache.oodt.cas.workflow.structs.WorkflowInstance orphan =
+                new org.apache.oodt.cas.workflow.structs.WorkflowInstance();
+        org.apache.oodt.cas.workflow.structs.Workflow unknown =
+                new org.apache.oodt.cas.workflow.structs.Workflow();
+        unknown.setId("pre-cond-workflow|urn:test:Gate|urn:test:Cond");
+        unknown.setName("Condition Workflow-Cond");
+        // No tasks: this is what addWorkflow rejects, and what the engine's
+        // own condition workflows look like once read back from a repository.
+        unknown.setTasks(new java.util.Vector());
+        orphan.setWorkflow(unknown);
+        orphan.setCurrentTaskId("urn:test:Cond");
+        orphan.setSharedContext(new Metadata());
+        orphan.setStatus("Success");
+        // Written into the same repository the manager reads: the fixture
+        // points the engine at this Lucene index.
+        org.apache.oodt.cas.workflow.instrepo.LuceneWorkflowInstanceRepository repo =
+                new org.apache.oodt.cas.workflow.instrepo.LuceneWorkflowInstanceRepository(
+                        luceneCatLoc, 20);
+        repo.addWorkflowInstance(orphan);
+        repo.release();
+
+        List<org.apache.oodt.cas.workflow.structs.WorkflowInstance> byStatus =
+                AvroTypeFactory.getWorkflowInstances(
+                        wmgr.getWorkflowInstancesByStatus("Success"));
+
+        assertNotNull("the listing failed outright", byStatus);
+        boolean sawTheOrphan = false;
+        for (org.apache.oodt.cas.workflow.structs.WorkflowInstance wi : byStatus) {
+            if (orphan.getId().equals(wi.getId())) {
+                sawTheOrphan = true;
+            }
+        }
+        assertTrue("an instance with no model was dropped from the listing",
+                sawTheOrphan);
+    }
+
     @Before
     public void setUp() throws Exception {
         startAvroRpcWorkflowManager();
