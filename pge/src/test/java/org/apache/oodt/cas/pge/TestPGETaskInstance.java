@@ -637,8 +637,20 @@ public class TestPGETaskInstance {
       verify(pgeTask.julLogger);
    }
 
+  /**
+    * The watcher publishes, and leaves the task's own metadata alone.
+    *
+    * <p>
+    * That object belongs to the thread running the task, which hands it to
+    * the W1 TaskJob end-persist; {@code stopProgressWatcher} joins with a
+    * one-second bound, so a watcher parked in a slow workflow manager call
+    * can still be running when that happens. {@code Metadata} is not
+    * thread-safe, so the overlay is the task thread's job, not the watcher's.
+    * </p>
+    */
   @Test
-   public void testReportProgressOverlaysTaskMetadataNotStaleJaccard() throws Exception {
+   public void testReportProgressPublishesWithoutTouchingTaskMetadata()
+         throws Exception {
       PGETaskInstance pgeTask = createTestInstance();
       File exe = new File(pgeTask.pgeConfig.getExeDir());
       Files.write(new File(exe, PgeProgress.FILE_NAME).toPath(),
@@ -659,13 +671,81 @@ public class TestPGETaskInstance {
 
       pgeTask.reportProgress();
 
-      assertEquals("bg CLIP", taskMet.getMetadata("PGETask_Progress"));
-      assertEquals("653", taskMet.getMetadata("PGETask_Done"));
-      assertEquals("filelist_chunk_0.txt", taskMet.getMetadata("Filename"));
+      assertEquals("the watcher wrote into the task's metadata", "jaccard",
+            taskMet.getMetadata("PGETask_Progress"));
       Metadata sent = posted.getValue();
       assertEquals("bg CLIP", sent.getMetadata("PGETask_Progress"));
       assertEquals("653", sent.getMetadata("PGETask_Done"));
       assertEquals(exe.getAbsolutePath(), sent.getMetadata("JobDir"));
+      verify(client);
+
+      // The task thread picks it up once the watcher has been stopped.
+      pgeTask.adoptProgressIntoTaskMetadata();
+      assertEquals("bg CLIP", taskMet.getMetadata("PGETask_Progress"));
+      assertEquals("653", taskMet.getMetadata("PGETask_Done"));
+      assertEquals("filelist_chunk_0.txt", taskMet.getMetadata("Filename"));
+      assertEquals(exe.getAbsolutePath(), taskMet.getMetadata("JobDir"));
+   }
+
+   /**
+    * A task that inherited no stale stamps starts without a round-trip.
+    *
+    * <p>
+    * Binding used to fetch and re-post the shared context for every PGE, so a
+    * fan-out paid two calls per task against the same workflow manager whose
+    * handler pool is the thing that falls over under load. Only the manager's
+    * copy of stale keys needs the network, and only when there are some.
+    * </p>
+    */
+  @Test
+   public void testBindWithNothingInheritedCostsNoCalls() throws Exception {
+      PGETaskInstance pgeTask = createTestInstance();
+      File exe = new File(pgeTask.pgeConfig.getExeDir());
+      Metadata taskMet = new Metadata();
+      taskMet.addMetadata("Filename", "filelist_chunk_0.txt");
+      pgeTask.workflowMetadata = taskMet;
+      pgeTask.pgeMetadata.replaceMetadata("JobDir", exe.getAbsolutePath());
+
+      WorkflowManagerClient client = createMock(WorkflowManagerClient.class);
+      replay(client);
+      pgeTask.setWmClient(client);
+
+      pgeTask.bindProgressContext();
+
+      verify(client);
+      assertEquals("filelist_chunk_0.txt", taskMet.getMetadata("Filename"));
+   }
+
+   /**
+    * A previous run's progress file does not outrank the task that follows.
+    *
+    * <p>
+    * The peek prefers {@code JobDir/.progress} over the metadata keys, so a
+    * reused {@code exeDir} that still holds a finished file would draw a
+    * completed bar for a task that has only just begun.
+    * </p>
+    */
+  @Test
+   public void testBindDiscardsAPreviousRunsProgressFile() throws Exception {
+      PGETaskInstance pgeTask = createTestInstance();
+      File exe = new File(pgeTask.pgeConfig.getExeDir());
+      File progress = new File(exe, PgeProgress.FILE_NAME);
+      Files.write(progress.toPath(),
+            "done=653\ntotal=653\nmsg=bg CLIP\n".getBytes(StandardCharsets.UTF_8));
+      assertTrue(progress.exists());
+
+      Metadata taskMet = new Metadata();
+      pgeTask.workflowMetadata = taskMet;
+      pgeTask.pgeMetadata.replaceMetadata("JobDir", exe.getAbsolutePath());
+
+      WorkflowManagerClient client = createMock(WorkflowManagerClient.class);
+      replay(client);
+      pgeTask.setWmClient(client);
+
+      pgeTask.bindProgressContext();
+
+      assertFalse("a previous run's progress file was left for this task",
+            progress.exists());
       verify(client);
    }
 

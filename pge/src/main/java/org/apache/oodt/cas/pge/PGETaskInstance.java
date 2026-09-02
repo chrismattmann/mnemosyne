@@ -116,7 +116,11 @@ public class PGETaskInstance implements WorkflowTaskInstance {
     * a previous task's {@code PGETask_*} stamps come back.
     */
    protected Metadata workflowMetadata;
-   private PgeProgress lastProgress;
+   /**
+    * Written by the progress watcher and read by the thread running the
+    * task, so it is published rather than left to chance.
+    */
+   private volatile PgeProgress lastProgress;
    static final long PROGRESS_POLL_MS = 2000L;
 
    protected PGETaskInstance() {}
@@ -258,17 +262,56 @@ public class PGETaskInstance implements WorkflowTaskInstance {
     * {@code JobDir} so OPSUI peeks the current {@code .progress} file.
     */
    protected void bindProgressContext() {
+      // Whether anything stale was actually inherited decides below whether
+      // this costs a round-trip at all.
+      boolean inherited = PgeProgress.fromMetadata(workflowMetadata) != null;
       PgeProgress.clearFrom(workflowMetadata);
       copyJobDir(workflowMetadata);
-      persistProgress(null);
+      discardPreviousProgressFile();
+      if (inherited) {
+         // Only the shared context held by the workflow manager still has the
+         // previous task's stamps at this point, and only clearing those needs
+         // the network. A task that inherited nothing -- the common case, and
+         // every first task in a workflow -- starts without two extra calls
+         // against a manager whose handler pool is worth not spending.
+         persistProgress(null);
+      }
    }
 
    /**
-    * While the script runs, copy {@code .progress} into the instance metadata
+    * Remove a previous run's {@code .progress} before this one starts.
+    *
+    * <p>
+    * The peek prefers this file over the metadata keys, so leaving one behind
+    * hands the next task a finished bar to display: an {@code exeDir} that is
+    * reused -- a retry, or one not templated per instance -- would show
+    * 653/653 for a task that has not started, which is the bug this change
+    * exists to fix, pointed the other way. Clearing the keys is not enough
+    * while the file outranks them.
+    * </p>
+    */
+   protected void discardPreviousProgressFile() {
+      if (pgeConfig == null || pgeConfig.getExeDir() == null) {
+         return;
+      }
+      File stale = new File(pgeConfig.getExeDir(), PgeProgress.FILE_NAME);
+      if (stale.exists() && !stale.delete()) {
+         logger.warn("Could not remove a previous run's progress file: {}",
+               stale.getAbsolutePath());
+      }
+   }
+
+   /**
+    * While the script runs, publish {@code .progress} to the workflow manager
     * so OPSUI can draw a bar. Scripts that never write the file are a no-op.
-    * Overlays the keys onto the metadata object {@link #run} was given (W1
-    * TaskJob persists that object at task end) and onto a fetch of the
-    * current shared context (live bar during the run).
+    *
+    * <p>
+    * This thread only ever touches metadata of its own: it posts the current
+    * shared context back with the progress keys overlaid, and records what it
+    * saw in {@link #lastProgress}. The metadata object {@link #run} was given
+    * belongs to the thread running the task, which copies the last progress
+    * onto it in {@link #adoptProgressIntoTaskMetadata} once this watcher has
+    * been stopped.
     */
    protected Thread startProgressWatcher() {
       Thread watcher = new Thread(new Runnable() {
@@ -310,10 +353,30 @@ public class PGETaskInstance implements WorkflowTaskInstance {
       if (next == null || next.sameAs(lastProgress)) {
          return;
       }
-      next.applyTo(workflowMetadata);
-      copyJobDir(workflowMetadata);
       persistProgress(next);
       lastProgress = next;
+   }
+
+   /**
+    * Copy the progress last seen onto the metadata object {@link #run} was
+    * given, for the W1 TaskJob end-persist to carry.
+    *
+    * <p>
+    * Only the thread running the task calls this. The watcher used to write
+    * into that object itself, but {@code stopProgressWatcher} joins with a
+    * one-second bound -- a bound, not a guarantee -- so a watcher parked in a
+    * workflow manager call outlives the join and would still be writing while
+    * this thread hands the same object to the end-persist. {@code Metadata}
+    * is not thread-safe, and a workflow manager that answers slowly is
+    * exactly the condition that makes the overlap likely rather than rare.
+    * </p>
+    */
+   protected void adoptProgressIntoTaskMetadata() {
+      PgeProgress snapshot = lastProgress;
+      if (snapshot != null) {
+         snapshot.applyTo(workflowMetadata);
+      }
+      copyJobDir(workflowMetadata);
    }
 
    /**
@@ -614,6 +677,7 @@ public class PGETaskInstance implements WorkflowTaskInstance {
          } finally {
             stopProgressWatcher(progressWatcher);
             reportProgress();
+            adoptProgressIntoTaskMetadata();
          }
 
          long endTime = System.currentTimeMillis();
