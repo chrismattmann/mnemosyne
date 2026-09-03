@@ -236,17 +236,18 @@ public class AvroRpcWorkflowManager implements WorkflowManager,org.apache.oodt.c
                     "Refusing to clear every workflow instance without force");
         }
 
+        // What is running is said, not refused over. Refusing was the first
+        // shape of this, and it made the operation useless exactly when it is
+        // wanted: the engine picks up every instance that is not done when it
+        // starts, so a manager restarted after a crash or a stuck run reports
+        // all of them as executing and there was then no way to clear them at
+        // all. force is the caller saying they mean it; a second veto it
+        // cannot overrule makes it half a flag.
         java.util.Collection executing = engine.getExecutingInstanceIds();
         if (executing != null && !executing.isEmpty()) {
-            // Clearing underneath a running workflow leaves the engine holding
-            // processors for instances that no longer exist, and the run it is
-            // part way through unrecorded.
-            logger.warn("Refusing to clear workflow instances: {} are executing",
-                    executing.size());
-            throw oodtError(new IllegalStateException(
-                    "instances are executing"),
-                    "Refusing to clear workflow instances while " + executing.size()
-                            + " are executing");
+            logger.warn("Clearing workflow instances while {} are executing; "
+                    + "the engine will be left holding processors for "
+                    + "instances that no longer exist", executing.size());
         }
 
         try {
