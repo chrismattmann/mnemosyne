@@ -27,6 +27,7 @@ import org.apache.oodt.cas.workflow.structs.WorkflowTaskInstance;
 import org.apache.oodt.cas.workflow.util.GenericWorkflowObjectFactory;
 
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Future;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
@@ -50,7 +51,18 @@ public class AsynchronousLocalEngineRunner extends AbstractEngineRunnerBase {
   public static final int DEFAULT_NUM_THREADS = 25;
 
   private final ExecutorService executor;
-  private final Map<String, Thread> workerMap;
+
+  /*
+   * What the pool is running, keyed by the instance it is running it for.
+   *
+   * These were the Thread objects the work was written as, which is not what
+   * runs it: a Thread handed to an ExecutorService is used as a Runnable, so
+   * it is never started and a pool thread calls its run() instead.
+   * Interrupting one of those objects therefore reached nothing -- the task
+   * carried on, and so did shutdown's attempt to stop everything. A Future
+   * cancels the thread that is actually running the work.
+   */
+  private final Map<String, Future<?>> workerMap;
 
   public AsynchronousLocalEngineRunner() {
     this(DEFAULT_NUM_THREADS);
@@ -59,7 +71,7 @@ public class AsynchronousLocalEngineRunner extends AbstractEngineRunnerBase {
   public AsynchronousLocalEngineRunner(int numThreads) {
     super();
     this.executor = Executors.newFixedThreadPool(numThreads);
-    this.workerMap = new ConcurrentHashMap<String, Thread>();
+    this.workerMap = new ConcurrentHashMap<String, Future<?>>();
   }
 
   /*
@@ -131,8 +143,8 @@ public class AsynchronousLocalEngineRunner extends AbstractEngineRunnerBase {
     // which is how live work came to be reported as abandoned, and why none
     // of it had a wall clock.
     synchronized (this.workerMap) {
-      this.workerMap.put(taskProcessor.getWorkflowInstance().getId(), worker);
-      this.executor.execute(worker);
+      this.workerMap.put(taskProcessor.getWorkflowInstance().getId(),
+          this.executor.submit(worker));
     }
   }
 
@@ -148,6 +160,39 @@ public class AsynchronousLocalEngineRunner extends AbstractEngineRunnerBase {
     return new java.util.ArrayList<String>(this.workerMap.keySet());
   }
 
+  /**
+   * Interrupts the task this runner is running for one instance.
+   *
+   * <p>
+   * Whoever asked for the stop needs to know whether there was anything to
+   * stop, so this says whether a worker was actually running. The thread is
+   * interrupted rather than killed: Thread.stop leaves whatever it was in the
+   * middle of half done, and a pge run is usually in the middle of writing to
+   * the catalog.
+   * </p>
+   *
+   * @return whether a worker was found and interrupted
+   */
+  public boolean stop(String instanceId) {
+    if (instanceId == null) {
+      return false;
+    }
+
+    Future<?> worker;
+    synchronized (this.workerMap) {
+      worker = this.workerMap.remove(instanceId);
+    }
+
+    if (worker == null) {
+      return false;
+    }
+
+    LOG.info("Stopping the task running for instance " + instanceId);
+    // true: interrupt it if it has already started, which is the case worth
+    // handling -- a task that has not started yet is simply dropped.
+    return worker.cancel(true);
+  }
+
   /*
    * (non-Javadoc)
    * 
@@ -155,12 +200,15 @@ public class AsynchronousLocalEngineRunner extends AbstractEngineRunnerBase {
    */
   @Override
   public void shutdown() {
-    for (Thread worker : this.workerMap.values()) {
+    for (Future<?> worker : this.workerMap.values()) {
       if (worker != null) {
-        worker.interrupt();
+        worker.cancel(true);
       }
     }
-
+    this.workerMap.clear();
+    // Otherwise the pool's own threads keep the JVM alive after everything
+    // running on them has been cancelled.
+    this.executor.shutdownNow();
   }
 
   /*

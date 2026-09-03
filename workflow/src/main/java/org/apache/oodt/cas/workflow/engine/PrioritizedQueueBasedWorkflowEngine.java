@@ -39,6 +39,7 @@ import org.apache.oodt.cas.workflow.structs.exceptions.EngineException;
 import org.apache.oodt.cas.workflow.structs.exceptions.InstanceRepositoryException;
 
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
 import org.apache.oodt.cas.workflow.engine.processor.WorkflowProcessor;
@@ -291,10 +292,26 @@ public class PrioritizedQueueBasedWorkflowEngine implements WorkflowEngine {
    * org.apache.oodt.cas.workflow.engine.WorkflowEngine#stopWorkflow(java.lang
    * .String)
    */
+  /**
+   * Stops a running instance, and says so in its state.
+   *
+   * <p>
+   * This was an empty method. The rpc above it returned true whatever
+   * happened, so the command line reported "Successfully stopped workflow"
+   * for an instance that carried on running -- which is worse than not
+   * offering the operation at all, because the report was believed.
+   * </p>
+   *
+   * <p>
+   * Stopping is two things: the task that is running has to be interrupted,
+   * and the instance has to be marked so that the querier does not simply
+   * pick it up again on its next pass. Doing only the first leaves an
+   * instance the engine restarts a second later.
+   * </p>
+   */
   @Override
   public void stopWorkflow(String workflowInstId) {
-    // TODO Auto-generated method stub
-
+    moveTo(workflowInstId, "Stopped", "done", "Stopped by request");
   }
 
   /*
@@ -304,10 +321,14 @@ public class PrioritizedQueueBasedWorkflowEngine implements WorkflowEngine {
    * org.apache.oodt.cas.workflow.engine.WorkflowEngine#pauseWorkflowInstance
    * (java.lang.String)
    */
+  /**
+   * Holds an instance where it is. Also an empty method, reported as success
+   * the same way. Paused is a holding state, so the querier leaves it alone
+   * until something moves it on.
+   */
   @Override
   public void pauseWorkflowInstance(String workflowInstId) {
-    // TODO Auto-generated method stub
-
+    moveTo(workflowInstId, "Paused", "holding", "Paused by request");
   }
 
   /*
@@ -317,10 +338,98 @@ public class PrioritizedQueueBasedWorkflowEngine implements WorkflowEngine {
    * org.apache.oodt.cas.workflow.engine.WorkflowEngine#resumeWorkflowInstance
    * (java.lang.String)
    */
+  /**
+   * Puts a held instance back in the queue, where the querier will find it.
+   */
   @Override
   public void resumeWorkflowInstance(String workflowInstId) {
-    // TODO Auto-generated method stub
+    moveTo(workflowInstId, "Queued", "waiting", "Resumed by request");
+  }
 
+  /**
+   * Moves one instance to a named state and writes it down.
+   *
+   * <p>
+   * The task running for it is interrupted first, so that a stop actually
+   * stops rather than marking an instance that goes on working. The state is
+   * set on the processor as well as persisted: the processor is what the
+   * querier reads, so an instance whose state was only written to the
+   * repository would be picked straight back up.
+   * </p>
+   */
+  private void moveTo(String workflowInstId, String stateName,
+      String category, String message) {
+    if (workflowInstId == null) {
+      return;
+    }
+
+    WorkflowProcessor processor = getProcessor(workflowInstId);
+    if (processor == null) {
+      LOG.log(Level.WARNING, "Asked to move instance " + workflowInstId
+          + " to " + stateName + ", but this engine is not tracking it");
+      return;
+    }
+
+    WorkflowState state = this.lifecycle
+        .getDefaultLifecycle().createState(stateName, category, message);
+    if (state.getCategory() == null) {
+      LOG.log(Level.WARNING, "The lifecycle in use declares no '" + category
+          + "' category, so instance " + workflowInstId
+          + " cannot be moved to " + stateName);
+      return;
+    }
+
+    /*
+     * The whole tree, not just the workflow that was named.
+     *
+     * A workflow does not run: its tasks do, each as a processor of its own
+     * with an instance id of its own, and it is one of those the runner is
+     * holding a thread for. Stopping only the id the caller passed leaves the
+     * task running under a workflow that reports itself stopped -- which is
+     * the same false report by a shorter route.
+     */
+    for (WorkflowProcessor each : treeUnder(processor)) {
+      WorkflowInstance inst = each.getWorkflowInstance();
+      if (inst == null) {
+        continue;
+      }
+
+      if (this.runner instanceof AsynchronousLocalEngineRunner) {
+        ((AsynchronousLocalEngineRunner) this.runner).stop(inst.getId());
+      }
+
+      each.setState(state);
+      inst.setState(state);
+      this.processorQueue.persist(inst);
+    }
+
+    LOG.info("Instance " + workflowInstId + " is now " + stateName);
+  }
+
+  /** A processor and everything beneath it, parents first. */
+  private List<WorkflowProcessor> treeUnder(WorkflowProcessor processor) {
+    List<WorkflowProcessor> all = new ArrayList<WorkflowProcessor>();
+    all.add(processor);
+    List<WorkflowProcessor> children = processor.getSubProcessors();
+    if (children != null) {
+      for (WorkflowProcessor child : children) {
+        if (child != null) {
+          all.addAll(treeUnder(child));
+        }
+      }
+    }
+    return all;
+  }
+
+  /** The processor for one instance, or null when there is not one. */
+  private WorkflowProcessor getProcessor(String workflowInstId) {
+    for (WorkflowProcessor processor : this.processorQueue.getProcessors()) {
+      WorkflowInstance inst = processor.getWorkflowInstance();
+      if (inst != null && workflowInstId.equals(inst.getId())) {
+        return processor;
+      }
+    }
+    return null;
   }
 
   /*
