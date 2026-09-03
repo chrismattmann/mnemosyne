@@ -70,6 +70,13 @@ public class FilenameTokenMetExtractor extends CmdLineMetExtractor implements
           .getTokenMetKeyNames();
       String[] filenameToks = filename.split("\\.")[0]
           .split(((FilenameTokenConfig) this.config).getTokenDelimeterScalar());
+      if (filenameToks.length > metKeyTokens.size()) {
+        throw new MetExtractionException("filename '" + filename + "' splits into "
+            + filenameToks.length + " tokens on '"
+            + ((FilenameTokenConfig) this.config).getTokenDelimeterScalar()
+            + "' but only " + metKeyTokens.size()
+            + " metadata keys are configured for it: " + metKeyTokens);
+      }
       for (int i = 0; i < filenameToks.length; i++) {
         String keyName = metKeyTokens.get(i);
         String keyVal = filenameToks[i];
