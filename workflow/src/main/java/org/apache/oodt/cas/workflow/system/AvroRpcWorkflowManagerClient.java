@@ -92,6 +92,11 @@ public class AvroRpcWorkflowManagerClient implements WorkflowManagerClient {
     }
 
     @Override
+    public boolean clearWorkflowInstances(boolean force) throws Exception {
+        return proxy.clearWorkflowInstances(force);
+    }
+
+    @Override
     public boolean refreshRepository() throws Exception {
         return proxy.refreshRepository();
     }

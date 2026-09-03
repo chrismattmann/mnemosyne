@@ -213,6 +213,54 @@ public class AvroRpcWorkflowManager implements WorkflowManager,org.apache.oodt.c
       }
     }
 
+    /**
+     * Removes every workflow instance this manager holds.
+     *
+     * <p>
+     * Answered by whichever repository the deployment configured, so a caller
+     * does not have to know where the instances live -- nor reach past this
+     * manager to get at them. Reaching past it is what callers had to do:
+     * DRAT stopped the manager to take its database lock, and its web
+     * application deleted a directory guessed at from a default, which did
+     * nothing at all when the deployment kept its instances somewhere else
+     * and said so cheerfully.
+     * </p>
+     */
+    @Override
+    public boolean clearWorkflowInstances(boolean force) throws AvroRemoteException {
+        // Two guards, because this throws away every record of every run.
+        if (!force) {
+            logger.warn("Refusing to clear workflow instances: force was not set");
+            throw oodtError(new IllegalArgumentException(
+                    "clearWorkflowInstances requires force"),
+                    "Refusing to clear every workflow instance without force");
+        }
+
+        java.util.Collection executing = engine.getExecutingInstanceIds();
+        if (executing != null && !executing.isEmpty()) {
+            // Clearing underneath a running workflow leaves the engine holding
+            // processors for instances that no longer exist, and the run it is
+            // part way through unrecorded.
+            logger.warn("Refusing to clear workflow instances: {} are executing",
+                    executing.size());
+            throw oodtError(new IllegalStateException(
+                    "instances are executing"),
+                    "Refusing to clear workflow instances while " + executing.size()
+                            + " are executing");
+        }
+
+        try {
+            boolean cleared = engine.getInstanceRepository()
+                    .clearWorkflowInstances();
+            logger.info("Cleared every workflow instance by request");
+            return cleared;
+        } catch (Exception e) {
+            logger.error("Unable to clear workflow instances: {}", e.getMessage());
+            throw oodtError(e, "Unable to clear workflow instances: Message: "
+                    + e.getMessage());
+        }
+    }
+
     @Override
     public boolean refreshRepository() throws AvroRemoteException {
         repo = getWorkflowRepositoryFromProperty();
