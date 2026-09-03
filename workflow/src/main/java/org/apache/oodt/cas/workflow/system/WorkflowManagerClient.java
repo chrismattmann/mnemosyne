@@ -40,6 +40,26 @@ import java.util.Vector;
  */
 public interface WorkflowManagerClient extends Closeable, Serializable {
 
+    /**
+     * Removes every workflow instance the manager holds.
+     *
+     * <p>
+     * Whichever repository the deployment configured answers this, so a
+     * caller clearing state does not have to know whether the instances live
+     * in a database, a Lucene index or memory, and does not have to stop the
+     * manager to reach them.
+     * </p>
+     *
+     * <p>
+     * force must be true; it is there so a caller has to mean it. The manager
+     * also refuses while any instance is executing.
+     * </p>
+     */
+    default boolean clearWorkflowInstances(boolean force) throws Exception {
+        throw new UnsupportedOperationException(
+                "This client cannot clear workflow instances");
+    }
+
     boolean refreshRepository()
             throws Exception;
 

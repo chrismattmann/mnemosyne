@@ -132,6 +132,59 @@ public class TestAvroRpcWorkflowManager extends TestCase{
                 sawTheOrphan);
     }
 
+
+    /**
+     * Clearing works whatever repository the deployment configured.
+     *
+     * <p>
+     * The point of asking the manager rather than the store: a caller does
+     * not have to know where instances live. DRAT had to know, and got it
+     * wrong -- its web application deleted a directory that only exists for
+     * one of the three implementations, found nothing, and reported a reset
+     * that had not happened.
+     * </p>
+     */
+    /**
+     * Not while a run is going.
+     *
+     * <p>
+     * Clearing underneath a running workflow leaves the engine holding
+     * processors for instances that no longer exist, and the run it is part
+     * way through unrecorded. The fixture has workflows going, so this is the
+     * state as found.
+     * </p>
+     */
+    @Test
+    public void testClearingIsRefusedWhileInstancesAreExecuting() throws Exception {
+        assertFalse("the fixture should have something executing",
+                wmgr.getExecutingWorkflowInstanceIds().isEmpty());
+        int before = wmgr.getNumWorkflowInstances();
+
+        try {
+            wmgr.clearWorkflowInstances(true);
+            fail("clearing while instances are executing should be refused");
+        } catch (Exception expected) {
+            // The refusal is the point.
+        }
+
+        assertEquals("instances were cleared while a run was going", before,
+                wmgr.getNumWorkflowInstances());
+    }
+
+    /** It has to be meant: this discards every record of every run. */
+    @Test
+    public void testClearingWithoutForceIsRefused() throws Exception {
+        int before = wmgr.getNumWorkflowInstances();
+        try {
+            wmgr.clearWorkflowInstances(false);
+            fail("clearing without force should have been refused");
+        } catch (Exception expected) {
+            // The refusal is the point.
+        }
+        assertEquals("instances were cleared despite the refusal", before,
+                wmgr.getNumWorkflowInstances());
+    }
+
     @Before
     public void setUp() throws Exception {
         startAvroRpcWorkflowManager();

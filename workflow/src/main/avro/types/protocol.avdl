@@ -96,4 +96,20 @@ import schema "AvroWorkflowInstancePage.avsc";
     boolean updateWorkflowInstanceStatus(
             string workflowInstId, string status) throws OodtError;
     boolean isAlive() throws OodtError;
+
+    /**
+     * Removes every workflow instance this manager holds.
+     *
+     * Whichever repository a deployment configures answers this, so a caller
+     * clearing state does not have to know whether the instances live in a
+     * database, a Lucene index or memory -- and does not have to reach past
+     * the manager to get at them. Reaching past it is what callers did
+     * before: stopping the manager to take its database lock, or deleting a
+     * directory guessed at from a default, which silently did nothing when
+     * the deployment was configured with something else.
+     *
+     * force must be true. It is there so that a caller has to mean it: this
+     * discards every record of every run.
+     */
+    boolean clearWorkflowInstances(boolean force) throws OodtError;
 }
