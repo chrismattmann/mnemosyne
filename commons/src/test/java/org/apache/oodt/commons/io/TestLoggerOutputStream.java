@@ -56,4 +56,58 @@ public class TestLoggerOutputStream extends TestCase {
       assertEquals(" to a log ", records.get(2).getMessage());
       assertEquals("file", records.get(3).getMessage());
    }
+
+   /**
+    * Gobbler flush and ExecUtils close used to log the same stdout twice.
+    */
+   public void testFlushAndCloseLogOnce() throws Exception {
+      final List<LogRecord> records = new ArrayList<LogRecord>();
+      Logger logger = Logger.getLogger(TestLoggerOutputStream.class.getName()
+            + ".flushClose");
+      logger.setUseParentHandlers(false);
+      logger.addHandler(new Handler() {
+         @Override
+         public void close() throws SecurityException {}
+         @Override
+         public void flush() {}
+         @Override
+         public void publish(LogRecord record) {
+            synchronized (records) {
+               records.add(record);
+            }
+         }
+      });
+      final LoggerOutputStream los = new LoggerOutputStream(logger, 1024, Level.INFO);
+      los.write("Num Missed    : [0]\n".getBytes("UTF-8"));
+      Thread flusher = new Thread(new Runnable() {
+         @Override
+         public void run() {
+            los.flush();
+         }
+      });
+      Thread closer = new Thread(new Runnable() {
+         @Override
+         public void run() {
+            try {
+               los.close();
+            } catch (IOException e) {
+               fail(e.getMessage());
+            }
+         }
+      });
+      flusher.start();
+      closer.start();
+      flusher.join();
+      closer.join();
+      synchronized (records) {
+         int hits = 0;
+         for (LogRecord record : records) {
+            if (record.getMessage() != null
+                  && record.getMessage().contains("Num Missed")) {
+               hits++;
+            }
+         }
+         assertEquals(1, hits);
+      }
+   }
 }
