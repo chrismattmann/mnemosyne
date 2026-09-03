@@ -145,43 +145,24 @@ public class TestAvroRpcWorkflowManager extends TestCase{
      * </p>
      */
     /**
-     * Not while a run is going.
+     * A run in progress does not make the instances unclearable.
      *
      * <p>
-     * Clearing underneath a running workflow leaves the engine holding
-     * processors for instances that no longer exist, and the run it is part
-     * way through unrecorded. The fixture has workflows going, so this is the
-     * state as found.
+     * This refused while anything was executing, which read as caution and
+     * behaved as a trap: the engine picks up every instance that is not done
+     * when it starts, so a manager restarted after a crash reported all of
+     * them as executing and nothing could clear them -- the one moment the
+     * operation exists for. force is the caller saying they mean it.
      * </p>
      */
     @Test
-    public void testClearingIsRefusedWhileInstancesAreExecuting() throws Exception {
+    public void testClearingWithForceWorksEvenWithARunInProgress() throws Exception {
         assertFalse("the fixture should have something executing",
                 wmgr.getExecutingWorkflowInstanceIds().isEmpty());
-        int before = wmgr.getNumWorkflowInstances();
 
-        try {
-            wmgr.clearWorkflowInstances(true);
-            fail("clearing while instances are executing should be refused");
-        } catch (Exception expected) {
-            // The refusal is the point.
-        }
+        assertTrue(wmgr.clearWorkflowInstances(true));
 
-        assertEquals("instances were cleared while a run was going", before,
-                wmgr.getNumWorkflowInstances());
-    }
-
-    /** It has to be meant: this discards every record of every run. */
-    @Test
-    public void testClearingWithoutForceIsRefused() throws Exception {
-        int before = wmgr.getNumWorkflowInstances();
-        try {
-            wmgr.clearWorkflowInstances(false);
-            fail("clearing without force should have been refused");
-        } catch (Exception expected) {
-            // The refusal is the point.
-        }
-        assertEquals("instances were cleared despite the refusal", before,
+        assertEquals("instances survived a forced clear", 0,
                 wmgr.getNumWorkflowInstances());
     }
 
