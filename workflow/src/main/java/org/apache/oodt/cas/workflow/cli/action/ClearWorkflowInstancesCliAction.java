@@ -45,6 +45,27 @@ public class ClearWorkflowInstancesCliAction extends WorkflowCliAction {
       this.force = force;
    }
 
+   /**
+    * Why the manager refused, in words.
+    *
+    * <p>
+    * The error Avro carries back has no message of its own -- its reason
+    * lives in the detail field -- so reporting getMessage() told a caller
+    * their clear failed with "null", which is the least useful thing it
+    * could have said.
+    * </p>
+    */
+   private String reasonFor(Exception e) {
+      if (e instanceof org.apache.oodt.cas.workflow.struct.avrotypes.OodtError) {
+         org.apache.oodt.cas.workflow.struct.avrotypes.OodtError error =
+               (org.apache.oodt.cas.workflow.struct.avrotypes.OodtError) e;
+         if (error.getDetail() != null) {
+            return String.valueOf(error.getDetail());
+         }
+      }
+      return e.getMessage() != null ? e.getMessage() : e.toString();
+   }
+
    private boolean forced() {
       return this.force
             || System.getProperty(FORCE_PROPERTY) != null;
@@ -60,7 +81,7 @@ public class ClearWorkflowInstancesCliAction extends WorkflowCliAction {
                : "The workflow manager reported nothing was cleared");
       } catch (Exception e) {
          throw new CmdLineActionException(
-               "Unable to clear workflow instances: " + e.getMessage(), e);
+               "Unable to clear workflow instances: " + reasonFor(e), e);
       }
    }
 }
