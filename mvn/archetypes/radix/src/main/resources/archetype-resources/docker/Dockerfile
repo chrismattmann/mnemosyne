@@ -7,10 +7,11 @@ ENV OODT_HOME=/oodt \
     CRAWLER_HOME=/oodt/crawler \
     PCS_HOME=/oodt/pcs
 WORKDIR /oodt
-RUN mkdir -p data/incoming data/archive data/backup data/failure
 
 FROM base AS filemgr
 ADD filemgr/target/*-bin.tar.gz /oodt/
+# Only this image seeds the shared volume; parallel copies can race on Linux.
+RUN mkdir -p /oodt/data/incoming /oodt/data/archive /oodt/data/backup /oodt/data/failure
 WORKDIR /oodt/filemgr
 EXPOSE 9000
 CMD ["java", "-cp", "lib/*", "-Dorg.apache.oodt.cas.filemgr.properties=etc/filemgr.properties", "org.apache.oodt.cas.filemgr.system.FileManagerServerMain", "--portNum", "9000"]
