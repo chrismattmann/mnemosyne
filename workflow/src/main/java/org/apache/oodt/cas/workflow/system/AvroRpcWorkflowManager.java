@@ -502,22 +502,55 @@ public class AvroRpcWorkflowManager implements WorkflowManager,org.apache.oodt.c
         return AvroTypeFactory.getAvroWorkflowInstance(inst);
     }
 
+    /*
+     * These three used to return true whatever happened, so a caller was told
+     * its instance had been stopped whether the engine had done anything at
+     * all -- and under the queue engine it had not, because the methods there
+     * were empty. The answer now describes the instance afterwards: the
+     * caller is told it stopped when it is in a done state, and not when it
+     * is not.
+     */
     @Override
     public boolean stopWorkflowInstance(String workflowInstId) throws AvroRemoteException {
         engine.stopWorkflow(workflowInstId);
-        return true;
+        return instanceIsIn(workflowInstId, "done");
     }
 
     @Override
     public boolean pauseWorkflowInstance(String workflowInstId) throws AvroRemoteException {
         engine.pauseWorkflowInstance(workflowInstId);
-        return true;
+        return instanceIsIn(workflowInstId, "holding");
     }
 
     @Override
     public boolean resumeWorkflowInstance(String workflowInstId) throws AvroRemoteException {
         engine.resumeWorkflowInstance(workflowInstId);
-        return true;
+        return !instanceIsIn(workflowInstId, "holding");
+    }
+
+    /**
+     * Whether an instance now sits in the given lifecycle category.
+     *
+     * <p>
+     * Read back from the repository rather than from the engine's own memory,
+     * so it reports what any other reader of that instance would see.
+     * </p>
+     */
+    private boolean instanceIsIn(String workflowInstId, String category) {
+        if (workflowInstId == null) {
+            return false;
+        }
+        try {
+            WorkflowInstance inst = engine.getInstanceRepository()
+                .getWorkflowInstanceById(workflowInstId);
+            return inst != null && inst.getState() != null
+                && inst.getState().getCategory() != null
+                && category.equals(inst.getState().getCategory().getName());
+        } catch (Exception e) {
+            logger.warn("Unable to read back instance {} to confirm its "
+                + "state: {}", workflowInstId, e.getMessage());
+            return false;
+        }
     }
 
 
