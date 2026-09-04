@@ -39,7 +39,6 @@ public class LoggerOutputStream extends OutputStream {
    private final Logger logger;
    private final CharBuffer buffer;
    private final Level logLevel;
-   private boolean closed;
 
    public LoggerOutputStream(Logger logger) throws InstantiationException {
       this(logger, Level.INFO);
@@ -62,13 +61,35 @@ public class LoggerOutputStream extends OutputStream {
 
    @Override
    public synchronized void write(int b) throws IOException {
-      if (closed) {
-         throw new IOException("LoggerOutputStream is closed");
-      }
       if (!buffer.hasRemaining()) {
          drain();
       }
       buffer.put((char) b);
+   }
+
+   /**
+    * Buffer a run of bytes, taking the lock once for all of them.
+    *
+    * <p>
+    * Without this the inherited implementation calls write(int) per byte, so
+    * a full 512 byte flush from a gobbler took the monitor 512 times.
+    * </p>
+    */
+   @Override
+   public synchronized void write(byte[] b, int off, int len)
+         throws IOException {
+      if (b == null) {
+         throw new NullPointerException();
+      }
+      if (off < 0 || len < 0 || off + len > b.length) {
+         throw new IndexOutOfBoundsException();
+      }
+      for (int i = 0; i < len; i++) {
+         if (!buffer.hasRemaining()) {
+            drain();
+         }
+         buffer.put((char) b[off + i]);
+      }
    }
 
    /**
@@ -80,6 +101,18 @@ public class LoggerOutputStream extends OutputStream {
     * both saw a non-empty buffer, both logged it, and CheckFailed (and any
     * other PGE) printed Num Missed twice for one pass. Drain under the same
     * lock as write and close so the second caller finds nothing left.
+    * </p>
+    *
+    * <p>
+    * Closing does not stop the stream accepting more. ExecUtils never joins
+    * its gobblers -- it asks them to stop, closes the process streams and
+    * returns -- so a gobbler is routinely still pushing the last of a pge's
+    * stdout through after close has run. Refusing those writes does not
+    * report anything to anyone either, because StreamGobbler writes through
+    * a PrintWriter, which swallows IOException and only sets checkError; the
+    * output would simply go missing. Losing the tail of a pge's stdout is a
+    * worse outcome than the duplicate line this fixes, so late writes are
+    * still buffered and still logged.
     * </p>
     */
    @Override
@@ -98,11 +131,8 @@ public class LoggerOutputStream extends OutputStream {
 
    @Override
    public synchronized void close() throws IOException {
-      if (closed) {
-         return;
-      }
+      // Idempotent by construction: drain no-ops on an empty buffer.
       drain();
-      closed = true;
       super.close();
    }
 }
