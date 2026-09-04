@@ -15,7 +15,12 @@
   limitations under the License.
 -->
 <cas:tasks xmlns:cas="http://oodt.jpl.nasa.gov/1.0/cas">
-<!--
-  TODO: Add some examples
--->
+  <!-- A small task used by docker/SmokeTest.java to prove that execution works. -->
+  <task id="urn:radix:smoke" name="Copy a test file"
+        class="org.apache.oodt.cas.workflow.examples.ExternScriptTaskInstance">
+    <configuration>
+      <property name="ShellType" value="/usr/bin/env"/>
+      <property name="PathToScript" value="/bin/cp"/>
+    </configuration>
+  </task>
 </cas:tasks>

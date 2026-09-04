@@ -32,8 +32,41 @@
         <include>.gitignore</include>
       </includes>
     </fileSet>
+    <fileSet>
+      <directory></directory>
+      <includes>
+        <include>.dockerignore</include>
+      </includes>
+    </fileSet>
+    <fileSet>
+      <directory>docker</directory>
+    </fileSet>
     <fileSet filtered="true">
       <directory>kubernetes</directory>
+    </fileSet>
+    <fileSet>
+      <directory>solr</directory>
+      <excludes>
+        <exclude>pom.xml</exclude>
+      </excludes>
+    </fileSet>
+    <fileSet filtered="true">
+      <directory>solr</directory>
+      <includes>
+        <include>pom.xml</include>
+      </includes>
+    </fileSet>
+    <fileSet>
+      <directory>webapps/solr-webapp</directory>
+      <excludes>
+        <exclude>pom.xml</exclude>
+      </excludes>
+    </fileSet>
+    <fileSet filtered="true">
+      <directory>webapps/solr-webapp</directory>
+      <includes>
+        <include>pom.xml</include>
+      </includes>
     </fileSet>
     <fileSet filtered="true" encoding="UTF-8">
       <directory>temp</directory>
@@ -102,14 +135,6 @@
         </fileSet>
       </fileSets>
     </module>
-    <module id="solr" dir="solr" name="solr">
-      <fileSets>
-        <fileSet>
-          <directory></directory>
-          <includes/>
-        </fileSet>
-      </fileSets>
-    </module>    
     <module id="distribution" dir="distribution" name="distribution">
       <fileSets>
         <fileSet>
@@ -144,14 +169,6 @@
             </fileSet>
           </fileSets>
         </module>
-        <module id="solr-webapp" dir="solr-webapp" name="solr-webapp">
-          <fileSets>
-            <fileSet>
-              <directory></directory>
-              <includes/>
-            </fileSet>
-          </fileSets>
-        </module>        
       </modules>
     </module>
   </modules>

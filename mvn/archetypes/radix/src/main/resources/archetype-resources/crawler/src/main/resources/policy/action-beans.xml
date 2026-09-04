@@ -117,6 +117,17 @@ the License.
     </bean>
 
     <!-- MOVE to BACKUP_DIR Actions -->
+    <bean id="MoveDataFileToBackupDir" lazy-init="true" class="org.apache.oodt.cas.crawl.action.MoveFile">
+        <property name="description" value="Moves the ingested data file to the backup directory" />
+        <property name="toDir" value="${crawler.backup.dir}" />
+        <property name="createToDir" value="true" />
+        <property name="phases">
+            <list>
+                <value type="java.lang.String">postIngestSuccess</value>
+            </list>
+        </property>
+    </bean>
+
     <bean id="MovePushpullMetFileToBackupDir" lazy-init="true" class="org.apache.oodt.cas.crawl.action.MoveFile">
         <property name="description" value="Moves the push-pull metadata file for the current data file to success directory" />
         <property name="fileExtension" value="${crawler.pushpull.met.file.ext}" />

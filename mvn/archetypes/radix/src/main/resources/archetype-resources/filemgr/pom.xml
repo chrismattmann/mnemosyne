@@ -29,62 +29,38 @@
    <name>File Manager (Apache OODT)</name>
    <artifactId>${rootArtifactId}-${artifactId}</artifactId>
    <packaging>jar</packaging>
+   <properties>
+      <filemgr.assembly.descriptor>src/main/assembly/assembly.xml</filemgr.assembly.descriptor>
+   </properties>
+   <build>
+      <plugins>
+         <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-assembly-plugin</artifactId>
+            <version>2.6</version>
+            <configuration>
+               <descriptors>
+                  <descriptor>${filemgr.assembly.descriptor}</descriptor>
+               </descriptors>
+            </configuration>
+            <executions>
+               <execution>
+                  <id>dist-assembly</id>
+                  <phase>package</phase>
+                  <goals>
+                     <goal>single</goal>
+                  </goals>
+               </execution>
+            </executions>
+         </plugin>
+      </plugins>
+   </build>
    <profiles>
       <profile>
-         <id>default</id>
-         <activation>
-            <activeByDefault>true</activeByDefault>
-         </activation>
-         <build>
-            <plugins>
-               <plugin>
-                  <groupId>org.apache.maven.plugins</groupId>
-                  <artifactId>maven-assembly-plugin</artifactId>
-                  <version>2.6</version>
-                  <configuration>
-                     <descriptors>
-                        <descriptor>src/main/assembly/assembly.xml</descriptor>
-                     </descriptors>
-                  </configuration>
-                  <executions>
-                     <execution>
-                        <id>dist-assembly</id>
-                        <phase>package</phase>
-                        <goals>
-                           <goal>single</goal>
-                        </goals>
-                     </execution>
-                  </executions>
-               </plugin>
-            </plugins>
-         </build>
-      </profile>
-      <profile>
          <id>fm-solr-catalog</id>
-         <activation/>
-         <build>
-            <plugins>
-               <plugin>
-                  <groupId>org.apache.maven.plugins</groupId>
-                  <artifactId>maven-assembly-plugin</artifactId>
-                  <version>2.6</version>
-                  <configuration>
-                     <descriptors>
-                        <descriptor>src/main/assembly/assembly.fm-solr-catalog.xml</descriptor>
-                     </descriptors>
-                  </configuration>
-                  <executions>
-                     <execution>
-                        <id>dist-assembly</id>
-                        <phase>package</phase>
-                        <goals>
-                           <goal>single</goal>
-                        </goals>
-                     </execution>
-                  </executions>
-               </plugin>
-            </plugins>
-         </build>
+         <properties>
+            <filemgr.assembly.descriptor>src/main/assembly/assembly.fm-solr-catalog.xml</filemgr.assembly.descriptor>
+         </properties>
       </profile>
       <profile>
          <id>docker</id>

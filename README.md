@@ -256,10 +256,36 @@ artifact.
 
 ## RADiX
 
-RADiX generates a complete, deployable Mnemosyne stack — File Manager, Workflow
-Manager, Resource Manager, Crawler, Solr, and Tomcat, wired together — as a
-starting point for a new pipeline. The archetypes live in `mvn/archetypes/` and
-generate projects against the current coordinates.
+RADiX generates a starter project with File Manager, Workflow Manager,
+Resource Manager, PCS, and OPSUI. The default Docker Compose deployment uses
+Lucene and Java 21, with OPSUI and PCS in one Tomcat 9 container. Tasks execute
+locally in Workflow Manager; configuring remote workers is a separate step.
+
+Install the current modules and archetype with `mvn clean install` from this
+repository using JDK 21, Maven 3.9+, Node.js, and npm. Then generate the starter
+outside this checkout (the archetype is not published to Maven Central):
+
+```bash
+mvn org.apache.maven.plugins:maven-archetype-plugin:3.4.1:generate \
+  -B -DarchetypeGroupId=ai.mattmann.mnemosyne \
+  -DarchetypeArtifactId=radix-archetype -DarchetypeVersion=1.11.0 \
+  -DarchetypeCatalog=local -Doodt=1.11.0 \
+  -DgroupId=example -DartifactId=my-pipeline -Dversion=1.0-SNAPSHOT
+cd my-pipeline
+mvn clean package
+sh docker/verify.sh
+```
+
+The generated project needs JDK 21, Maven, Docker with Compose v2+, and a POSIX
+shell. Its verification script starts the stack and checks Avro services,
+file ingestion and queries, workflow output, OPSUI, PCS, and the optional Crawler.
+Open `http://localhost:8080/opsui/` afterwards.
+`docker compose --profile '*' down` stops all services and preserves their data volume.
+
+The Crawler is optional (`docker compose --profile crawler up --build -d crawler`).
+The legacy Solr profile and Kubernetes manifests still need separate upgrades;
+they are outside the verified Compose starter. See the generated `README.txt`
+for configuration, persistence, and cleanup instructions.
 
 [DRAT](https://github.com/chrismattmann/drat) and
 [BigTranslate](https://github.com/chrismattmann/bigtranslate) are both RADiX

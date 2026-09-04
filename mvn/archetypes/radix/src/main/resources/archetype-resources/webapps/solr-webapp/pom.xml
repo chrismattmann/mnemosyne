@@ -22,12 +22,12 @@
   <modelVersion>4.0.0</modelVersion>
   <parent>
     <groupId>${groupId}</groupId>
-    <artifactId>${rootArtifactId}</artifactId>
+    <artifactId>${artifactId}</artifactId>
     <version>${version}</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <name>Solr Webapp (Apache Solr)</name>
-  <artifactId>${rootArtifactId}-${artifactId}</artifactId>
+  <artifactId>${artifactId}-solr-webapp</artifactId>
   <packaging>war</packaging>
 
   <build>

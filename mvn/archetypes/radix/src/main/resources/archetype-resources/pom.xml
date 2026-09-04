@@ -22,7 +22,7 @@
   <artifactId>${artifactId}</artifactId>
   <name>Data Management System</name>
   <packaging>pom</packaging>
-  <description>Data Management System Powered by Apache OODT delivered via RADiX</description>
+  <description>Data Management System Powered by Mnemosyne delivered via RADiX</description>
   <version>${version}</version>
 
   <properties>
@@ -31,30 +31,25 @@
     <oodt.version>${oodt}</oodt.version>
     <oodt.pge.version>${oodt}</oodt.pge.version>
    <!-- Maven plugin dependencies -->
-    <maven-compiler-plugin.version>3.2</maven-compiler-plugin.version>
-    <maven-surefire-plugin.version>2.17</maven-surefire-plugin.version>
-    <maven-jar-plugin.version>2.5</maven-jar-plugin.version>
-    <maven-javadoc-plugin.version>2.10.1</maven-javadoc-plugin.version>
+    <maven.compiler.release>21</maven.compiler.release>
+    <maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
+    <maven-surefire-plugin.version>3.5.3</maven-surefire-plugin.version>
+    <maven-jar-plugin.version>3.4.2</maven-jar-plugin.version>
+    <maven-javadoc-plugin.version>3.11.2</maven-javadoc-plugin.version>
     <maven-eclipse-plugin.version>2.9</maven-eclipse-plugin.version>
     <dockerfile-maven-version>1.4.10</dockerfile-maven-version>
   </properties>
 
-  <repositories>
-    <repository>
-      <id>maven2</id>
-      <name>Java Sun Maven2 Repository</name>
-      <url>https://download.java.net/maven/2</url>
-      <layout>default</layout>
-    </repository>
-    <repository>
-      <id>apache.snapshots</id>
-      <name>Apache Snapshots</name>
-      <url>https://repository.apache.org/snapshots/</url>
-      <releases>
-        <enabled>false</enabled>
-      </releases>
-    </repository>
-  </repositories>
+  <!-- Match oodt-core: Avro's older transitive version cannot run Tika 3. -->
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>org.apache.commons</groupId>
+        <artifactId>commons-compress</artifactId>
+        <version>1.28.0</version>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
 
   <distributionManagement>
   <!-- use the following if you're not using a snapshot version. -->
@@ -76,12 +71,28 @@
     <testSourceDirectory>${basedir}/src/test</testSourceDirectory>
     <plugins>
       <plugin>
+        <artifactId>maven-enforcer-plugin</artifactId>
+        <version>3.5.0</version>
+        <executions>
+          <execution>
+            <id>require-java-21</id>
+            <goals>
+              <goal>enforce</goal>
+            </goals>
+            <configuration>
+              <rules>
+                <requireJavaVersion>
+                  <version>[21,)</version>
+                  <message>RADiX requires JDK 21 or newer. Set JAVA_HOME before running Maven.</message>
+                </requireJavaVersion>
+              </rules>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
         <artifactId>maven-compiler-plugin</artifactId>
         <version>${maven-compiler-plugin.version}</version>
-        <configuration>
-          <source>1.6</source>
-          <target>1.6</target>
-        </configuration>
       </plugin>
       <plugin>
         <artifactId>maven-jar-plugin</artifactId>
@@ -109,7 +120,6 @@
         <artifactId>maven-javadoc-plugin</artifactId>
         <version>${maven-javadoc-plugin.version}</version>
         <configuration>
-          <outputEncoding>UTF-8</outputEncoding>
           <charset>UTF-8</charset>
           <docencoding>UTF-8</docencoding>
           <encoding>UTF-8</encoding>
@@ -126,5 +136,16 @@
       </plugin>
     </plugins>
   </build>
+
+  <!-- Legacy Solr packaging is retained for migration, outside the default build. -->
+  <profiles>
+    <profile>
+      <id>fm-solr-catalog</id>
+      <modules>
+        <module>solr</module>
+        <module>webapps/solr-webapp</module>
+      </modules>
+    </profile>
+  </profiles>
 
 </project>

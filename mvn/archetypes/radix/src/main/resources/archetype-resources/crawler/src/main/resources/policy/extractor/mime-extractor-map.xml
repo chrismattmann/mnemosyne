@@ -17,7 +17,7 @@ the License.
 -->
 <cas:mimetypemap xmlns:cas="http://oodt.jpl.nassa.gov/1.0/cas" magic="false" mimeRepo="/oodt/crawler/policy/extractor/mimetypes.xml">
 	<mime type="text/plain">
-		<extractor class="org.apache.oodt.cas.metadata.extractors.ExternMetExtractor">
+		<extractor class="org.apache.oodt.cas.metadata.extractors.TikaCmdLineMetExtractor">
 			<config file="/oodt/crawler/policy/extractor/tika.conf"/>
 			<preCondComparators>
 				<preCondComparator id="CheckThatDataFileSizeIsGreaterThanZero"/>
