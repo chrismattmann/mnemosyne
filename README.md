@@ -30,15 +30,13 @@ The **Crawler** brings products in. The **File Manager** is the system of record
 
 ## Why the name
 
-Mnemosyne is the Titaness of memory and the mother of the Muses. Stripped to
-essentials, that is what this software is. It is not primarily a scheduler or a
-workflow engine — those are means. What it actually gives you is an unbroken
-record: every data product, its lineage, the configuration that produced it, and
-the ability to reproduce it years later. Provenance is the product.
+Mnemosyne is the Titaness of memory. That is what this software is: not
+primarily a scheduler or a workflow engine — those are means — but an unbroken
+record of every data product, its lineage, the configuration that produced it,
+and the ability to reproduce it years later. Provenance is the product.
 
-That was the point at NASA JPL, where OODT was built to process data for
-missions whose results had to remain defensible for decades. It is still the
-point now.
+That was the point at NASA JPL, where OODT processed data for missions whose
+results had to stay defensible for decades. It still is.
 
 ## Heritage
 
@@ -55,12 +53,10 @@ Apache Top Level Project until April 2023, and it ran real science:
   40+ institutions researching early biomarkers of disease
 - **Apache DRAT**, a distributed release audit tool built on top of it
 
-The ASF retired the project because its community had wound down, not because
-the software stopped working. `apache/oodt` has not moved since September 2019.
-This repository carries that history forward, and continues it.
-
-**Apache OODT is the legacy name.** If you arrived here searching for Apache
-OODT, you are in the right place — this is the maintained descendant.
+The ASF retired it because its community had wound down, not because the
+software stopped working; `apache/oodt` has not moved since September 2019.
+**Apache OODT is the legacy name** — if you arrived here searching for it, this
+is the maintained descendant.
 
 ## What changed, and what did not
 
@@ -86,122 +82,10 @@ is cosmetic.
 `cas-*` artifactIds are also unchanged. "Catalog and Archive Service" is an
 accurate description and carries fifteen years of citations.
 
-### Migrating from Apache OODT
-
-Change the coordinates. Nothing else.
-
-```diff
--<groupId>org.apache.oodt</groupId>
-+<groupId>ai.mattmann.mnemosyne</groupId>
--<version>1.10-SNAPSHOT</version>
-+<version>1.11.0</version>
-```
-
-Your `filemgr.properties`, policy XML, PGE configs, and launcher scripts do not
-change, because they reference Java class names rather than Maven coordinates.
-
-One thing to know if you are coming from a working OODT install: the 2020
-`org.apache.oodt:cas-*:1.10-SNAPSHOT` build published to Apache snapshots
-predates the JDK 21 and Avro work here. If your build resolved that artifact,
-you were running the older code. A fixed release version removes the ambiguity.
-
-### Do not keep both on the classpath
-
-Mnemosyne keeps its Java packages as `org.apache.oodt.*`, so its classes share
-fully-qualified names with the retired `org.apache.oodt` artifacts still
-published on Maven Central — 249 of `cas-filemgr`'s classes, for instance, are
-name-identical between `org.apache.oodt:cas-filemgr:1.9.1` and
-`ai.mattmann.mnemosyne:cas-filemgr:1.11.0`.
-
-Because the groupIds differ, **Maven treats them as unrelated artifacts and will
-not collapse them.** If both reach one classpath, every duplicated class is
-resolved by classpath order rather than by dependency mediation, and the failure
-that follows looks nothing like its cause.
-
-Mnemosyne's own build bans the retired coordinates outright. Consumers should do
-the same, which turns a silent runtime hazard into a loud build failure:
-
-```xml
-<plugin>
-  <groupId>org.apache.maven.plugins</groupId>
-  <artifactId>maven-enforcer-plugin</artifactId>
-  <version>3.5.0</version>
-  <executions>
-    <execution>
-      <id>enforce-no-retired-oodt</id>
-      <goals><goal>enforce</goal></goals>
-      <configuration>
-        <rules>
-          <bannedDependencies>
-            <excludes>
-              <exclude>org.apache.oodt:*</exclude>
-            </excludes>
-          </bannedDependencies>
-        </rules>
-      </configuration>
-    </execution>
-  </executions>
-</plugin>
-```
-
-If a transitive dependency drags the old artifacts in, exclude them there rather
-than relaxing the rule.
-
-The usual fix for this — publishing a `<relocation>` POM under the old
-coordinates — is unavailable, since that requires owning the `org.apache.oodt`
-groupId on Maven Central.
-
-## Upgrading from Apache OODT: your indexes must be rebuilt
-
-**Mnemosyne 1.12.0 cannot read a Lucene index written by Apache OODT.** Not
-slowly, not with reduced functionality — it will not open it.
-
-Lucene reads indexes written by one major version back. OODT shipped Lucene
-6; Mnemosyne is on Lucene 10. That is four majors, so the File Manager
-catalog and the Workflow Manager instance repository both have to be built
-again from their sources:
-
-- **`LuceneCatalog`** — the File Manager product catalog. Re-ingest, or
-  re-index from whichever catalog holds the authority.
-- **`LuceneWorkflowInstanceRepository`** — workflow instance history. This is
-  usually operational history rather than a record of record, and is
-  ordinarily fine to start empty.
-
-Check before you upgrade whether your catalog is the only copy of anything.
-If it is, export it first. For a system whose purpose is keeping an unbroken
-record of every data product, a catalog you cannot open is the worst thing
-that can happen to you, and no upgrade is worth it.
-
-**If you would rather not rebuild**, the archived
-[`apache/oodt`](https://github.com/apache/oodt) still exists, still builds,
-and still reads those indexes. It is not maintained, but it has not stopped
-working. Mnemosyne is a continuation, not an obligation.
-
-Solr is a separate matter and is unaffected: Mnemosyne talks to Solr over the
-network as a client, so your Solr can be upgraded, or not, on its own
-schedule.
-
-## Upgrading from Apache OODT: logging is quieter by default
-
-Stock OODT shipped `.level = ALL` in every component's `logging.properties`,
-and `<Root level="debug">` in most `log4j2.xml` files. A default deployment
-therefore logged at FINE and below, which is what
-[OODT-991](https://issues.apache.org/jira/browse/OODT-991) complained about in
-2018. Mnemosyne ships `INFO` instead, and sends only errors to the console
-while the file appenders keep the full record.
-
-If you depended on `FINE` output from a stock deployment, set it back
-deliberately in `etc/logging.properties` or `etc/log4j2.xml`. Both files are
-still shipped to `etc/` and are still what the start scripts point at.
-
-What changed alongside it is worth knowing if you script the CLIs: those two
-files used to be packaged **inside** some of the library jars as well, so any
-application with, say, `cas-workflow` on its classpath silently adopted its
-logging configuration. That is how the File Manager's own command line tools
-came to log DEBUG to standard output, which corrupts the output of any tool
-whose stdout is piped — `query-tool ... | DeleteProduct --read` fed a log line
-in place of a product id. Library jars no longer carry logging configuration,
-and the console appenders write to standard error rather than standard output.
+**Coming from a working OODT install?** Changing the coordinates is the whole
+migration, but there are three things that will bite you — the two artifacts
+cannot share a classpath, Lucene indexes must be rebuilt, and logging is
+quieter by default. [UPGRADING.md](UPGRADING.md) covers each.
 
 ## Components
 
@@ -216,9 +100,6 @@ and the console appenders write to standard error rather than standard output.
 | **pcs-services** | JSON health, catalog, workflow, and pedigree APIs at `/pcs/services/` |
 | **CAS Metadata / CLI / Commons** | Shared metadata, command-line, and utility layers |
 
-Pipelines are described in structured XML rather than accreted shell glue, so
-they can be read, reviewed, and changed by people who did not write them.
-
 ## Build
 
 Mnemosyne is Java, built with Maven 3, and runs on **JDK 21**.
@@ -227,15 +108,21 @@ Mnemosyne is Java, built with Maven 3, and runs on **JDK 21**.
 mvn clean install
 ```
 
+Tika is used for MIME detection, so only `tika-core` is a dependency. The
+format parsers behind the two example metadata extractors are opt in:
+
+```bash
+mvn clean install -Ptika-parsers
+```
+
 To skip tests and javadoc for a faster local install:
 
 ```bash
 mvn clean install -DskipTests -Dmaven.javadoc.skip=true
 ```
 
-All source files are UTF-8. If you generate the site, set
-`MAVEN_OPTS="-Dfile.encoding=UTF-8 -Xmx1g"` — documentation generation is
-memory-hungry.
+Source is UTF-8; generating the site wants
+`MAVEN_OPTS="-Dfile.encoding=UTF-8 -Xmx1g"`.
 
 ### Tests
 
@@ -258,39 +145,23 @@ artifact.
 
 ## RADiX
 
-RADiX generates a starter project with File Manager, Workflow Manager,
-Resource Manager, PCS, and OPSUI. The default Docker Compose deployment uses
-Lucene and Java 21, with OPSUI and PCS in one Tomcat 9 container. Tasks execute
-locally in Workflow Manager; configuring remote workers is a separate step.
+RADiX generates a complete, deployable Mnemosyne stack — File Manager, Workflow
+Manager, Resource Manager, PCS, OPSUI and Tomcat, wired together — as a starting
+point for a new pipeline. The archetypes live in `mvn/archetypes/`.
 
-Install the current modules and archetype with `mvn clean install` from this
-repository using JDK 21, Maven 3.9+, Node.js, and npm. This also builds a launcher
-with the current Maven project version. The launcher uses the local archetype
-catalog, so installation must finish before generation; the archetype is not
-published to Maven Central. From this repository root, generate the starter
-outside the checkout:
+`mvn clean install` builds a generator carrying this repository's version; the
+archetype is not published, so that install has to finish first.
 
 ```bash
 RADIX_GENERATOR="$PWD/mvn/archetypes/radix/target/classes/bin/radix"
-cd ..
-sh "$RADIX_GENERATOR" -B -DgroupId=example -DartifactId=my-pipeline
-cd my-pipeline
-mvn clean package
-sh docker/verify.sh
+cd .. && sh "$RADIX_GENERATOR" -B -DgroupId=example -DartifactId=my-pipeline
+cd my-pipeline && mvn clean package && sh docker/verify.sh
 ```
 
-The generated project needs JDK 21, Maven, Docker with Compose v2+, and a POSIX
-shell. Its verification script starts the stack and checks Avro services,
-file ingestion and queries, workflow output, OPSUI, PCS, and the optional Crawler.
-The generated `docker/SmokeTest.java` is included so users can verify their own
-deployment. It runs in the optional `test` profile, not in the normal services.
-Open `http://localhost:8080/opsui/` afterwards.
-`docker compose --profile '*' down` stops all services and preserves their data volume.
-
-The Crawler is optional (`docker compose --profile crawler up --build -d crawler`).
-The legacy Solr profile and Kubernetes manifests still need separate upgrades;
-they are outside the verified Compose starter. See the generated `README.txt`
-for configuration, persistence, and cleanup instructions.
+`verify.sh` brings the stack up under Docker Compose and checks it end to end;
+OPSUI is then at `http://localhost:8080/opsui/`. The generated `README.txt`
+covers configuration, persistence, the optional Crawler and Solr profiles, and
+cleanup.
 
 [DRAT](https://github.com/chrismattmann/drat) and
 [BigTranslate](https://github.com/chrismattmann/bigtranslate) are both RADiX
@@ -317,22 +188,3 @@ Apache Software Foundation, used here only to describe this project's origin.
 
 Mnemosyne includes subcomponents with separate copyright notices and license
 terms; see LICENSE.txt.
-
-## Export control
-
-This distribution includes cryptographic software. The country in which you
-reside may restrict the import, possession, use, or re-export of encryption
-software. Check your country's laws before using it. See
-<https://www.wassenaar.org/> for more information.
-
-The U.S. Department of Commerce, Bureau of Industry and Security (BIS) has
-classified this software as Export Commodity Control Number (ECCN) 5D002.C.1,
-which includes information security software using or performing cryptographic
-functions with asymmetric algorithms. The form and manner of this distribution
-makes it eligible for export under the License Exception ENC Technology Software
-Unrestricted (TSU) exception (see BIS Export Administration Regulations, Section
-740.13) for both object code and source code.
-
-Mnemosyne uses Apache Tika, which uses the Bouncy Castle generic encryption
-libraries to extract text and metadata from encrypted PDF files. See
-<https://www.bouncycastle.org/> for details.
