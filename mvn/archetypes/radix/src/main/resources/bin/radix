@@ -17,9 +17,9 @@
 exec mvn org.apache.maven.plugins:maven-archetype-plugin:3.4.1:generate \
     -DarchetypeGroupId=ai.mattmann.mnemosyne \
     -DarchetypeArtifactId=radix-archetype \
-    -DarchetypeVersion=1.11.0 \
+    -DarchetypeVersion=@project.version@ \
     -DarchetypeCatalog=local \
-    -Doodt=1.11.0 \
+    -Doodt=@project.version@ \
     -DgroupId=com.mycompany \
     -DartifactId=oodt \
     -Dversion=1.0-SNAPSHOT \

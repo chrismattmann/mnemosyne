@@ -42,6 +42,11 @@ checks the archived bytes, runs a workflow that copies a file, and checks
 OPSUI and the PCS APIs. It then starts the optional Crawler and checks automatic
 ingestion of an incoming text file. A failed check gives a non-zero exit status.
 
+docker/SmokeTest.java is included so you can verify this deployment after setup
+or configuration changes. It uses the optional Compose test profile and is not
+part of the normal service runtime. The checks assume the starter's default
+policies and shared data paths; update the checks if you change those defaults.
+
 Open http://localhost:8080/opsui/ after verification. The stack stays running.
 Port 8080 is bound to localhost. Avro ports are available only inside Compose.
 Stop the stack with:

@@ -245,7 +245,9 @@ mvn -pl workflow test    # one module
 ```
 
 Every push and pull request against `master` builds and tests the full reactor
-on JDK 21; the Build badge above reports it. Signing and deployment live in the
+on JDK 21, then generates and compiles a RADiX starter without Docker; the Build
+badge above reports it. The separate **RADiX Docker Compose** workflow runs full
+integration tests when started manually from GitHub Actions. Signing and deployment live in the
 `release` profile and are not part of that run, so a pull request never needs a
 GPG key to go green.
 
@@ -262,15 +264,16 @@ Lucene and Java 21, with OPSUI and PCS in one Tomcat 9 container. Tasks execute
 locally in Workflow Manager; configuring remote workers is a separate step.
 
 Install the current modules and archetype with `mvn clean install` from this
-repository using JDK 21, Maven 3.9+, Node.js, and npm. Then generate the starter
-outside this checkout (the archetype is not published to Maven Central):
+repository using JDK 21, Maven 3.9+, Node.js, and npm. This also builds a launcher
+with the current Maven project version. The launcher uses the local archetype
+catalog, so installation must finish before generation; the archetype is not
+published to Maven Central. From this repository root, generate the starter
+outside the checkout:
 
 ```bash
-mvn org.apache.maven.plugins:maven-archetype-plugin:3.4.1:generate \
-  -B -DarchetypeGroupId=ai.mattmann.mnemosyne \
-  -DarchetypeArtifactId=radix-archetype -DarchetypeVersion=1.11.0 \
-  -DarchetypeCatalog=local -Doodt=1.11.0 \
-  -DgroupId=example -DartifactId=my-pipeline -Dversion=1.0-SNAPSHOT
+RADIX_GENERATOR="$PWD/mvn/archetypes/radix/target/classes/bin/radix"
+cd ..
+sh "$RADIX_GENERATOR" -B -DgroupId=example -DartifactId=my-pipeline
 cd my-pipeline
 mvn clean package
 sh docker/verify.sh
@@ -279,6 +282,8 @@ sh docker/verify.sh
 The generated project needs JDK 21, Maven, Docker with Compose v2+, and a POSIX
 shell. Its verification script starts the stack and checks Avro services,
 file ingestion and queries, workflow output, OPSUI, PCS, and the optional Crawler.
+The generated `docker/SmokeTest.java` is included so users can verify their own
+deployment. It runs in the optional `test` profile, not in the normal services.
 Open `http://localhost:8080/opsui/` afterwards.
 `docker compose --profile '*' down` stops all services and preserves their data volume.
 

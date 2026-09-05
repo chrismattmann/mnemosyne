@@ -65,23 +65,21 @@ jobs:
       - name: Build and test
         run: mvn -B clean install
 
-      - name: Generate and verify RADiX with Docker Compose
-        timeout-minutes: 20
+      # The local archetype and its dependencies come from the install above.
+      # The built launcher contains this reactor's version; keep these steps together.
+      - name: Generate and compile RADiX
+        timeout-minutes: 10
         run: |
           set -eu
           cd "$RUNNER_TEMP"
-          mvn -B -ntp org.apache.maven.plugins:maven-archetype-plugin:3.4.1:generate \
-            -DarchetypeGroupId=ai.mattmann.mnemosyne \
-            -DarchetypeArtifactId=radix-archetype -DarchetypeVersion=1.11.0 \
-            -DarchetypeCatalog=local -Doodt=1.11.0 \
-            -DgroupId=example -DartifactId=radix-ci -Dversion=1.0-SNAPSHOT
+          sh "$GITHUB_WORKSPACE/mvn/archetypes/radix/target/classes/bin/radix" \
+            -B -ntp -DgroupId=example -DartifactId=radix-ci
           cd radix-ci
-          trap 'docker compose --profile "*" down --volumes' EXIT
-          # Compile real source: an empty generated project does not exercise javac.
+          # This CI-only fixture tests the compiler settings in the empty extensions
+          # module. It is not a deployment example and is not shipped to users.
           mkdir -p extensions/src/main/java
           printf '%s\n' 'public record RadixCompileCheck(String value) {}' > extensions/src/main/java/RadixCompileCheck.java
           mvn -B -ntp clean package
-          sh docker/verify.sh
 
       # Several suites in this repository start real servers on fixed ports
       # and write into temporary directories. When one of them fails, the

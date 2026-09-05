@@ -20,7 +20,7 @@
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <requiredProperties>
     <requiredProperty key="oodt">
-      <defaultValue>1.11.0</defaultValue>
+      <defaultValue>@project.version@</defaultValue>
     </requiredProperty>
   </requiredProperties>
   <fileSets>
