@@ -326,6 +326,30 @@ the License.
             <groupId>log4j</groupId>
             <artifactId>log4j</artifactId>
           </exclusion>
+          <!--
+            Cryptographic libraries, which arrive by three separate paths:
+            tika-parser-crypto-module (encrypted and signed documents),
+            tika-parser-digest-commons (message digests), and POI's
+            poi-ooxml-full (signed Office documents).
+
+            Nothing here asks for any of that. Tika is used for MIME
+            detection and light metadata, and the File Manager computes its
+            own checksums. Shipping these made the project a distributor of
+            cryptographic software, with the export classification that
+            follows, in exchange for parsers nobody enables.
+          -->
+          <exclusion>
+            <groupId>org.apache.tika</groupId>
+            <artifactId>tika-parser-crypto-module</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.apache.tika</groupId>
+            <artifactId>tika-parser-digest-commons</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
         </exclusions>
       </dependency>
       <dependency>
@@ -526,6 +550,30 @@ the License.
           <exclusion>
             <groupId>log4j</groupId>
             <artifactId>log4j</artifactId>
+          </exclusion>
+          <!--
+            Cryptographic libraries, which arrive by three separate paths:
+            tika-parser-crypto-module (encrypted and signed documents),
+            tika-parser-digest-commons (message digests), and POI's
+            poi-ooxml-full (signed Office documents).
+
+            Nothing here asks for any of that. Tika is used for MIME
+            detection and light metadata, and the File Manager computes its
+            own checksums. Shipping these made the project a distributor of
+            cryptographic software, with the export classification that
+            follows, in exchange for parsers nobody enables.
+          -->
+          <exclusion>
+            <groupId>org.apache.tika</groupId>
+            <artifactId>tika-parser-crypto-module</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.apache.tika</groupId>
+            <artifactId>tika-parser-digest-commons</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>*</artifactId>
           </exclusion>
         </exclusions>
       </dependency>
