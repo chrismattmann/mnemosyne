@@ -27,7 +27,7 @@ the License.
 	    value="[RESMGR_URL]"/>
 	    
 	<Parameter name="org.apache.oodt.pcs.ll.conf.filePath"
-	    value="[PCS_HOME]/policy/pcs-ll-conf.xmnl"/>
+	    value="[PCS_HOME]/policy/pcs-ll-conf.xml"/>
 	    
 	<Parameter name="org.apache.oodt.pcs.health.crawler.conf.filePath"
 	    value="[PCS_HOME]/policy/pcs-crawlers.xml"/>

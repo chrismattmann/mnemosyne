@@ -30,7 +30,7 @@
    <name>Distribution (RADiX Distro of OODT)</name>
    <packaging>pom</packaging>
    <properties>
-      <tomcat.version>9.0.7</tomcat.version>
+      <tomcat.version>9.0.121</tomcat.version>
    </properties>
    <profiles>
       <profile>

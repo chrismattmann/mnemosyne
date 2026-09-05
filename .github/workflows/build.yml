@@ -65,6 +65,22 @@ jobs:
       - name: Build and test
         run: mvn -B clean install
 
+      # The local archetype and its dependencies come from the install above.
+      # The built launcher contains this reactor's version; keep these steps together.
+      - name: Generate and compile RADiX
+        timeout-minutes: 10
+        run: |
+          set -eu
+          cd "$RUNNER_TEMP"
+          sh "$GITHUB_WORKSPACE/mvn/archetypes/radix/target/classes/bin/radix" \
+            -B -ntp -DgroupId=example -DartifactId=radix-ci
+          cd radix-ci
+          # This CI-only fixture tests the compiler settings in the empty extensions
+          # module. It is not a deployment example and is not shipped to users.
+          mkdir -p extensions/src/main/java
+          printf '%s\n' 'public record RadixCompileCheck(String value) {}' > extensions/src/main/java/RadixCompileCheck.java
+          mvn -B -ntp clean package
+
       # Several suites in this repository start real servers on fixed ports
       # and write into temporary directories. When one of them fails, the
       # stack trace in the log is rarely the whole story, so keep the reports.

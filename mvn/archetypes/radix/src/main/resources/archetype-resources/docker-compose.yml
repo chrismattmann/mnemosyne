@@ -1,125 +1,121 @@
-version: '3'
+# Run `mvn clean package`, then `docker compose up --build --wait`.
+# RPC ports stay on the Compose network; the dashboard is local to this machine.
+x-runtime: &runtime
+  init: true
+  restart: unless-stopped
+  environment:
+    JAVA_TOOL_OPTIONS: -XX:ActiveProcessorCount=2 -Xmx512m
+  volumes:
+    - data:/oodt/data
+  healthcheck:
+    interval: 5s
+    timeout: 3s
+    retries: 30
+    start_period: 15s
 
 services:
-
-  crawler:
-    image: ${artifactId}-crawler:${version}
-#    restart: always
-    environment:
-      - FAILURE_DIR=/tmp
-      - BACKUP_DIR=/tmp
-      - PUSHPULL_MET_FILE_EXT=met
-      - FILEMGR_URL=http://filemgr:9000
-      - WORKFLOW_URL=http://workflow:9002
-      - RELATIVE_PRODUCT_PATH=
-    volumes:
-      - ${artifactId}-crawler-policy:/oodt/crawler/policy
-      - ${artifactId}-logs:/oodt/crawler/logs
-      - ${artifactId}-data:/oodt/data
-      - ${artifactId}-temp:/tmp
-
   filemgr:
-    image: ${artifactId}-filemgr:${version}
-    restart: always
-    ports:
-      - 9000:9000
-    environment:
-      - SOLR_URL=http://solr:8983
-    volumes:
-      - ${artifactId}-filemgr-policy:/oodt/filemgr/policy
-      - ${artifactId}-logs:/oodt/filemgr/logs
-      - ${artifactId}-data:/oodt/data
-      - ${artifactId}-temp:/tmp
-
-  resmgr:
-    image: ${artifactId}-resmgr:${version}
-    restart: always
-    ports:
-      - 9001:9001
-    volumes:
-      - ${artifactId}-resmgr-policy:/oodt/resmgr/policy
-      - ${artifactId}-data:/oodt/data
-      - ${artifactId}-logs:/oodt/resmgr/logs
-      - ${artifactId}-temp:/tmp
-
-  solr:
-    image: ${artifactId}-solr:${version}
-    restart: always
-    ports:
-      - 8983:8983
+    <<: *runtime
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: filemgr
+    healthcheck:
+      test: [CMD, bash, -c, 'true </dev/tcp/127.0.0.1/9000']
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 15s
 
   workflow:
-    image: ${artifactId}-workflow:${version}
-    restart: always
-    ports:
-      - 9002:9002
+    <<: *runtime
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: workflow
     environment:
-      - RESMGR_URL=http://resmgr:9001
-    volumes:
-      - ${artifactId}-workflow-policy:/oodt/workflow/policy
-      - ${artifactId}-logs:/oodt/workflow/logs
-      - ${artifactId}-temp:/tmp
+      JAVA_TOOL_OPTIONS: -XX:ActiveProcessorCount=2 -Xmx512m
+      # Execute tasks in this container. A remote worker is not part of this starter.
+      RESMGR_URL: ''
+    healthcheck:
+      test: [CMD, bash, -c, 'true </dev/tcp/127.0.0.1/9002']
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 15s
+
+  resmgr:
+    <<: *runtime
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: resmgr
+    healthcheck:
+      test: [CMD, bash, -c, 'true </dev/tcp/127.0.0.1/9001']
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 15s
 
   opsui:
-    image: ${artifactId}-opsui:${version}
-    restart: always
+    <<: *runtime
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: opsui
     ports:
-      - 8080:8080
+      - '127.0.0.1:8080:8080'
+    depends_on:
+      filemgr:
+        condition: service_healthy
+      workflow:
+        condition: service_healthy
+      resmgr:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, curl, --fail, --silent, --max-time, '5', 'http://localhost:8080/pcs/services/workflow/definitions']
+      interval: 10s
+      timeout: 6s
+      retries: 30
+      start_period: 30s
+
+  crawler:
+    <<: *runtime
+    profiles: [crawler]
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: crawler
     environment:
-      - FILEMGR_URL=http://filemgr:9000
-      - RESMGR_URL=http://resmgr:9001
-      - WORKFLOW_URL=http://workflow:9002
-      - GANGLIA_URL=
+      JAVA_TOOL_OPTIONS: -XX:ActiveProcessorCount=2 -Xmx512m
+      FILEMGR_URL: http://filemgr:9000
+      WORKFLOW_URL: http://workflow:9002
+      FAILURE_DIR: /oodt/data/failure
+      BACKUP_DIR: /oodt/data/backup
+      PUSHPULL_MET_FILE_EXT: met
+    depends_on:
+      filemgr:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, bash, -c, 'true </dev/tcp/127.0.0.1/9020']
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 15s
+
+  smoke:
+    profiles: [test]
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: smoke
+    environment:
+      JAVA_TOOL_OPTIONS: -XX:ActiveProcessorCount=2 -Xmx512m
     volumes:
-      - ${artifactId}-workflow-policy:/oodt/workflow/policy
-      - ${artifactId}-pcs-policy:/oodt/pcs/policy
+      - data:/oodt/data
+    depends_on:
+      opsui:
+        condition: service_healthy
 
 volumes:
-  ${artifactId}-crawler-policy:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: $PWD/crawler/src/main/resources/policy
-  ${artifactId}-filemgr-policy:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: $PWD/filemgr/src/main/resources/policy
-  ${artifactId}-resmgr-policy:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: $PWD/resmgr/src/main/resources/policy
-  ${artifactId}-workflow-policy:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: $PWD/workflow/src/main/resources/policy
-  ${artifactId}-pcs-policy:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: $PWD/pcs/src/main/resources/policy
-  ${artifactId}-logs:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: $PWD/logs
-  ${artifactId}-data:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: $PWD/data
-  ${artifactId}-temp:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: $PWD/temp
+  data:
