@@ -2,8 +2,19 @@ name: RADiX Docker Compose
 
 # Run from the Actions page when validating runtime or release changes.
 # Image pulls and Docker availability do not gate the normal Build workflow.
+#
+# Also weekly, because a job that only ever runs when somebody remembers is a
+# job that stops running. What it guards -- that the archetype still generates
+# a project which builds and comes up under Compose -- breaks from changes
+# made elsewhere, and the useful time to find that out is the week it happens
+# rather than the day of a release.
 on:
   workflow_dispatch:
+  schedule:
+    # Sundays, early UTC: off the usual working hours in either direction, so
+    # a failure is waiting on Monday rather than competing with a weekday's
+    # builds for runners.
+    - cron: '17 4 * * 0'
 
 jobs:
   verify:
