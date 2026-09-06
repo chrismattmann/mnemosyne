@@ -25,6 +25,7 @@ import org.apache.commons.lang.Validate;
 import org.apache.oodt.cas.crawl.structs.exceptions.CrawlerActionException;
 import org.apache.oodt.cas.filemgr.metadata.CoreMetKeys;
 import org.apache.oodt.cas.metadata.Metadata;
+import org.apache.oodt.cas.metadata.util.PathUtils;
 import org.apache.oodt.cas.workflow.system.WorkflowManagerClient;
 import org.apache.oodt.cas.workflow.system.rpc.RpcCommunicationFactory;
 
@@ -42,6 +43,7 @@ public class WorkflowMgrStatusUpdate extends CrawlerAction implements
       CoreMetKeys {
 
    private String ingestSuffix;
+   private String eventName;
    private String workflowMgrUrl;
 
    public WorkflowMgrStatusUpdate() {
@@ -52,13 +54,41 @@ public class WorkflowMgrStatusUpdate extends CrawlerAction implements
          throws CrawlerActionException {
       try {
          WorkflowManagerClient wClient = RpcCommunicationFactory.createClient(new URL(this.workflowMgrUrl));
-         String ingestSuffix = this.ingestSuffix;
-         return wClient.sendEvent(productMetadata.getMetadata(PRODUCT_TYPE)
-               + ingestSuffix, productMetadata);
+         return wClient.sendEvent(eventNameFor(productMetadata),
+               productMetadata);
       } catch (Exception e) {
          throw new CrawlerActionException(
                "Failed to update workflow manager : " + e.getMessage(), e);
       }
+   }
+
+   /**
+    * The event this ingest should fire.
+    *
+    * <p>By default the product type with a suffix, so ingesting an
+    * <code>EmploymentStringChunk</code> fires
+    * <code>EmploymentStringChunkIngest</code>. That convention assumes the
+    * workflow repository declares events separately from workflows, which
+    * the XML repository does and the packaged repository does not: there a
+    * workflow's id <em>is</em> its event, so the derived name matches
+    * nothing and the ingest quietly starts no workflow at all.
+    *
+    * <p>Setting <code>eventName</code> names the event outright, so a
+    * crawler can start a packaged workflow by its id. Metadata references
+    * in it are replaced, so <code>urn:x:[ProductType]Workflow</code> works
+    * as well as a literal name.
+    */
+   protected String eventNameFor(Metadata productMetadata)
+         throws CrawlerActionException {
+      if (eventName != null && eventName.trim().length() > 0) {
+         try {
+            return PathUtils.doDynamicReplacement(eventName, productMetadata);
+         } catch (Exception e) {
+            throw new CrawlerActionException("Could not read eventName ["
+                  + eventName + "]: " + e.getMessage(), e);
+         }
+      }
+      return productMetadata.getMetadata(PRODUCT_TYPE) + ingestSuffix;
    }
 
    @Override
@@ -73,6 +103,14 @@ public class WorkflowMgrStatusUpdate extends CrawlerAction implements
 
    public void setIngestSuffix(String ingestSuffix) {
       this.ingestSuffix = ingestSuffix;
+   }
+
+   /**
+    * Name the event outright instead of deriving it from the product type.
+    * Leave unset for the historic behaviour.
+    */
+   public void setEventName(String eventName) {
+      this.eventName = eventName;
    }
 
    @Required
