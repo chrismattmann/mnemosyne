@@ -20,6 +20,9 @@ package org.apache.oodt.cas.workflow.engine;
 //OODT imports
 
 import org.apache.oodt.cas.metadata.util.PathUtils;
+import org.apache.oodt.cas.workflow.lifecycle.WorkflowLifecycle;
+import java.util.List;
+import java.util.Arrays;
 import org.apache.oodt.cas.workflow.engine.runner.EngineRunner;
 import org.apache.oodt.cas.workflow.instrepo.WorkflowInstanceRepository;
 import org.apache.oodt.cas.workflow.lifecycle.WorkflowLifecycleManager;
@@ -90,10 +93,42 @@ public class PrioritizedQueueBasedWorkflowEngineFactory implements
         .getProperty(ENGINE_RUNNER_CLASS));
   }
 
+  /**
+   * The categories this engine asks the lifecycle for. A lifecycle written
+   * for the thread pool engine defines none of them, and the only symptom
+   * is that every instance is created and then parks at its initial state
+   * for good, with nothing logged anywhere.
+   */
+  private static final List<String> REQUIRED_CATEGORIES = Arrays.asList(
+      "initial", "transition", "done");
+
   protected WorkflowLifecycleManager getWorkflowLifecycle()
       throws InstantiationException {
-    return new WorkflowLifecycleManager(PathUtils.replaceEnvVariables(System
-        .getProperty(LIFECYCLES_FILE_PATH_PROPERTY)));
+    String path = PathUtils.replaceEnvVariables(System
+        .getProperty(LIFECYCLES_FILE_PATH_PROPERTY));
+    WorkflowLifecycleManager manager = new WorkflowLifecycleManager(path);
+    warnIfLifecycleIsForAnotherEngine(manager, path);
+    return manager;
+  }
+
+  /**
+   * Said at startup rather than discovered from an engine that appears to
+   * have stopped.
+   */
+  private void warnIfLifecycleIsForAnotherEngine(
+      WorkflowLifecycleManager manager, String path) {
+    WorkflowLifecycle lifecycle = manager.getDefaultLifecycle();
+    if (lifecycle == null) {
+      return;
+    }
+    List<String> missing = lifecycle.missingCategories(REQUIRED_CATEGORIES);
+    if (!missing.isEmpty()) {
+      LOG.log(Level.SEVERE, "Lifecycle [" + path + "] defines no "
+          + missing + " category, which this engine needs. Instances will "
+          + "be created and will not advance. This engine expects the "
+          + "wengine lifecycle; a lifecycle written for the thread pool "
+          + "engine will not do.");
+    }
   }
 
   protected PrioritySorter getPrioritizer() {
