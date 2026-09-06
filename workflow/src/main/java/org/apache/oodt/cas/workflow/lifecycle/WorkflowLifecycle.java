@@ -20,9 +20,13 @@ package org.apache.oodt.cas.workflow.lifecycle;
 
 //JDK imports
 import java.util.Comparator;
+import java.util.Collection;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.List;
 import java.util.SortedSet;
 import java.util.TreeSet;
+import java.util.Vector;
 
 /**
  * 
@@ -35,6 +39,9 @@ import java.util.TreeSet;
  * 
  */
 public class WorkflowLifecycle {
+
+  private static final Logger LOG = Logger.getLogger(
+      WorkflowLifecycle.class.getName());
 
   public static final String DEFAULT_LIFECYCLE = "__default__";
 
@@ -305,10 +312,54 @@ public class WorkflowLifecycle {
     return null;
   }
   
+  /**
+   * The categories in <code>required</code> that this lifecycle does not
+   * define.
+   *
+   * <p>Engines ask for states by category, and a category this lifecycle
+   * has never heard of yields a state with no category at all. An instance
+   * holding such a state cannot be transitioned out of it, so it is
+   * created and then parks there for good. Asking this question at startup
+   * turns that into one line at the point the deployment is configured
+   * wrongly, rather than an engine that appears to have quietly stopped.
+   *
+   * @param required category names the engine intends to ask for
+   * @return those it will not find, in the order given; empty if all are
+   *         present
+   */
+  public List<String> missingCategories(Collection<String> required) {
+    List<String> missing = new Vector<String>();
+    if (required == null) {
+      return missing;
+    }
+    for (String category : required) {
+      if (category != null && getCategoryByName(category) == null) {
+        missing.add(category);
+      }
+    }
+    return missing;
+  }
+
   public WorkflowState createState(String name, String category, String message){
     WorkflowState state = new WorkflowState();
     state.setName(name);
-    state.setCategory(getCategoryByName(category));
+    WorkflowLifecycleStage resolved = getCategoryByName(category);
+    if (resolved == null) {
+      // Said, rather than left to be inferred from an engine that appears
+      // to have stopped. A state with no category cannot be transitioned
+      // out of, so the instance is created and then stays exactly where it
+      // is: no exception, no warning, nothing in any log.
+      //
+      // The usual cause is a lifecycle written for a different engine. The
+      // queue based engine asks for initial, transition and done among
+      // others; a lifecycle offering only setup, error and completion
+      // answers none of them, and every instance parks at Null forever.
+      LOG.log(Level.SEVERE, "Lifecycle [" + this.getName()
+          + "] defines no category [" + category + "], which state [" + name
+          + "] needs. An instance in this state cannot leave it. Check that "
+          + "this lifecycle is the one the configured engine expects.");
+    }
+    state.setCategory(resolved);
     state.setMessage(message);
     return state;
   }
