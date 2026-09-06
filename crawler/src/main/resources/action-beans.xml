@@ -144,6 +144,11 @@ the License.
 	<!-- Workflow Manager Actions -->
 	<bean id="TriggerPostIngestWorkflow" lazy-init="true" class="org.apache.oodt.cas.crawl.action.WorkflowMgrStatusUpdate">
 		<property name="description" value="Triggers workflow event with the name [ProductType]Ingest" />
+        <!-- Or name the event outright, for a repository whose
+             workflows are their own events rather than declaring them
+             separately: the packaged repository is started by workflow
+             id, so a derived [ProductType]Ingest matches nothing there.
+             <property name="eventName" value="urn:x:MyWorkflow" /> -->
 		<property name="ingestSuffix" value="Ingest" />
 		<property name="workflowMgrUrl" value="${crawler.workflowmgr.url}" />
 		<property name="phases">
