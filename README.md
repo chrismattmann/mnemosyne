@@ -1,6 +1,6 @@
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/mnemosyne-mark-dark.svg">
-  <img src="assets/mnemosyne-mark-light.svg" alt="" width="72" height="72">
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/mnemosyne-mark-dark.svg">
+  <img src=".github/assets/mnemosyne-mark-light.svg" alt="" width="72" height="72">
 </picture>
 
 # Mnemosyne
