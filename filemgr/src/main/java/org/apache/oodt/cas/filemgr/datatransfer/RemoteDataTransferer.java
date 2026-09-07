@@ -84,15 +84,34 @@ public class RemoteDataTransferer implements DataTransfer {
     * org.apache.oodt.cas.filemgr.datatransfer.DataTransfer#setFileManagerUrl
     * (java.net.URL)
     */
+   /**
+    * Use this client rather than connecting to a url.
+    *
+    * <p>Package private, and here so the transfer can be exercised without
+    * a file manager to talk to. Every other transferer in this package is
+    * tested; this one was not, and what its failure handling turned out to
+    * be is the reason that mattered.</p>
+    */
+   void setFileManagerClient(FileManagerClient client) {
+      this.client = client;
+   }
+
    public void setFileManagerUrl(URL url) {
+      // The url is recorded whether or not the connection succeeds: it was
+      // configured either way, and leaving it unset made a failed
+      // connection report itself later as "no file manager url specified",
+      // which sends the reader to the configuration rather than the
+      // network. Whether there is a client to talk to is a separate
+      // question, asked separately.
+      this.fileManagerUrl = url;
       try {
          client = RpcCommunicationFactory.createClient(url);
-         this.fileManagerUrl = url;
          LOG.log(Level.INFO, "Remote Data Transfer to: ["
                + client.getFileManagerUrl().toString() + "] enabled");
       } catch (ConnectionException e) {
-         LOG.log(Level.WARNING, "Connection exception for filemgr: [" + url
-               + "]");
+         LOG.log(Level.WARNING, "Could not connect to the file manager at ["
+               + url + "]: " + e.getMessage() + ". Transfers through this "
+               + "transferer will fail until it can.");
       }
    }
 
@@ -106,7 +125,7 @@ public class RemoteDataTransferer implements DataTransfer {
    public void transferProduct(Product product) throws DataTransferException,
          IOException {
 
-      if (fileManagerUrl == null) {
+      if (fileManagerUrl == null || client == null) {
          throw new DataTransferException(
                "No file manager url specified for remote data transfer: cannot transfer product: ["
                      + product.getProductName() + "]!");
@@ -131,13 +150,14 @@ public class RemoteDataTransferer implements DataTransfer {
          LOG.log(Level.FINE, "Reference: [" + r.getOrigReference()
                              + "] is file: transferring it");
 
-         try {
-           remoteTransfer(r, product);
-         } catch (URISyntaxException e) {
-           LOG.log(Level.WARNING,
-               "Error transferring file: [" + r.getOrigReference()
-               + "]: URISyntaxException: " + e.getMessage());
-         }
+          try {
+            remoteTransfer(r, product);
+          } catch (URISyntaxException e) {
+            throw new DataTransferException("Reference ["
+                + r.getOrigReference() + "] of product ["
+                + product.getProductName() + "] is not a usable URI: "
+                + e.getMessage(), e);
+          }
        } else {
          LOG.log(
              Level.FINE,
@@ -209,7 +229,7 @@ public class RemoteDataTransferer implements DataTransfer {
    }
    
    private void remoteTransfer(Reference reference, Product product)
-         throws URISyntaxException {
+         throws URISyntaxException, DataTransferException {
       // get the file path
       File origFile = new File(new URI(reference.getOrigReference()));
       File destFile = new File(new URI(reference.getDataStoreReference()));
@@ -239,15 +259,13 @@ public class RemoteDataTransferer implements DataTransfer {
             client.transferFile(destFilePath, buf, offset, numBytes);
          }
       } catch (IOException e) {
-         LOG.log(Level.WARNING,
-               "Error opening input stream to read file to transfer: Message: "
-                     + e.getMessage());
-      } catch (DataTransferException e) {
-         LOG.log(
-               Level.WARNING,
-               "DataTransferException when transfering file: [" + origFilePath
-                     + "] to [" + destFilePath + "]: Message: "
-                     + e.getMessage());
+         // Raised, not logged. A transfer that could not read its source
+         // used to return as though it had sent the file, and the caller
+         // then declared the product transferred: the catalog gained an
+         // entry for bytes that never moved.
+         throw new DataTransferException("Unable to read [" + origFilePath
+               + "] to transfer it to [" + destFilePath + "]: "
+               + e.getMessage(), e);
       } finally {
          if (is != null) {
             try {
