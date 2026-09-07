@@ -1,3 +1,8 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/mnemosyne-mark-dark.svg">
+  <img src="assets/mnemosyne-mark-light.svg" alt="" width="72" height="72">
+</picture>
+
 # Mnemosyne
 
 [![Build](https://github.com/chrismattmann/mnemosyne/actions/workflows/build.yml/badge.svg?branch=master)](https://github.com/chrismattmann/mnemosyne/actions/workflows/build.yml)
