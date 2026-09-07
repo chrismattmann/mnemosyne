@@ -19,6 +19,7 @@ package org.apache.oodt.cas.workflow.engine;
 
 //OODT imports
 import org.apache.oodt.cas.workflow.engine.processor.TaskProcessor;
+import org.apache.oodt.cas.workflow.lifecycle.WorkflowState;
 import org.apache.oodt.cas.workflow.engine.processor.WorkflowProcessor;
 import org.apache.oodt.cas.workflow.engine.runner.EngineRunner;
 import org.apache.oodt.cas.workflow.instrepo.WorkflowInstanceRepository;
@@ -116,6 +117,50 @@ public class TestTaskRunnerRequeue extends TestCase {
     assertEquals(2, querier.getRunnableProcessors().size());
     assertSame("it should go back where it came from",
         first, querier.getNext());
+  }
+
+  /**
+   * A requeued task keeps a name the querier will offer again.
+   *
+   * <p>Reaching the runnable queue renames a task to WaitingOnResources,
+   * and TaskProcessor offers only Loaded, Queued or PreConditionSuccess.
+   * A task handed back because the runner was full therefore kept a name
+   * that made it ineligible, and since the querier replaces its queue
+   * wholesale on the next pass, the copy put back was dropped and the task
+   * was never seen again.</p>
+   *
+   * <p>The tests above do not catch that, because they run the runner
+   * without the querier: nothing replaces the queue, so the requeued copy
+   * survives on its own. This asserts the state instead, which is what
+   * makes the task eligible when the querier does run.</p>
+   */
+  public void testARequeuedTaskIsOfferedAgain() throws Exception {
+    TaskQuerier querier = querierHolding(1);
+    TaskProcessor held = querier.getNext();
+    assertNotNull(held);
+
+    // Exactly what the querier does on queueing it, which is the whole
+    // cause: the name it assigns is the one TaskProcessor will not offer.
+    WorkflowState waiting = new WorkflowState();
+    waiting.setName("WaitingOnResources");
+    held.getWorkflowInstance().setState(waiting);
+    assertEquals("WaitingOnResources",
+        held.getWorkflowInstance().getState().getName());
+
+    querier.requeue(held);
+
+    String state = held.getWorkflowInstance().getState().getName();
+    assertEquals("a requeued task must be eligible to be offered again, "
+        + "and WaitingOnResources is not", "Queued", state);
+  }
+
+  /** And the queue still holds it, at the front. */
+  public void testARequeuedTaskIsStillInTheQueue() throws Exception {
+    TaskQuerier querier = querierHolding(2);
+    TaskProcessor held = querier.getNext();
+    querier.requeue(held);
+    assertEquals(2, querier.getRunnableProcessors().size());
+    assertSame(held, querier.getNext());
   }
 
   public void testRequeueIgnoresNull() throws Exception {

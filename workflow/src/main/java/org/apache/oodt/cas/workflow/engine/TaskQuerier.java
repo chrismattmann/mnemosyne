@@ -266,8 +266,58 @@ public class TaskQuerier implements Runnable {
     if (taskProcessor == null) {
       return;
     }
+
+    // Put it back in a state the querier will offer again.
+    //
+    // Reaching the runnable queue renames a task to WaitingOnResources,
+    // and TaskProcessor only offers one that is Loaded, Queued or
+    // PreConditionSuccess. So a task handed back because the runner was
+    // full kept a name that made it ineligible, and the next pass of the
+    // querier replaced the queue wholesale and dropped the copy put back
+    // here. The task then sat at WaitingOnResources for good: not running,
+    // not failed, not deferred, and counted as none of those.
+    //
+    // It takes a saturated runner at the moment one particular task is
+    // offered, so it is rare on a small workflow and ordinary on a large
+    // fan out. A run of four hundred and fifty eight instances lost its
+    // final stage this way and sat idle for thirteen hours with every
+    // thread free.
+    WorkflowState queued = queuedState(taskProcessor);
+    if (queued != null) {
+      taskProcessor.getWorkflowInstance().setState(queued);
+      persist(taskProcessor.getWorkflowInstance());
+    }
+
     synchronized (queueLock) {
       this.runnableProcessors.add(0, taskProcessor);
+    }
+  }
+
+  /**
+   * The Queued state from this processor's own lifecycle, or null if it has
+   * none to give.
+   *
+   * <p>A lifecycle with no Queued state is one written for another engine,
+   * which is its own problem and reported separately. Returning null leaves
+   * the task where it was rather than moving it somewhere the engine
+   * understands even less.</p>
+   */
+  private WorkflowState queuedState(TaskProcessor taskProcessor) {
+    try {
+      WorkflowProcessorHelper helper = new WorkflowProcessorHelper(
+          taskProcessor.getLifecycleManager());
+      WorkflowLifecycle lifecycle = helper
+          .getLifecycleForProcessor(taskProcessor);
+      if (lifecycle == null) {
+        return null;
+      }
+      return lifecycle.createState("Queued", "waiting",
+          "Returned to the queue: the runner had no free slot");
+    } catch (Exception e) {
+      LOG.log(Level.WARNING, "Could not return task ["
+          + taskProcessor.getWorkflowInstance().getId() + "] to Queued: "
+          + e.getMessage());
+      return null;
     }
   }
 
