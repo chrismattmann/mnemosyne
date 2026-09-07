@@ -1,0 +1,38 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100" role="img" aria-label="Mnemosyne">
+  <title>Mnemosyne</title>
+  <!--
+    Mannaz, of the Elder Futhark: a record cut into stone by people who had
+    no other way to keep one, which is what this software is for.
+
+    Drawn on a hundred unit grid so the weight is a percentage rather than a
+    guess. Staves inset 28 and running y22 to y78; the diagonals stop at the
+    midline, which is the historical form and what keeps the lower half open
+    at small sizes. Square caps, never round: this is cut, not written.
+
+    Inherits its colour. For GitHub, which renders an svg inside an img tag
+    and so resolves currentColor to nothing useful, use the -light and -dark
+    files instead.
+  -->
+  <g fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="square">
+    <path d="M28 22 V 78"/>
+    <path d="M72 22 V 78"/>
+    <path d="M28 22 L 72 50"/>
+    <path d="M72 22 L 28 50"/>
+  </g>
+</svg>
