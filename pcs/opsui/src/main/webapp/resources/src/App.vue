@@ -18,9 +18,17 @@
   <div class="shell">
     <header class="mast">
       <div class="brand">
-        <svg class="mark" viewBox="0 0 32 32" aria-hidden="true">
-          <rect x="4" y="6" width="24" height="20" rx="2" fill="none" stroke="currentColor" stroke-width="2"/>
-          <path d="M8 12h16M8 16h10M8 20h13" stroke="currentColor" stroke-width="2" fill="none"/>
+        <!--
+          Mannaz, of the Elder Futhark. Four straight strokes on a hundred
+          unit grid; square caps, because it is cut rather than written.
+          The canonical files live in .github/assets, but a war cannot
+          reach those, so the mark is inline here.
+        -->
+        <svg class="mark" viewBox="0 0 100 100" aria-hidden="true" fill="none">
+          <g stroke="currentColor" stroke-width="9" stroke-linecap="square">
+            <path d="M28 22 V 78"/><path d="M72 22 V 78"/>
+            <path d="M28 22 L 72 50"/><path d="M72 22 L 28 50"/>
+          </g>
         </svg>
         <div>
           <h1>OPSUI</h1>
@@ -51,6 +59,27 @@
     <ConditionView v-else-if="route.view === 'condition'" :payload="conditionPayload" :back-label="route.taskId ? 'Task' : (route.workflowId ? 'Workflow' : 'Workflows')" :loading="loading" @back="backFromCondition"/>
 
     <p v-if="error" class="banner">{{ error }}</p>
+
+    <!--
+      Said once, quietly, at the bottom. This is an operations console, so
+      the attribution stays out of the way of the work.
+    -->
+    <footer class="colophon">
+      <svg class="colophon-mark" viewBox="0 0 100 100" aria-hidden="true" fill="none">
+        <g stroke="currentColor" stroke-width="10" stroke-linecap="square">
+          <path d="M28 22 V 78"/><path d="M72 22 V 78"/>
+          <path d="M28 22 L 72 50"/><path d="M72 22 L 28 50"/>
+        </g>
+      </svg>
+      <p>
+        Powered by
+        <a href="https://github.com/chrismattmann/mnemosyne" target="_blank"
+           rel="noopener noreferrer">Mnemosyne</a>
+        &middot;
+        <a href="https://www.mattmann.ai/" target="_blank"
+           rel="noopener noreferrer">Mattmann.AI</a>
+      </p>
+    </footer>
   </div>
 </template>
 
@@ -660,6 +689,39 @@ h1 {
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--muted);
+}
+
+.colophon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  margin-top: 3rem;
+  padding-top: 1.1rem;
+  border-top: 1px solid var(--rule, rgba(127, 127, 127, 0.22));
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.colophon-mark {
+  width: 0.95rem;
+  height: 0.95rem;
+  color: var(--copper);
+  flex: none;
+}
+
+.colophon p { margin: 0; }
+
+.colophon a {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px solid currentColor;
+  padding-bottom: 1px;
+}
+
+.colophon a:hover,
+.colophon a:focus-visible {
+  color: var(--copper);
 }
 
 nav {
