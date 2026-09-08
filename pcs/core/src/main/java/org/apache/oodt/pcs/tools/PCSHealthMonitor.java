@@ -45,7 +45,7 @@ import org.jboss.netty.channel.ChannelFactory;
 import org.jboss.netty.channel.socket.nio.NioClientSocketChannelFactory;
 import org.jboss.netty.channel.socket.nio.NioWorkerPool;
 import org.jboss.netty.util.HashedWheelTimer;
-import org.apache.oodt.cas.resource.system.extern.AvroRpcBatchStub;
+import org.apache.oodt.cas.resource.structs.avrotypes.AvroIntrBatchmgr;
 import org.apache.oodt.cas.crawl.daemon.AvroRpcCrawlDaemonController;
 import org.apache.oodt.cas.filemgr.metadata.CoreMetKeys;
 import org.apache.oodt.cas.filemgr.structs.Product;
@@ -748,17 +748,34 @@ public final class PCSHealthMonitor implements CoreMetKeys,
     return buf.toString();
   }
 
+  /**
+   * Whether the batch stub on a node answers.
+   *
+   * <p>Asked for a client of {@code AvroRpcBatchStub}, which is the server
+   * implementation rather than the generated protocol interface, Avro throws
+   * {@code AvroRuntimeException: Not a Specific protocol}. That is unchecked,
+   * the catch below took only IOException, and so a health check for one node
+   * returned 500 for the whole report: the PCS status on the OPSUI front page
+   * and the resources view both went blank the moment a batch stub existed to
+   * check. {@code AvroIntrBatchmgr} is the protocol, and is what
+   * {@link org.apache.oodt.cas.resource.batchmgr.AvroRpcBatchMgrProxy} has
+   * always used to reach the same stub.</p>
+   *
+   * <p>Anything thrown here now means the node is down, which is the question
+   * being asked. A monitor that cannot see a node must say so, not fail.</p>
+   */
   private boolean getBatchStubUp(ResourceNode node) {
 
     NettyTransceiver client = null;
-    AvroRpcBatchStub proxy;
+    AvroIntrBatchmgr proxy;
     try {
       client = new NettyTransceiver(
           new InetSocketAddress(node.getIpAddr().getHost(), node.getIpAddr().getPort()),
           BATCH_STUB_CHANNEL_FACTORY, 40000L);
-      proxy = (AvroRpcBatchStub) SpecificRequestor.getClient(AvroRpcBatchStub.class, client);
+      proxy = SpecificRequestor.getClient(AvroIntrBatchmgr.class, client);
       return proxy.isAlive();
-    } catch (IOException e) {
+    } catch (Exception e) {
+      LOG.log(Level.FINE, "Batch stub at " + node.getIpAddr() + " did not answer", e);
       return false;
     } finally {
       if (client != null) {
