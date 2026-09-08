@@ -46,6 +46,7 @@ import org.jboss.netty.channel.socket.nio.NioClientSocketChannelFactory;
 import org.jboss.netty.channel.socket.nio.NioWorkerPool;
 import org.jboss.netty.util.HashedWheelTimer;
 import org.apache.oodt.cas.resource.structs.avrotypes.AvroIntrBatchmgr;
+import org.apache.oodt.commons.rpc.AvroTransceivers;
 import org.apache.oodt.cas.crawl.daemon.AvroRpcCrawlDaemonController;
 import org.apache.oodt.cas.filemgr.metadata.CoreMetKeys;
 import org.apache.oodt.cas.filemgr.structs.Product;
@@ -763,6 +764,14 @@ public final class PCSHealthMonitor implements CoreMetKeys,
    *
    * <p>Anything thrown here now means the node is down, which is the question
    * being asked. A monitor that cannot see a node must say so, not fail.</p>
+   *
+   * <p>The connection is closed with {@code AvroTransceivers.closeSharing}
+   * rather than {@code close}. In avro-ipc 1.8.2 both close paths end in
+   * {@code ChannelFactory.releaseExternalResources()}, so an ordinary close
+   * destroys the shared factory this method reuses: the first node checked
+   * answers, and every node after it reports down with "Error connecting" on
+   * a factory already torn down. Measured on a live pair of stubs -- with
+   * close, calls two and three fail; with closeSharing they do not.</p>
    */
   private boolean getBatchStubUp(ResourceNode node) {
 
@@ -780,7 +789,10 @@ public final class PCSHealthMonitor implements CoreMetKeys,
     } finally {
       if (client != null) {
         try {
-          closeNettyTransceiver(client);
+          // Not close(): in avro-ipc 1.8.2 every close path ends in
+          // ChannelFactory.releaseExternalResources(), which tears down the
+          // shared factory above rather than just this connection.
+          AvroTransceivers.closeSharing(client);
         } catch (IOException | RuntimeException e) {
           LOG.log(Level.FINE, "Unable to close batch stub health check client", e);
         }
@@ -788,29 +800,6 @@ public final class PCSHealthMonitor implements CoreMetKeys,
     }
   }
 
-  private static void closeNettyTransceiver(NettyTransceiver transceiver)
-      throws IOException {
-    try {
-      Method close = NettyTransceiver.class.getMethod("close", boolean.class);
-      close.invoke(transceiver, false);
-    } catch (NoSuchMethodException e) {
-      transceiver.close();
-    } catch (IllegalAccessException e) {
-      throw new IOException("Unable to close Avro Netty transceiver", e);
-    } catch (InvocationTargetException e) {
-      Throwable cause = e.getCause();
-      if (cause instanceof IOException) {
-        throw (IOException) cause;
-      }
-      if (cause instanceof RuntimeException) {
-        throw (RuntimeException) cause;
-      }
-      if (cause instanceof Error) {
-        throw (Error) cause;
-      }
-      throw new IOException("Unable to close Avro Netty transceiver", cause);
-    }
-  }
 
   private static ExecutorService newDaemonCachedThreadPool(final String namePrefix) {
     return Executors.newCachedThreadPool(newDaemonThreadFactory(namePrefix));

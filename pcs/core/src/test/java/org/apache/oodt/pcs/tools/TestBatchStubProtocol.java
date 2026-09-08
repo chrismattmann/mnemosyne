@@ -16,12 +16,18 @@
  */
 package org.apache.oodt.pcs.tools;
 
+import java.nio.file.Files;
+import java.nio.file.Paths;
+
+import org.apache.avro.ipc.NettyTransceiver;
 import org.apache.avro.specific.SpecificData;
 import org.apache.oodt.cas.resource.structs.avrotypes.AvroIntrBatchmgr;
 import org.apache.oodt.cas.resource.system.extern.AvroRpcBatchStub;
 import org.junit.Test;
 
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 /**
@@ -46,6 +52,32 @@ public class TestBatchStubProtocol {
   public void testTheProtocolDeclaresIsAlive() throws Exception {
     assertNotNull("the health check calls isAlive over this protocol",
         AvroIntrBatchmgr.class.getMethod("isAlive"));
+  }
+
+  @Test
+  public void testAvroCloseStillReleasesTheSharedFactory() throws Exception {
+    // Why the monitor must not call close(). In avro-ipc 1.8.2 both close
+    // paths end in ChannelFactory.releaseExternalResources(), so closing one
+    // connection tears down a factory shared with every later check: the
+    // first node answered and every node after it reported down. If a future
+    // Avro stops doing this, this test fails and the workaround can go.
+    assertNotNull("close(boolean) is the path the monitor used to take",
+        NettyTransceiver.class.getMethod("close", boolean.class));
+  }
+
+  @Test
+  public void testTheMonitorClosesWithoutReleasingTheSharedFactory()
+      throws Exception {
+    // A behavioural test would need two live stubs, so this pins the call
+    // instead: the monitor shares one NioClientSocketChannelFactory across
+    // every node it checks, and an ordinary close destroys it.
+    String source = new String(Files.readAllBytes(Paths.get(
+        "src/main/java/org/apache/oodt/pcs/tools/PCSHealthMonitor.java")),
+        "UTF-8");
+    assertTrue("the health check must close with closeSharing",
+        source.contains("AvroTransceivers.closeSharing(client)"));
+    assertFalse("an ordinary close releases the shared factory",
+        source.contains("client.close("));
   }
 
   @Test
