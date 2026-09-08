@@ -6,6 +6,7 @@
   "imports":["AvroNameValueJobInput.avsc"],
   "fields":[
     {"name":"className","type":"string"},
-    {"name":"imple","type":["AvroNameValueJobInput","null"]}
+    {"name":"imple","type":["AvroNameValueJobInput","null"]},
+    {"name":"payload","type":["string","null"],"default":null}
   ]
 }

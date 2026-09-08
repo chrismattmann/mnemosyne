@@ -152,6 +152,15 @@ public final class GenericWorkflowObjectFactory {
 	 */
 	public static WorkflowTaskInstance getTaskObjectFromClassName(String className) {
 
+		if (className == null) {
+			// Every other way of failing here logs before returning null. This
+			// one said nothing, so a task instance class that never arrived
+			// looked exactly like one that arrived and would not load, and the
+			// caller's NullPointerException named neither.
+			LOG.log(Level.SEVERE, "No task instance class name given: cannot "
+					+ "instantiate a workflow task");
+			return null;
+		}
 		if (className != null) {
 			WorkflowTaskInstance taskInstance;
 
