@@ -68,7 +68,11 @@ public class FifoMappedJobQueue implements MappedJobQueue {
 
     // Check if the jobs queue is full
     List<String> queue = queues.get(queueName);
-    if (queue.size() == maxQueueSize) {
+    // >= and not ==: requeueJob below pushes a returning job onto the front
+    // without asking, so a queue can sit over its limit, and on == a queue
+    // in that state never trips the check again -- the cap stops existing
+    // rather than holding.
+    if (queue.size() >= maxQueueSize) {
       throw new JobQueueException(
           "The queue " + spec.getJob().getQueueName() + " is full.  The job "
               + spec.getJob().getId() + " could not be requeued.");
