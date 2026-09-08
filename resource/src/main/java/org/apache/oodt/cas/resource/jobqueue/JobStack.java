@@ -65,28 +65,38 @@ public class JobStack implements JobQueue {
    * 
    * @see org.apache.oodt.cas.resource.jobqueue.JobQueue#addJob(org.apache.oodt.cas.resource.structs.JobSpec)
    */
-  public String addJob(JobSpec spec) throws JobQueueException {
-    String jobId = safeAddJob(spec);
-    if (queue.size() != maxQueueSize) {
-      LOG
-          .log(Level.INFO, "Added Job: [" + spec.getJob().getId()
-              + "] to queue");
-      queue.add(spec);
-      spec.getJob().setStatus(JobStatus.QUEUED);
-      safeUpdateJob(spec);
-      return jobId;
-    } else {
+  public synchronized String addJob(JobSpec spec) throws JobQueueException {
+    // Capacity first, and only then the repository. These were the other way
+    // round, so a job rejected for a full queue had already been written to
+    // the repository and stayed there: counted by every report, belonging to
+    // no queue, and run by nothing.
+    //
+    // The test is >= rather than the != it used to be. Nothing here keeps the
+    // size from passing the maximum -- requeueJob below adds without asking --
+    // and on != a queue one job over its limit never trips the check again,
+    // so the cap silently stops existing rather than holding.
+    if (queue.size() >= maxQueueSize) {
       throw new JobQueueException("Reached max queue size: [" + maxQueueSize
                                   + "]: Unable to add job: [" + spec.getJob().getId() + "]");
     }
+    String jobId = safeAddJob(spec);
+    LOG.log(Level.INFO, "Added Job: [" + spec.getJob().getId() + "] to queue");
+    queue.add(spec);
+    spec.getJob().setStatus(JobStatus.QUEUED);
+    safeUpdateJob(spec);
+    return jobId;
   }
 
   /*
    * (non-Javadoc)
    * @see gov.nasa.jpl.oodt.cas.resource.jobqueue.JobQueue#requeueJob(gov.nasa.jpl.oodt.cas.resource.structs.JobSpec)
    */
-  public String requeueJob(JobSpec spec) throws JobQueueException {
+  public synchronized String requeueJob(JobSpec spec) throws JobQueueException {
 	  try {
+	      // A job already admitted is let back in even at capacity: it is
+	      // being returned rather than newly offered, and refusing it loses
+	      // work the scheduler already accepted. That is why addJob tests
+	      // >= and not ==: this path can leave the queue over its limit.
 	      queue.add(spec);
 	      spec.getJob().setStatus(JobStatus.QUEUED);
 	      safeUpdateJob(spec);

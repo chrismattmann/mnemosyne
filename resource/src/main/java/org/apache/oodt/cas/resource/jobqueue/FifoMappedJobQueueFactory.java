@@ -47,20 +47,34 @@ public class FifoMappedJobQueueFactory implements JobQueueFactory {
 	public FifoMappedJobQueueFactory() {
 		try{
 			String stackSizeStr = System.getProperty(
-					"gov.nasa.smap.spdm.resource.jobqueue.fifomappedjobqueue.maxstacksize");
+					"org.apache.oodt.cas.resource.jobqueue.fifomappedjobqueue.maxstacksize");
 	
 			if (stackSizeStr != null) {
 				stackSize = Integer.parseInt(stackSizeStr);
 			}
 		    
+			// The default was a class that has never existed here:
+			// gov.nasa.smap.spdm.resource.jobrepo.SmapMemoryJobRepositoryFactory,
+			// left behind with the property name above. A deployment that did
+			// not set resource.jobrepo.factory got a ClassNotFoundException
+			// rather than a job repository.
 			String jobRepoFactoryClassStr = System.getProperty(
 					"resource.jobrepo.factory",
-					"gov.nasa.smap.spdm.resource.jobrepo.SmapMemoryJobRepositoryFactory");
+					"org.apache.oodt.cas.resource.jobrepo.MemoryJobRepositoryFactory");
 			this.repo = GenericResourceManagerObjectFactory.
 					getJobRepositoryFromServiceFactory(jobRepoFactoryClassStr);
+			if (this.repo == null) {
+				throw new IllegalStateException("No job repository from ["
+						+ jobRepoFactoryClassStr + "]");
+			}
 		}catch(Exception e){
+			// Not swallowed. Logging and carrying on left repo null, and the
+			// queue this factory then handed out threw NullPointerException on
+			// the first job instead of naming the configuration that was wrong.
 			LOG.log(Level.SEVERE, "An error occurred while creating a " +
-					"FifoMappedJobQueue: " + e.getMessage());
+					"FifoMappedJobQueue: " + e.getMessage(), e);
+			throw new IllegalStateException(
+					"Unable to create a FifoMappedJobQueue", e);
 		}
 
 	}
