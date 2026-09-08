@@ -114,11 +114,22 @@ public class TaskJobInput implements JobInput {
    */
   public Object write() {
     // need to create a Map with the task metadata and the task config
+    //
+    // Nulls are left out rather than put in: this is a ConcurrentHashMap,
+    // which rejects them, so an input with any field unset threw from here
+    // instead of serializing. read() above treats an absent key as an unset
+    // field, which is what it is.
     Map outHash = new ConcurrentHashMap();
-    outHash.put("task.config", XmlRpcStructFactory
-        .getXmlRpcWorkflowTaskConfiguration(this.taskConfig));
-    outHash.put("task.metadata", this.dynMetadata.getMap());
-    outHash.put("task.instance.class", this.workflowTaskInstanceClassName);
+    if (this.taskConfig != null) {
+      outHash.put("task.config", XmlRpcStructFactory
+          .getXmlRpcWorkflowTaskConfiguration(this.taskConfig));
+    }
+    if (this.dynMetadata != null && this.dynMetadata.getMap() != null) {
+      outHash.put("task.metadata", this.dynMetadata.getMap());
+    }
+    if (this.workflowTaskInstanceClassName != null) {
+      outHash.put("task.instance.class", this.workflowTaskInstanceClassName);
+    }
     return outHash;
   }
 

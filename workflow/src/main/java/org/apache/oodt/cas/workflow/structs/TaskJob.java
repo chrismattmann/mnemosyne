@@ -77,6 +77,14 @@ public class TaskJob implements JobInstance, WorkflowStatus, CoreMetKeys{
         WorkflowTaskInstance inst = GenericWorkflowObjectFactory
                 .getTaskObjectFromClassName(taskInput
                         .getWorkflowTaskInstanceClassName());
+        if (inst == null) {
+            // Said as a sentence rather than as a NullPointerException three
+            // lines further down, which named the interface it could not call
+            // and nothing about the task, the class, or why.
+            throw new JobInputException("No workflow task instance for class ["
+                    + taskInput.getWorkflowTaskInstanceClassName()
+                    + "]: the task cannot be run on this node");
+        }
 
         // override what ProcessingNode we are running on
         // the workflow manager by default inserts its own host

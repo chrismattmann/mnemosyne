@@ -23,11 +23,22 @@ import org.apache.oodt.cas.metadata.Metadata;
 import org.apache.oodt.cas.resource.structs.avrotypes.*;
 import org.apache.oodt.cas.resource.util.GenericResourceManagerObjectFactory;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.*;
 
 public class AvroTypeFactory {
+
+    /**
+     * For the job input payload. A job input's write() returns maps, lists
+     * and strings -- the XML-RPC safe shape -- and JSON carries that without
+     * needing a schema per implementation, which is the point: the classes
+     * that need carrying live in modules that depend on this one.
+     */
+    private static final ObjectMapper PAYLOAD_MAPPER = new ObjectMapper();
 
     public static Job getJob(AvroJob avroJob) {
         Job job = new Job();
@@ -60,6 +71,10 @@ public class AvroTypeFactory {
     public static JobInput getJobInput(AvroJobInput avroJobInput){
         JobInput jobInput = GenericResourceManagerObjectFactory
                 .getJobInputFromClassName(avroJobInput.getClassName());
+        if (jobInput == null) {
+            throw new IllegalStateException("No job input from class name ["
+                    + avroJobInput.getClassName() + "]");
+        }
 
         return setJobInputInplementation(jobInput,avroJobInput);
     }
@@ -67,6 +82,9 @@ public class AvroTypeFactory {
     public static AvroJobInput getAvroJobInput(JobInput jobInput){
         AvroJobInput avroJobInput = new AvroJobInput();
         avroJobInput.setClassName(jobInput.getClass().getCanonicalName());
+        if (!(jobInput instanceof NameValueJobInput)) {
+            avroJobInput.setPayload(writePayload(jobInput));
+        }
 
         return setAvroJobInputInplementation(avroJobInput,jobInput);
     }
@@ -80,7 +98,46 @@ public class AvroTypeFactory {
             return nameValueJobInput;
         }
 
+        // Every other job input, through the contract JobInput has always
+        // had. Only NameValueJobInput was handled here, so anything else
+        // crossed the wire as an empty object of the right class: a
+        // TaskJobInput arrived with no task config, no metadata and no
+        // instance class name, and the batch stub then failed to build a task
+        // it had never been told about.
+        //
+        // JobInput extends XmlRpcWriteable, whose write() returns a structure
+        // of maps, lists and strings and whose read() takes it back. That is
+        // what the XML-RPC transport used. Going through it here means the
+        // conversion does not need to know the concrete class, which matters
+        // because the classes that need it -- TaskJobInput among them -- live
+        // in modules that depend on this one and cannot be named from here.
+        if (avroJobInput.getPayload() != null) {
+            jobInput.read(readPayload(avroJobInput.getPayload().toString()));
+        }
         return jobInput;
+    }
+
+    /** The job input's own serialization, as JSON. */
+    private static String writePayload(JobInput jobInput) {
+        Object written = jobInput.write();
+        if (written == null) {
+            return null;
+        }
+        try {
+            return PAYLOAD_MAPPER.writeValueAsString(written);
+        } catch (IOException e) {
+            throw new IllegalStateException("Unable to serialize job input ["
+                    + jobInput.getClass().getName() + "]", e);
+        }
+    }
+
+    private static Object readPayload(String payload) {
+        try {
+            return PAYLOAD_MAPPER.readValue(payload, Map.class);
+        } catch (IOException e) {
+            throw new IllegalStateException(
+                    "Unable to read a job input payload", e);
+        }
     }
 
     private static NameValueJobInput setPropertiesToNameValueJobInput(Hashtable hashProp, NameValueJobInput nameValueJobInput){

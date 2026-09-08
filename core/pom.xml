@@ -99,6 +99,15 @@ the License.
         <artifactId>avro-ipc</artifactId>
         <version>1.8.2</version>
       </dependency>
+      <!-- Carries a job input's own serialization across Avro RPC. Already
+           present transitively through Avro; managed here because
+           cas-resource now uses it directly, and a version that drifts from
+           Avro's would put two on the classpath. -->
+      <dependency>
+        <groupId>com.fasterxml.jackson.core</groupId>
+        <artifactId>jackson-databind</artifactId>
+        <version>2.20.0</version>
+      </dependency>
       <dependency>
         <groupId>org.apache.avro</groupId>
         <artifactId>avro</artifactId>
