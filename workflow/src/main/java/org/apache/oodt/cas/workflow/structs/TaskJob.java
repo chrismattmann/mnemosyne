@@ -132,7 +132,15 @@ public class TaskJob implements JobInstance, WorkflowStatus, CoreMetKeys{
                         "Unable to update status for workflow instance: ["
                                 + workflowInstId + "] to : [" + status + "]");
             }
-        } catch (Exception ignore) {
+        } catch (Exception e) {
+            // Not ignored. These calls reach the workflow manager from
+            // whichever machine the task landed on, so when its address does
+            // not resolve from there every one of them fails -- and silence
+            // made that look like success. ProcessingNode kept naming the
+            // manager's own host because the node's correction never arrived
+            // and nothing said so.
+            LOG.log(Level.WARNING, "Unable to reach the workflow manager for "
+                    + "instance [" + workflowInstId + "]: " + e.getMessage(), e);
         }
     }
 
@@ -145,7 +153,15 @@ public class TaskJob implements JobInstance, WorkflowStatus, CoreMetKeys{
                         "Unable to update Metadata for workflow instance: ["
                                 + workflowInstId + "]");
             }
-        } catch (Exception ignore) {
+        } catch (Exception e) {
+            // Not ignored. These calls reach the workflow manager from
+            // whichever machine the task landed on, so when its address does
+            // not resolve from there every one of them fails -- and silence
+            // made that look like success. ProcessingNode kept naming the
+            // manager's own host because the node's correction never arrived
+            // and nothing said so.
+            LOG.log(Level.WARNING, "Unable to reach the workflow manager for "
+                    + "instance [" + workflowInstId + "]: " + e.getMessage(), e);
         }
     }
 
@@ -160,7 +176,15 @@ public class TaskJob implements JobInstance, WorkflowStatus, CoreMetKeys{
                         "Unable to update start date time for workflow instance: ["
                                 + workflowInstId + "]");
             }
-        } catch (Exception ignore) {
+        } catch (Exception e) {
+            // Not ignored. These calls reach the workflow manager from
+            // whichever machine the task landed on, so when its address does
+            // not resolve from there every one of them fails -- and silence
+            // made that look like success. ProcessingNode kept naming the
+            // manager's own host because the node's correction never arrived
+            // and nothing said so.
+            LOG.log(Level.WARNING, "Unable to reach the workflow manager for "
+                    + "instance [" + workflowInstId + "]: " + e.getMessage(), e);
         }
     }
 
@@ -175,7 +199,15 @@ public class TaskJob implements JobInstance, WorkflowStatus, CoreMetKeys{
                         "Unable to update end date time for workflow instance: ["
                                 + workflowInstId + "]");
             }
-        } catch (Exception ignore) {
+        } catch (Exception e) {
+            // Not ignored. These calls reach the workflow manager from
+            // whichever machine the task landed on, so when its address does
+            // not resolve from there every one of them fails -- and silence
+            // made that look like success. ProcessingNode kept naming the
+            // manager's own host because the node's correction never arrived
+            // and nothing said so.
+            LOG.log(Level.WARNING, "Unable to reach the workflow manager for "
+                    + "instance [" + workflowInstId + "]: " + e.getMessage(), e);
         }
     }
 
