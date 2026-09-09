@@ -25,7 +25,7 @@ import java.util.Vector;
 import org.apache.oodt.cas.metadata.Metadata;
 //OODT imports
 import org.apache.oodt.cas.resource.util.Configurable;
-import org.apache.oodt.cas.resource.util.XmlRpcWriteable;
+import org.apache.oodt.cas.resource.util.StructWriteable;
 
 /**
  * @author mattmann
@@ -35,7 +35,7 @@ import org.apache.oodt.cas.resource.util.XmlRpcWriteable;
  * Input to a job that should be writeable over the XML-RPC wire.
  * </p>.
  */
-public interface JobInput extends XmlRpcWriteable, Configurable {
+public interface JobInput extends StructWriteable, Configurable {
 
   /**
    * Gets the ID of this JobInput

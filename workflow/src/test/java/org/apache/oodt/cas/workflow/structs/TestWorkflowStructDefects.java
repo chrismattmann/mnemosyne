@@ -20,7 +20,7 @@ package org.apache.oodt.cas.workflow.structs;
 import org.apache.oodt.cas.metadata.Metadata;
 import org.apache.oodt.cas.workflow.examples.CheckForMetadataKeys;
 import org.apache.oodt.cas.workflow.util.GenericWorkflowObjectFactory;
-import org.apache.oodt.cas.workflow.util.XmlRpcStructFactory;
+import org.apache.oodt.cas.workflow.util.StructFactory;
 
 import org.junit.Test;
 import org.w3c.dom.Document;
@@ -53,8 +53,8 @@ public class TestWorkflowStructDefects {
   public void instancePrioritySurvivesTheXmlRpcRoundTrip() {
     WorkflowInstance instance = instanceWith(Priority.LOW, "inst-1");
 
-    Map struct = XmlRpcStructFactory.getXmlRpcWorkflowInstance(instance);
-    WorkflowInstance received = XmlRpcStructFactory.getWorkflowInstanceFromXmlRpc(struct);
+    Map struct = StructFactory.getXmlRpcWorkflowInstance(instance);
+    WorkflowInstance received = StructFactory.getWorkflowInstanceFromXmlRpc(struct);
 
     assertEquals(Priority.LOW.getValue(), received.getPriority().getValue(), 0.0);
   }
@@ -63,8 +63,8 @@ public class TestWorkflowStructDefects {
   public void ahighPriorityAlsoSurvives() {
     WorkflowInstance instance = instanceWith(Priority.HIGH, "inst-2");
 
-    WorkflowInstance received = XmlRpcStructFactory.getWorkflowInstanceFromXmlRpc(
-        XmlRpcStructFactory.getXmlRpcWorkflowInstance(instance));
+    WorkflowInstance received = StructFactory.getWorkflowInstanceFromXmlRpc(
+        StructFactory.getXmlRpcWorkflowInstance(instance));
 
     assertEquals(Priority.HIGH.getValue(), received.getPriority().getValue(), 0.0);
   }

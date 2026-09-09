@@ -31,7 +31,7 @@ import org.apache.oodt.cas.resource.structs.ResourceNode;
 import org.apache.oodt.cas.resource.structs.avrotypes.AvroIntrBatchmgr;
 import org.apache.oodt.commons.rpc.AvroTransceivers;
 import org.apache.oodt.commons.rpc.RequestTimeout;
-import org.apache.oodt.cas.resource.util.XmlRpcStructFactory;
+import org.apache.oodt.cas.resource.util.StructFactory;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;

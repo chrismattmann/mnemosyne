@@ -23,11 +23,22 @@ package org.apache.oodt.cas.resource.util;
  * @version $Revision$
  * 
  * <p>
- * An interface requiring implementing classes to define how that can be
- * serialized to and from the XML-RPC wire.
- * </p>.
+ * An interface requiring implementing classes to define how they serialize
+ * themselves to and from a plain structure of maps, lists and strings.
+ * </p>
+ *
+ * <p>
+ * Named for XML-RPC until 2026 because that was the transport when it was
+ * written. No XML-RPC transport remains -- nothing imports
+ * org.apache.xmlrpc any more -- and the name outlived it badly: the Avro
+ * conversion in AvroTypeFactory ignored this contract entirely and
+ * special-cased one implementation instead, so a TaskJobInput crossed the
+ * wire with every field unset and no workflow task could run on a remote
+ * node at all. A name that reads as dead scaffolding gets treated as dead
+ * scaffolding.
+ * </p>
  */
-public interface XmlRpcWriteable {
+public interface StructWriteable {
 
   /**
    * This method should define how to take an XML-RPC serializable

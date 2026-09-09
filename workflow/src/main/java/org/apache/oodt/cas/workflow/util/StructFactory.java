@@ -45,9 +45,9 @@ import java.util.Vector;
  * @version $Revision$
  * 
  */
-public final class XmlRpcStructFactory {
+public final class StructFactory {
 
-  private XmlRpcStructFactory() throws InstantiationException {
+  private StructFactory() throws InstantiationException {
     throw new InstantiationException("Don't instantiate XmlRpcStructFactories!");
   }
 
