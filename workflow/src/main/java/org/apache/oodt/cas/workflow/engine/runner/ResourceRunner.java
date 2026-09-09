@@ -152,6 +152,14 @@ public class ResourceRunner extends AbstractEngineRunnerBase implements CoreMetK
           .getProperty(TASK_LOAD)));
     }
 
+    // Before the context is read, not after: the shared context is what
+    // travels to the node, and the keys stamped here are the ones a task
+    // cannot start without. AsynchronousLocalEngineRunner has always called
+    // this; ResourceRunner inherited it and never did, so a task that ran
+    // locally failed remotely with "Must specify WorkflowInstId" from
+    // PGETaskInstance -- which is most of what a deployment runs.
+    stampTaskMetadata(taskProcessor, workflowTask);
+
     TaskJobInput in = new TaskJobInput();
     in.setDynMetadata(taskProcessor.getWorkflowInstance().getSharedContext());
     in.setTaskConfig(workflowTask.getTaskConfig());
