@@ -71,6 +71,13 @@ import static org.apache.oodt.cas.workflow.util.GenericWorkflowObjectFactory.get
  */
 public class AvroRpcWorkflowManager implements WorkflowManager,org.apache.oodt.cas.workflow.struct.avrotypes.WorkflowManager {
 
+    /**
+     * The address this manager tells compute nodes to call back on. Set it
+     * wherever this machine's hostname does not resolve from the nodes.
+     */
+    public static final String WORKFLOW_MANAGER_URL_PROPERTY =
+        "org.apache.oodt.cas.workflow.manager.url";
+
     private static final org.slf4j.Logger logger = LoggerFactory.getLogger(AvroRpcWorkflowManager.class);
 
     private Server server;
@@ -110,13 +117,32 @@ public class AvroRpcWorkflowManager implements WorkflowManager,org.apache.oodt.c
             throw new IllegalStateException("Null engine");
         }
 
-        URL workflowManagerUrl = safeGetUrlFromString("http://" + getHostname() + ":" + port);
+        // The address a node will be told to call back on, so it has to be
+        // reachable from a node -- not merely correct here.
+        //
+        // InetAddress.getLocalHost().getHostName() answers with the short
+        // local name, "ninja", which resolves on the machine that produced it
+        // and nowhere else: a compute node was handed http://ninja:9201, could
+        // not resolve it, and every status and metadata update it pushed back
+        // was lost. ProcessingNode was the visible half -- an instance kept
+        // naming the manager's own host as the machine that ran the task --
+        // but task start and end times and status transitions travel the same
+        // way, and all of them went the same place.
+        //
+        // The property wins when set; the hostname stays the default, where it
+        // has always worked for a single machine.
+        String advertised = System.getProperty(WORKFLOW_MANAGER_URL_PROPERTY);
+        if (advertised == null || advertised.trim().isEmpty()) {
+            advertised = "http://" + getHostname() + ":" + port;
+        }
+        URL workflowManagerUrl = safeGetUrlFromString(advertised);
         if(workflowManagerUrl == null){
-            throw new IllegalStateException("Null workflow manager URL");
+            throw new IllegalStateException(
+                "Null workflow manager URL from [" + advertised + "]");
         }
 
-        logger.debug("Setting workflow engine url: {}", workflowManagerUrl.toString());
-        engine.setWorkflowManagerUrl(safeGetUrlFromString("http://" + getHostname()  + ":" + port));
+        logger.info("Workflow manager reachable at {}", workflowManagerUrl);
+        engine.setWorkflowManagerUrl(workflowManagerUrl);
         repo = getWorkflowRepositoryFromProperty();
         // An engine that does not build a repository of its own is told which
         // one it belongs to, so it can answer for it. Without this it reports
