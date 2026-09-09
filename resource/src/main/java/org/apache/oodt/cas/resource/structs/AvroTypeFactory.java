@@ -105,7 +105,7 @@ public class AvroTypeFactory {
         // instance class name, and the batch stub then failed to build a task
         // it had never been told about.
         //
-        // JobInput extends XmlRpcWriteable, whose write() returns a structure
+        // JobInput extends StructWriteable, whose write() returns a structure
         // of maps, lists and strings and whose read() takes it back. That is
         // what the XML-RPC transport used. Going through it here means the
         // conversion does not need to know the concrete class, which matters

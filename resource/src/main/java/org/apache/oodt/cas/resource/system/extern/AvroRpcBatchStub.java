@@ -39,7 +39,7 @@ import org.apache.oodt.cas.resource.structs.avrotypes.AvroResourceNode;
 import org.apache.oodt.cas.resource.structs.exceptions.JobException;
 import org.apache.oodt.cas.resource.structs.exceptions.JobInputException;
 import org.apache.oodt.cas.resource.util.GenericResourceManagerObjectFactory;
-import org.apache.oodt.cas.resource.util.XmlRpcStructFactory;
+import org.apache.oodt.cas.resource.util.StructFactory;
 
 import java.net.InetSocketAddress;
 import java.util.Collections;

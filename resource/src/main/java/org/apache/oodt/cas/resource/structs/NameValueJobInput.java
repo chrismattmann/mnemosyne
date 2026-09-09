@@ -68,7 +68,7 @@ public class NameValueJobInput implements JobInput {
   /*
    * (non-Javadoc)
    * 
-   * @see org.apache.oodt.cas.resource.util.XmlRpcWriteable#read(java.lang.Object)
+   * @see org.apache.oodt.cas.resource.util.StructWriteable#read(java.lang.Object)
    */
   public void read(Object in) {
     // we want to make sure that we're reading in
@@ -90,7 +90,7 @@ public class NameValueJobInput implements JobInput {
   /*
    * (non-Javadoc)
    * 
-   * @see org.apache.oodt.cas.resource.util.XmlRpcWriteable#write()
+   * @see org.apache.oodt.cas.resource.util.StructWriteable#write()
    */
   public Object write() {
     Map writeable = new ConcurrentHashMap();

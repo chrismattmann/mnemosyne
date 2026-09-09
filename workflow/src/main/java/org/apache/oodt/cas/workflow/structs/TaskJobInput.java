@@ -22,7 +22,7 @@ package org.apache.oodt.cas.workflow.structs;
 
 import org.apache.oodt.cas.metadata.Metadata;
 import org.apache.oodt.cas.resource.structs.JobInput;
-import org.apache.oodt.cas.workflow.util.XmlRpcStructFactory;
+import org.apache.oodt.cas.workflow.util.StructFactory;
 
 import java.io.BufferedInputStream;
 import java.io.File;
@@ -90,7 +90,7 @@ public class TaskJobInput implements JobInput {
   /*
    * (non-Javadoc)
    * 
-   * @see org.apache.oodt.cas.resource.util.XmlRpcWriteable#read(java.lang.Object)
+   * @see org.apache.oodt.cas.resource.util.StructWriteable#read(java.lang.Object)
    */
   public void read(Object in) {
     if (!(in instanceof Map)) {
@@ -99,7 +99,7 @@ public class TaskJobInput implements JobInput {
 
     Map inHash = (Map) in;
 
-    this.taskConfig = XmlRpcStructFactory
+    this.taskConfig = StructFactory
         .getWorkflowTaskConfigurationFromXmlRpc((Map) inHash
             .get("task.config"));
     this.dynMetadata.addMetadata((Map) inHash.get("task.metadata"));
@@ -110,7 +110,7 @@ public class TaskJobInput implements JobInput {
   /*
    * (non-Javadoc)
    * 
-   * @see org.apache.oodt.cas.resource.util.XmlRpcWriteable#write()
+   * @see org.apache.oodt.cas.resource.util.StructWriteable#write()
    */
   public Object write() {
     // need to create a Map with the task metadata and the task config
@@ -121,7 +121,7 @@ public class TaskJobInput implements JobInput {
     // field, which is what it is.
     Map outHash = new ConcurrentHashMap();
     if (this.taskConfig != null) {
-      outHash.put("task.config", XmlRpcStructFactory
+      outHash.put("task.config", StructFactory
           .getXmlRpcWorkflowTaskConfiguration(this.taskConfig));
     }
     if (this.dynMetadata != null && this.dynMetadata.getMap() != null) {
