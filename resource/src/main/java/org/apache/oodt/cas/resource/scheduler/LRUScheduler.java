@@ -90,36 +90,77 @@ public class LRUScheduler implements Scheduler {
                 Thread.currentThread().sleep(sleepTime);
             } catch (Exception ignore) {}
 
-            if (!myJobQueue.isEmpty()) {
-                JobSpec exec;
-
-                try {
-                    exec = myJobQueue.getNextJob();
-                    LOG.log(Level.INFO, "Obtained Job: ["
-                            + exec.getJob().getId()
-                            + "] from Queue: Scheduling for execution");
-                } catch (Exception e) {
-                    LOG.log(Level.WARNING,
-                            "Error getting next job from JobQueue: Message: "
-                                    + e.getMessage());
-                    continue;
-                }
-
-                try {
-                    schedule(exec);
-                } catch (Exception e) {
-                    LOG.log(Level.WARNING, "Error scheduling job: ["
-                            + exec.getJob().getId() + "]: Message: "
-                            + e.getMessage());
-                    // place the job spec back on the queue
-                    try {
-                        myJobQueue.requeueJob(exec);
-                    } catch (Exception ignore) {
-                    }
-                }
-            }
+            drainQueue();
         }
 
+    }
+
+    /**
+     * Place as many queued jobs as there is room for, then go back to sleep.
+     *
+     * <p>This used to take exactly one job per cycle. With the wait at twenty
+     * seconds that is one job every twenty seconds however much capacity is
+     * free: twenty chunks across two eight-slot nodes spent about seven
+     * minutes being handed out, and a four hundred and fifty eight chunk
+     * corpus would spend some two and a half hours in scheduling alone. It
+     * grew worse with each node added, because the capacity grew and the tap
+     * did not.</p>
+     *
+     * <p>It also left a fast node idle. Work was handed out evenly by count,
+     * so the quicker machine finished its share and then waited for a cycle
+     * to offer it more, while the slower one was still working. Filling every
+     * free slot as it appears is what keeps it fed.</p>
+     *
+     * <p>The loop stops as soon as a job cannot be placed, which is the
+     * signal that no node has room, and is bounded by the queue size taken at
+     * the start. schedule() puts a job it cannot place back on the queue
+     * itself, so without that bound an unplaceable job would be pulled and
+     * requeued forever.</p>
+     */
+    // Package-private so a test can drive one pass without the endless loop.
+    void drainQueue() {
+        int budget;
+        try {
+            budget = myJobQueue.getQueuedJobs().size();
+        } catch (Exception e) {
+            LOG.log(Level.WARNING, "Unable to size the job queue: Message: "
+                    + e.getMessage());
+            return;
+        }
+
+        while (budget-- > 0 && !myJobQueue.isEmpty()) {
+            JobSpec exec;
+            try {
+                exec = myJobQueue.getNextJob();
+                LOG.log(Level.INFO, "Obtained Job: ["
+                        + exec.getJob().getId()
+                        + "] from Queue: Scheduling for execution");
+            } catch (Exception e) {
+                LOG.log(Level.WARNING,
+                        "Error getting next job from JobQueue: Message: "
+                                + e.getMessage());
+                return;
+            }
+
+            try {
+                if (!schedule(exec)) {
+                    // No node has room. schedule() has already put it back;
+                    // the rest of the queue can wait for the next cycle
+                    // rather than being pulled and requeued behind it.
+                    return;
+                }
+            } catch (Exception e) {
+                LOG.log(Level.WARNING, "Error scheduling job: ["
+                        + exec.getJob().getId() + "]: Message: "
+                        + e.getMessage());
+                // place the job spec back on the queue
+                try {
+                    myJobQueue.requeueJob(exec);
+                } catch (Exception ignore) {
+                }
+                return;
+            }
+        }
     }
 
     /*
