@@ -93,6 +93,50 @@ public class TestAvroRpcWorkflowManager extends TestCase{
      * </p>
      */
     @Test
+    /**
+     * Write an instance into the index the manager is using, waiting out the
+     * engine if it happens to be holding the writer.
+     *
+     * <p>setUp starts a manager and fires a long running workflow, so the
+     * engine is writing to this index while the test wants to write to it
+     * too. Lucene allows one IndexWriter per directory: the second gets
+     * LockObtainFailedException, which the repository reports as "Unable to
+     * index workflow instance". Locally the engine has usually finished by
+     * the time the test asks; on a loaded CI runner it has not, and the test
+     * failed there while passing here.</p>
+     *
+     * <p>The lock is held for as long as one write takes, so waiting is the
+     * whole fix. Failing after ten seconds keeps a genuinely stuck index from
+     * being mistaken for contention.</p>
+     */
+    private void addToTheRepositoryTheManagerReads(
+            org.apache.oodt.cas.workflow.structs.WorkflowInstance instance)
+            throws Exception {
+        long deadline = System.currentTimeMillis() + 10000;
+        Exception last = null;
+        while (System.currentTimeMillis() < deadline) {
+            org.apache.oodt.cas.workflow.instrepo.LuceneWorkflowInstanceRepository repo =
+                    new org.apache.oodt.cas.workflow.instrepo.LuceneWorkflowInstanceRepository(
+                            luceneCatLoc, 20);
+            try {
+                repo.addWorkflowInstance(instance);
+                repo.release();
+                return;
+            } catch (Exception e) {
+                last = e;
+                try {
+                    repo.release();
+                } catch (Exception ignore) {
+                    // releasing a repository that never opened is not news
+                }
+                Thread.sleep(250);
+            }
+        }
+        throw new AssertionError(
+                "could not write to the instance index within 10s: "
+                        + (last == null ? "no attempt made" : last.getMessage()));
+    }
+
     public void testAnInstanceWithNoModelDoesNotEmptyTheListing() throws Exception {
         // An instance whose workflow this repository cannot describe: an id
         // that was never defined, and no tasks to define it from.
@@ -111,11 +155,7 @@ public class TestAvroRpcWorkflowManager extends TestCase{
         orphan.setStatus("Success");
         // Written into the same repository the manager reads: the fixture
         // points the engine at this Lucene index.
-        org.apache.oodt.cas.workflow.instrepo.LuceneWorkflowInstanceRepository repo =
-                new org.apache.oodt.cas.workflow.instrepo.LuceneWorkflowInstanceRepository(
-                        luceneCatLoc, 20);
-        repo.addWorkflowInstance(orphan);
-        repo.release();
+        addToTheRepositoryTheManagerReads(orphan);
 
         List<org.apache.oodt.cas.workflow.structs.WorkflowInstance> byStatus =
                 AvroTypeFactory.getWorkflowInstances(
