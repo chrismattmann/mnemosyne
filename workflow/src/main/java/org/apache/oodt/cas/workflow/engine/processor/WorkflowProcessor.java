@@ -28,6 +28,7 @@ import org.apache.oodt.cas.workflow.structs.WorkflowInstance;
 //JDK imports
 import java.util.List;
 import java.util.Vector;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 
@@ -290,11 +291,85 @@ public abstract class WorkflowProcessor implements WorkflowProcessorListener,
     }
   }
 
+  /**
+   * Put a condition that has answered "no" back in the queue, so that it is
+   * asked again on the next pass.
+   *
+   * <p>
+   * A condition is a task, and a task that fails is finished: it lands in
+   * Failure, which the lifecycle files under "done", and a done child is
+   * skipped by {@link SequentialProcessor#getRunnableSubProcessors()} and
+   * excluded from the querier's repository query. Nothing ever asks it again.
+   * Since {@link #passedPreConditions()} requires every condition to be in
+   * Success, the task it guards waits forever.
+   * </p>
+   *
+   * <p>
+   * That makes every condition a one-shot gate, which is the opposite of what
+   * a condition is for. A gate exists to hold work until something becomes
+   * true, and the whole point is that it is not true yet when first asked --
+   * so the first "no" was being treated as a verdict rather than as "not yet".
+   * ProductCountSettledCondition, which waits for a count to stop rising,
+   * could never once have returned true: it is asked before anything has been
+   * produced, fails, and is never asked again. The join it guards has always
+   * been started by hand, and this is why.
+   * </p>
+   *
+   * <p>
+   * Conditions only, and only ones that failed. A task that fails is a real
+   * failure and must stay failed; retrying a PGE forever because it threw is
+   * a different and much worse bug. The container is requeued with its
+   * children, since a sequential parent rolls its child's Failure up into its
+   * own state and would otherwise stay done while its children were ready.
+   * </p>
+   *
+   * @param conditions the pre- or post-condition processor, which may be null
+   */
+  private void requeueAnsweredConditions(WorkflowProcessor conditions) {
+    if (conditions == null) {
+      return;
+    }
+
+    boolean requeued = false;
+    List<WorkflowProcessor> children = conditions.getSubProcessors();
+    if (children != null) {
+      for (WorkflowProcessor child : children) {
+        if (child instanceof ConditionProcessor && hasFailed(child)) {
+          requeue(child, "condition answered no; asking again");
+          requeued = true;
+        }
+      }
+    }
+
+    if (requeued && hasFailed(conditions)) {
+      requeue(conditions, "a condition below this was requeued");
+    }
+  }
+
+  private boolean hasFailed(WorkflowProcessor processor) {
+    WorkflowInstance instance = processor.getWorkflowInstance();
+    if (instance == null || instance.getState() == null) {
+      return false;
+    }
+    return "Failure".equals(instance.getState().getName());
+  }
+
+  private void requeue(WorkflowProcessor processor, String why) {
+    WorkflowState queued = this.helper.getLifecycleForProcessor(processor)
+        .createState("Queued", "waiting",
+            "Workflow Processor: requeue: " + why + ": instance: ["
+                + processor.getWorkflowInstance().getId() + "]");
+    processor.getWorkflowInstance().setState(queued);
+    LOG.log(Level.FINE, "Requeued condition instance: ["
+        + processor.getWorkflowInstance().getId() + "]: " + why);
+  }
+
   public synchronized List<TaskProcessor> getRunnableWorkflowProcessors() {
     Vector<TaskProcessor> runnableTasks = new Vector<TaskProcessor>();
 
     // evaluate pre-conditions
     if (!this.passedPreConditions()) {
+      requeueAnsweredConditions(this.getPreConditions());
       // Conditions can gate this processor without being held by it: they run
       // as instances of their own, discovered from the repository like any
       // other work. There is then nothing here to hand back, and asking for
@@ -313,6 +388,7 @@ public abstract class WorkflowProcessor implements WorkflowProcessorListener,
         runnableTasks.addAll(subProcessor.getRunnableWorkflowProcessors());
       }
     } else if (!this.passedPostConditions()) {
+      requeueAnsweredConditions(this.getPostConditions());
       if (this.getPostConditions() != null) {
         for (WorkflowProcessor subProcessor : this.getPostConditions()
             .getRunnableSubProcessors()) {
