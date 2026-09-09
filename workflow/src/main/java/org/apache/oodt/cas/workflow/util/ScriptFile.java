@@ -96,10 +96,43 @@ public class ScriptFile {
         this.commandShell = commandShell;
     }
 
+    /**
+     * Whether this shell understands "set -e", by the name it is invoked
+     * under. Anything not recognised is left exactly as it was, because a
+     * shell we cannot name is one whose syntax we do not know.
+     */
+    static boolean stopsOnError(String shell) {
+        if (shell == null) {
+            return false;
+        }
+        String name = shell.trim();
+        int slash = name.lastIndexOf('/');
+        if (slash >= 0) {
+            name = name.substring(slash + 1);
+        }
+        int space = name.indexOf(' ');
+        if (space >= 0) {
+            name = name.substring(0, space);
+        }
+        return name.equals("sh") || name.equals("bash") || name.equals("ksh")
+                || name.equals("zsh") || name.equals("dash");
+    }
+
     public String toString() {
         StringBuilder rStr = new StringBuilder();
 
         rStr.append("#!").append(commandShell).append("\n");
+
+        // Without this the script runs every command whatever the one before
+        // it did, and exits with the status of the last one. A PGE whose
+        // science command failed therefore reported success, so long as
+        // whatever trailed it -- a copy, a heartbeat, a log line -- succeeded.
+        // The task is marked Success, nothing is ingested, and the run carries
+        // on with no data. Observed on a translate stage where all 144 jobs
+        // failed and all 144 instances went green.
+        if (stopsOnError(commandShell)) {
+            rStr.append("set -e\n");
+        }
 
         for (Object command : commands) {
             String cmd = (String) command;
