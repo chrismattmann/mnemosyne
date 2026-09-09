@@ -682,16 +682,26 @@ public class LuceneWorkflowInstanceRepository extends
             Document doc = toDoc(wInst);
             writer.addDocument(doc);
         } catch (IOException e) {
+            // With the cause attached. Without it a LockObtainFailedException
+            // -- another writer already has this index -- reads as an
+            // unexplained indexing failure, and the stack that would have said
+            // so was lost.
             LOG.log(Level.WARNING, "Unable to index workflow instance: ["
-                    + wInst.getId() + "]: Message: " + e.getMessage());
+                    + wInst.getId() + "]: Message: " + e.getMessage(), e);
             throw new InstanceRepositoryException(
                     "Unable to index workflow instance: [" + wInst.getId()
-                            + "]: Message: " + e.getMessage());
+                            + "]: Message: " + e.getMessage(), e);
         } finally {
-            try {
-                writer.close();
-            } catch (Exception e) {
-                System.out.println(e);
+            // Null when the constructor above threw, which is exactly when
+            // this ran: the NullPointerException then replaced the real
+            // failure and was printed to stdout, where no log collects it.
+            if (writer != null) {
+                try {
+                    writer.close();
+                } catch (Exception e) {
+                    LOG.log(Level.WARNING, "Unable to close the index writer "
+                            + "for instance [" + wInst.getId() + "]", e);
+                }
             }
         }
 
