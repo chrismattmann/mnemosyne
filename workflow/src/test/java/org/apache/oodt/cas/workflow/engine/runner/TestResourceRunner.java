@@ -20,6 +20,8 @@ package org.apache.oodt.cas.workflow.engine.runner;
 //OODT imports
 import org.apache.oodt.cas.workflow.engine.QuerierAndRunnerUtils;
 import org.apache.oodt.cas.workflow.engine.processor.TaskProcessor;
+import org.apache.oodt.cas.workflow.lifecycle.WorkflowState;
+import org.apache.oodt.cas.resource.structs.JobStatus;
 
 //JUnit imports
 import junit.framework.TestCase;
@@ -232,6 +234,92 @@ public class TestResourceRunner extends TestCase {
             return null;
           }
         });
+  }
+
+  /**
+   * A task that the resource manager has put on a node says so.
+   *
+   * <p>
+   * Nothing ever set Executing for a task: it went to WaitingOnResources when
+   * handed to a runner and stayed there until it finished, so a queue full of
+   * work and a cluster running flat out looked identical from the workflow
+   * side.
+   * </p>
+   */
+  public void testATaskPlacedOnANodeReportsExecuting() throws Exception {
+    MockResourceManagerClient client = new MockResourceManagerClient();
+    client.setQueueCapacity(10);
+    client.setNextJobId("job-1");
+    runner = new ResourceRunner(client, null, FAST_POLL_SECONDS);
+
+    TaskProcessor processor = newTaskProcessor();
+    runner.execute(processor);
+    client.setJobStatus("job-1", JobStatus.SCHEDULED);
+
+    assertTrue("a task on a node should report Executing",
+        waitForState(processor, "Executing"));
+  }
+
+  /** A job still sitting in the resource manager's queue does not. */
+  public void testAQueuedTaskDoesNotClaimToBeExecuting() throws Exception {
+    MockResourceManagerClient client = new MockResourceManagerClient();
+    client.setQueueCapacity(10);
+    client.setNextJobId("job-1");
+    runner = new ResourceRunner(client, null, FAST_POLL_SECONDS);
+
+    TaskProcessor processor = newTaskProcessor();
+    runner.execute(processor);
+    client.setJobStatus("job-1", JobStatus.QUEUED);
+
+    assertFalse("a queued job must not claim to be running",
+        waitForState(processor, "Executing"));
+  }
+
+  /**
+   * Completion still wins over the status probe, and a finished job stops
+   * being tracked exactly as before.
+   */
+  public void testCompletionIsUnaffectedByTheStatusProbe() throws Exception {
+    MockResourceManagerClient client = new MockResourceManagerClient();
+    client.setQueueCapacity(10);
+    client.setNextJobId("job-1");
+    runner = new ResourceRunner(client, null, FAST_POLL_SECONDS);
+
+    runner.execute(newTaskProcessor());
+    client.setJobStatus("job-1", JobStatus.SCHEDULED);
+    client.setJobComplete("job-1", true);
+
+    long deadline = System.currentTimeMillis() + 15000;
+    while (runner.getOutstandingJobCount() > 0
+        && System.currentTimeMillis() < deadline) {
+      Thread.sleep(200);
+    }
+    assertEquals("a completed job should no longer be tracked",
+        0, runner.getOutstandingJobCount());
+  }
+
+  /** Which statuses mean "the resource manager has put this on a node". */
+  public void testOnlyPlacedStatusesCountAsRunning() throws Exception {
+    assertTrue(ResourceRunner.isOnANode(JobStatus.SCHEDULED));
+    assertTrue(ResourceRunner.isOnANode(JobStatus.EXECUTED));
+    assertFalse(ResourceRunner.isOnANode(JobStatus.QUEUED));
+    assertFalse(ResourceRunner.isOnANode(JobStatus.SUCCESS));
+    assertFalse(ResourceRunner.isOnANode(JobStatus.FAILURE));
+    assertFalse("an unreadable status is not a running one",
+        ResourceRunner.isOnANode(null));
+  }
+
+  private boolean waitForState(TaskProcessor processor, String name)
+      throws Exception {
+    long deadline = System.currentTimeMillis() + 8000;
+    while (System.currentTimeMillis() < deadline) {
+      WorkflowState state = processor.getWorkflowInstance().getState();
+      if (state != null && name.equals(state.getName())) {
+        return true;
+      }
+      Thread.sleep(100);
+    }
+    return false;
   }
 
   private TaskProcessor newTaskProcessor() throws Exception {

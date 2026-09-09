@@ -20,6 +20,7 @@ package org.apache.oodt.cas.workflow.engine.runner;
 //OODT imports
 import java.io.IOException;
 import org.apache.oodt.cas.resource.structs.Job;
+import org.apache.oodt.cas.resource.structs.JobStatus;
 import org.apache.oodt.cas.resource.structs.exceptions.JobExecutionException;
 import org.apache.oodt.cas.resource.structs.exceptions.JobRepositoryException;
 import org.apache.oodt.cas.resource.system.ResourceManagerClient;
@@ -251,6 +252,62 @@ public class ResourceRunner extends AbstractEngineRunnerBase implements CoreMetK
     return this.outstandingJobs.size();
   }
 
+  /**
+   * Move a task to Executing once the Resource Manager has actually placed it
+   * on a node.
+   *
+   * <p>
+   * Nothing set this for a task. A task went to WaitingOnResources when it was
+   * handed to a runner and stayed there until it finished, so "queued, waiting
+   * for a free node" and "running on the GPU right now" were the same state.
+   * The Resource Manager would show both nodes saturated while the Workflow
+   * Manager, OPSUI and Gloss all reported nothing executing, and there was no
+   * way to tell from the workflow side how much of a run was actually moving.
+   * </p>
+   *
+   * <p>
+   * Taken from what the Resource Manager reports rather than set at
+   * submission, because a submitted job may sit in its queue. Marking it
+   * Executing on acceptance would trade one wrong answer for another, with
+   * every queued task claiming to run.
+   * </p>
+   */
+  private void markExecuting(TaskProcessor taskProcessor, String jobId) {
+    WorkflowState current = taskProcessor.getWorkflowInstance().getState();
+    if (current != null && "Executing".equals(current.getName())) {
+      return;
+    }
+    WorkflowLifecycle lifecycle = getLifecycle(taskProcessor);
+    WorkflowState state = lifecycle.createState("Executing", "running",
+        "Resource manager job: [" + jobId + "] placed on a node");
+    taskProcessor.setState(state);
+    persist(taskProcessor.getWorkflowInstance());
+  }
+
+  /**
+   * Whether the Resource Manager has this job on a node, as opposed to still
+   * holding it in a queue.
+   */
+  static boolean isOnANode(String status) {
+    return JobStatus.SCHEDULED.equals(status)
+        || JobStatus.EXECUTED.equals(status);
+  }
+
+  /**
+   * The job's status, or null if it could not be read. Null means "ask again
+   * next pass", never "something has changed".
+   */
+  protected String safeGetJobStatus(String jobId) {
+    try {
+      Job job = rClient.getJobInfo(jobId);
+      return job != null ? job.getStatus() : null;
+    } catch (Exception e) {
+      LOG.log(Level.FINE, "Could not read status for job: [" + jobId
+          + "]: Message: " + e.getMessage());
+      return null;
+    }
+  }
+
   protected boolean safeCheckJobComplete(String jobId) {
     try {
       return rClient.isJobComplete(jobId);
@@ -359,6 +416,11 @@ public class ResourceRunner extends AbstractEngineRunnerBase implements CoreMetK
             outstandingJobs.remove(jobId);
             completeTask(taskProcessor, "Resource manager job: [" + jobId
                 + "] completed");
+          } else if (isOnANode(safeGetJobStatus(jobId))) {
+            // Only for jobs that are not finished, and only until the state
+            // has been recorded once. Completion is what this monitor is
+            // really for and its handling is left exactly as it was.
+            markExecuting(taskProcessor, jobId);
           }
         } catch (Exception e) {
           // A failure observing one job must not stop the monitor, or every

@@ -51,6 +51,8 @@ public class MockResourceManagerClient implements ResourceManagerClient {
 
   private final Map<String, Boolean> jobCompletion =
       new ConcurrentHashMap<String, Boolean>();
+  private final Map<String, String> jobStatus =
+      new ConcurrentHashMap<String, String>();
 
   private int queueCapacity = 10;
 
@@ -77,6 +79,11 @@ public class MockResourceManagerClient implements ResourceManagerClient {
 
   public void setJobComplete(String jobId, boolean complete) {
     this.jobCompletion.put(jobId, complete);
+  }
+
+  /** What the resource manager says this job is doing. */
+  public void setJobStatus(String jobId, String status) {
+    this.jobStatus.put(jobId, status);
   }
 
   /** What was submitted alongside each job, so a test can read it. */
@@ -125,7 +132,14 @@ public class MockResourceManagerClient implements ResourceManagerClient {
 
   @Override
   public Job getJobInfo(String jobId) throws JobRepositoryException {
-    return null;
+    String status = this.jobStatus.get(jobId);
+    if (status == null) {
+      return null;
+    }
+    Job job = new Job();
+    job.setId(jobId);
+    job.setStatus(status);
+    return job;
   }
 
   @Override
