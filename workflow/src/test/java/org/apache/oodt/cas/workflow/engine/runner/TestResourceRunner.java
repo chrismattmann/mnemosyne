@@ -27,6 +27,8 @@ import org.apache.oodt.cas.metadata.Metadata;
 import org.apache.oodt.cas.resource.structs.JobInput;
 import org.apache.oodt.cas.workflow.metadata.CoreMetKeys;
 import org.apache.oodt.cas.workflow.structs.TaskJobInput;
+import org.apache.oodt.cas.workflow.instrepo.WorkflowInstanceRepository;
+import org.apache.oodt.cas.workflow.structs.WorkflowInstance;
 
 /**
  * Exercises {@link ResourceRunner} against a stand-in Resource Manager.
@@ -164,6 +166,72 @@ public class TestResourceRunner extends TestCase {
         met.getMetadata(CoreMetKeys.WORKFLOW_INST_ID));
     assertNotNull("the task has to know which task it is",
         met.getMetadata(CoreMetKeys.TASK_ID));
+  }
+
+  /**
+   * What the node wrote while the task was away must survive completion.
+   *
+   * <p>The processor holds a copy of the instance read before the job was
+   * submitted. TaskJob on the node writes the machine it actually ran on
+   * through the workflow manager, into the repository. Persisting the
+   * pre-dispatch copy afterwards put the old values straight back: an
+   * instance that ran on a compute node kept naming the manager's own host,
+   * because the correction was written and then overwritten.</p>
+   */
+  public void testCompletionKeepsWhatTheNodeWrote() throws Exception {
+    MockResourceManagerClient client = new MockResourceManagerClient();
+    client.setQueueCapacity(10);
+    client.setNextJobId("job-1");
+
+    TaskProcessor processor = newTaskProcessor();
+    String instanceId = processor.getWorkflowInstance().getId();
+
+    // The repository as the node left it: same instance, its own hostname.
+    WorkflowInstance asTheNodeLeftIt = new WorkflowInstance();
+    asTheNodeLeftIt.setId(instanceId);
+    Metadata nodeContext = new Metadata();
+    nodeContext.addMetadata(CoreMetKeys.PROCESSING_NODE, "spaghetti");
+    asTheNodeLeftIt.setSharedContext(nodeContext);
+
+    runner = new ResourceRunner(client, repositoryHolding(asTheNodeLeftIt),
+        FAST_POLL_SECONDS);
+    runner.execute(processor);
+
+    // The processor still holds the pre-dispatch value.
+    processor.getWorkflowInstance().getSharedContext()
+        .replaceMetadata(CoreMetKeys.PROCESSING_NODE, "ninja");
+
+    client.setJobComplete("job-1", true);
+    long deadline = System.currentTimeMillis() + 15000;
+    while (runner.getOutstandingJobCount() > 0
+        && System.currentTimeMillis() < deadline) {
+      Thread.sleep(100);
+    }
+
+    assertEquals("the node ran it, so the node's answer is the true one",
+        "spaghetti",
+        processor.getWorkflowInstance().getSharedContext()
+            .getMetadata(CoreMetKeys.PROCESSING_NODE));
+  }
+
+  /** A repository that knows one instance: the one the node wrote. */
+  private WorkflowInstanceRepository repositoryHolding(
+      final WorkflowInstance stored) {
+    return (WorkflowInstanceRepository) java.lang.reflect.Proxy.newProxyInstance(
+        WorkflowInstanceRepository.class.getClassLoader(),
+        new Class[] {WorkflowInstanceRepository.class},
+        new java.lang.reflect.InvocationHandler() {
+          public Object invoke(Object proxy, java.lang.reflect.Method method,
+              Object[] args) {
+            if ("getWorkflowInstanceById".equals(method.getName())) {
+              return stored;
+            }
+            Class<?> r = method.getReturnType();
+            if (r == boolean.class) { return Boolean.FALSE; }
+            if (r == int.class) { return Integer.valueOf(0); }
+            return null;
+          }
+        });
   }
 
   private TaskProcessor newTaskProcessor() throws Exception {

@@ -25,6 +25,8 @@ import org.apache.oodt.cas.resource.structs.exceptions.JobRepositoryException;
 import org.apache.oodt.cas.resource.system.ResourceManagerClient;
 import org.apache.oodt.cas.resource.system.rpc.ResourceManagerFactory;
 import org.apache.oodt.cas.workflow.engine.processor.TaskProcessor;
+import org.apache.oodt.cas.metadata.Metadata;
+import org.apache.oodt.cas.workflow.structs.WorkflowInstance;
 import org.apache.oodt.cas.workflow.instrepo.WorkflowInstanceRepository;
 import org.apache.oodt.cas.workflow.lifecycle.WorkflowLifecycle;
 import org.apache.oodt.cas.workflow.lifecycle.WorkflowState;
@@ -280,11 +282,54 @@ public class ResourceRunner extends AbstractEngineRunnerBase implements CoreMetK
    * task returns.
    */
   private void completeTask(TaskProcessor taskProcessor, String msg) {
+    adoptMetadataWrittenByTheNode(taskProcessor);
     WorkflowLifecycle lifecycle = getLifecycle(taskProcessor);
     WorkflowState state = lifecycle.createState("ExecutionComplete",
         "transition", msg);
     taskProcessor.setState(state);
     persist(taskProcessor.getWorkflowInstance());
+  }
+
+  /**
+   * Take back what the node wrote while the task was away.
+   *
+   * <p>The processor holds a copy of the instance read before the job was
+   * submitted. While the task runs elsewhere, TaskJob on that node writes to
+   * the same instance through the workflow manager: the node it actually ran
+   * on, and its task start and end times. Those updates land in the
+   * repository, not in this copy -- and persisting this copy afterwards puts
+   * the pre-dispatch values back over them.</p>
+   *
+   * <p>ProcessingNode is where it showed: an instance that ran on a compute
+   * node kept reporting the manager's own host, because the correction was
+   * written and then overwritten a moment later. The node is the authority on
+   * what happened to a task it ran, so its keys win here.</p>
+   *
+   * <p>Only the shared context is taken. State belongs to this runner, which
+   * is about to set it.</p>
+   */
+  private void adoptMetadataWrittenByTheNode(TaskProcessor taskProcessor) {
+    WorkflowInstance mine = taskProcessor.getWorkflowInstance();
+    if (instRep == null || mine == null || mine.getId() == null) {
+      return;
+    }
+    try {
+      WorkflowInstance stored = instRep.getWorkflowInstanceById(mine.getId());
+      if (stored == null || stored.getSharedContext() == null) {
+        return;
+      }
+      Metadata context = mine.getSharedContext();
+      if (context == null) {
+        context = new Metadata();
+        mine.setSharedContext(context);
+      }
+      context.replaceMetadata(stored.getSharedContext());
+    } catch (Exception e) {
+      // Worth saying, not worth failing the task over: the work is done and
+      // the instance still advances, it just reports the pre-dispatch values.
+      LOG.log(Level.WARNING, "Unable to read back the metadata written by the "
+          + "node for instance [" + mine.getId() + "]: " + e.getMessage(), e);
+    }
   }
 
   private void failTask(TaskProcessor taskProcessor, WorkflowTask task,
