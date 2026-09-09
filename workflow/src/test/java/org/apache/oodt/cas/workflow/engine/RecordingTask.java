@@ -95,8 +95,6 @@ public class RecordingTask implements WorkflowTaskInstance {
       throws WorkflowTaskInstanceException {
     String name = config != null ? config.getProperty("RecordAs") : null;
     name = name != null ? name : "unnamed";
-    RECORDED.add(name);
-
     if (metadata != null) {
       SEEN.put(name, new ArrayList<String>(metadata.getAllKeys()));
       // Leave a mark for whatever runs next.
@@ -104,6 +102,16 @@ public class RecordingTask implements WorkflowTaskInstance {
     } else {
       SEEN.put(name, new ArrayList<String>());
     }
+
+    // What was seen is published before the name that announces it.
+    //
+    // Every test here waits on RECORDED and then reads SEEN. Adding to
+    // RECORDED first opens a window in which the waiter is released and
+    // the keys are not there yet, so keysSeenBy returns an empty list and
+    // the assertion fails on a test whose subject ran perfectly. On a fast
+    // machine that window is nanoseconds; on a loaded CI runner it is wide
+    // enough to lose, which is what made TestTaskMetadataIsStamped flaky.
+    RECORDED.add(name);
 
     if (failEverything) {
       throw new WorkflowTaskInstanceException("failing on purpose");
