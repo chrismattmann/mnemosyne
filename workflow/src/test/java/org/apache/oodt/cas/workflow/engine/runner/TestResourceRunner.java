@@ -23,6 +23,10 @@ import org.apache.oodt.cas.workflow.engine.processor.TaskProcessor;
 
 //JUnit imports
 import junit.framework.TestCase;
+import org.apache.oodt.cas.metadata.Metadata;
+import org.apache.oodt.cas.resource.structs.JobInput;
+import org.apache.oodt.cas.workflow.metadata.CoreMetKeys;
+import org.apache.oodt.cas.workflow.structs.TaskJobInput;
 
 /**
  * Exercises {@link ResourceRunner} against a stand-in Resource Manager.
@@ -129,6 +133,37 @@ public class TestResourceRunner extends TestCase {
 
     assertEquals("a rejected submission should not be tracked",
         0, runner.getOutstandingJobCount());
+  }
+
+  /**
+   * The keys a task cannot start without have to be in the shared context
+   * before it is captured for the wire.
+   *
+   * <p>AsynchronousLocalEngineRunner has always called stampTaskMetadata.
+   * ResourceRunner extended the same base class, inherited the method and
+   * never called it, so a task that ran locally failed on a node with
+   * "Must specify WorkflowInstId" from PGETaskInstance -- and PGE tasks are
+   * most of what a deployment runs. It showed up in the workflow manager too:
+   * the instance metadata was visibly sparse, because stamping writes into
+   * the instance's shared context and nothing was writing.</p>
+   */
+  public void testExecuteStampsTheTaskMetadata() throws Exception {
+    MockResourceManagerClient client = new MockResourceManagerClient();
+    client.setQueueCapacity(10);
+    client.setNextJobId("job-1");
+    runner = new ResourceRunner(client, null, FAST_POLL_SECONDS);
+
+    runner.execute(newTaskProcessor());
+
+    assertEquals(1, client.getSubmittedInputs().size());
+    JobInput submitted = client.getSubmittedInputs().get(0);
+    assertTrue(submitted instanceof TaskJobInput);
+    Metadata met = ((TaskJobInput) submitted).getDynMetadata();
+    assertNotNull("a task with no metadata cannot run", met);
+    assertNotNull("PGETaskInstance refuses to start without it",
+        met.getMetadata(CoreMetKeys.WORKFLOW_INST_ID));
+    assertNotNull("the task has to know which task it is",
+        met.getMetadata(CoreMetKeys.TASK_ID));
   }
 
   private TaskProcessor newTaskProcessor() throws Exception {

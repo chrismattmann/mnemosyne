@@ -47,6 +47,7 @@ public class MockResourceManagerClient implements ResourceManagerClient {
 
   private final List<Job> submittedJobs = Collections
       .synchronizedList(new ArrayList<Job>());
+  private final List<JobInput> submittedInputs = new ArrayList<JobInput>();
 
   private final Map<String, Boolean> jobCompletion =
       new ConcurrentHashMap<String, Boolean>();
@@ -78,6 +79,11 @@ public class MockResourceManagerClient implements ResourceManagerClient {
     this.jobCompletion.put(jobId, complete);
   }
 
+  /** What was submitted alongside each job, so a test can read it. */
+  public List<JobInput> getSubmittedInputs() {
+    return this.submittedInputs;
+  }
+
   public List<Job> getSubmittedJobs() {
     return this.submittedJobs;
   }
@@ -87,6 +93,7 @@ public class MockResourceManagerClient implements ResourceManagerClient {
   @Override
   public String submitJob(Job exec, JobInput in) throws JobExecutionException {
     this.submittedJobs.add(exec);
+    this.submittedInputs.add(in);
     if (this.nextJobId != null) {
       this.jobCompletion.put(this.nextJobId, false);
     }
