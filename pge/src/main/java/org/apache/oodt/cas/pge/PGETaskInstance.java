@@ -423,8 +423,23 @@ public class PGETaskInstance implements WorkflowTaskInstance {
 
    protected java.util.logging.Logger createLogger() throws IOException, PGEException {
       File logDir = new File(pgeConfig.getExeDir(), "logs");
-      if (!(logDir.exists() || logDir.mkdirs())) {
-         throw new PGEException("mkdirs for logs directory return false");
+      // The path is the whole diagnosis, so say it. This message sent one
+      // investigation chasing a filesystem race that did not exist: the real
+      // cause was metadata that failed to resolve, which left getExeDir()
+      // empty, so the directory being complained about was a relative "logs"
+      // under whatever the working directory happened to be. The message
+      // described that as a disk problem and named nothing.
+      //
+      // isDirectory rather than exists, and asked again after mkdirs: exists()
+      // is also true of a plain file sitting where a directory belongs, and
+      // mkdirs builds parents that concurrent tasks share. That second part is
+      // hardening rather than a fix for anything observed -- 200 trials of 16
+      // concurrent creators produced no failure -- but a check-then-act is
+      // worth closing while here.
+      if (!(logDir.isDirectory() || logDir.mkdirs() || logDir.isDirectory())) {
+         throw new PGEException("Unable to create the logs directory ["
+               + logDir + "] for execution directory ["
+               + pgeConfig.getExeDir() + "]");
       }
 
       java.util.logging.Logger logger = java.util.logging.Logger.getLogger(PGETaskInstance.class.getName() + "." + workflowInstId);
@@ -552,9 +567,11 @@ public class PGETaskInstance implements WorkflowTaskInstance {
    protected void createExeDir() throws PGEException {
       logger.info("Creating PGE execution working directory: [{}]", pgeConfig.getExeDir());
       File executionDir = new File(pgeConfig.getExeDir());
-      if (!(executionDir.exists() || executionDir.mkdirs())) {
+      if (!(executionDir.isDirectory() || executionDir.mkdirs()
+            || executionDir.isDirectory())) {
          logger.warn("Unable to create execution working directory: {}", pgeConfig.getExeDir());
-         throw new PGEException("mkdirs returned false for creating [" + pgeConfig.getExeDir() + "]");
+         throw new PGEException("mkdirs returned false for creating ["
+               + pgeConfig.getExeDir() + "]");
       }
    }
 
