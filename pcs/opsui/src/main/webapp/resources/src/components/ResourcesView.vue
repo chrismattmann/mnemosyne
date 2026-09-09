@@ -93,7 +93,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="job in jobs" :key="job.id || job.name">
+            <tr v-for="job in shownJobs" :key="job.id || job.name">
               <td>{{ job.name || '—' }}</td>
               <td class="mono">{{ job.id }}</td>
               <td>{{ job.status || '—' }}</td>
@@ -103,15 +103,30 @@
             </tr>
           </tbody>
         </table>
+        <div v-if="jobs.length" class="more">
+          <p class="muted shown">
+            Showing {{ shownJobs.length }} of {{ jobs.length }} jobs.
+          </p>
+          <button v-if="hasMore" type="button" @click="loadMore">
+            {{ moreLabel }}
+          </button>
+        </div>
       </article>
     </template>
   </section>
 </template>
 
 <script>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { onDemandLabel, onDemandPill } from '../onDemandStatus.js'
 import { stubForNode } from '../resourceStubs.js'
+import {
+  JOB_PAGE_SIZE,
+  hasMoreJobs,
+  moreJobsLabel,
+  nextShown,
+  visibleJobs
+} from '../jobPages.js'
 
 export default {
   name: 'ResourcesView',
@@ -122,12 +137,23 @@ export default {
   },
   setup(props) {
     const resource = computed(() => (props.payload && props.payload.resource) || {})
+    const jobs = computed(() => resource.value.jobs || [])
+    // Held across refreshes rather than reset by them: the view polls, and a
+    // queue that collapsed back to one page every few seconds would be worse
+    // than the long table this replaces.
+    const shown = ref(JOB_PAGE_SIZE)
     return {
       resource,
       error: computed(() => resource.value.error || ''),
       nodes: computed(() => resource.value.nodes || []),
       queues: computed(() => resource.value.queues || []),
-      jobs: computed(() => resource.value.jobs || []),
+      jobs,
+      shownJobs: computed(() => visibleJobs(jobs.value, shown.value)),
+      hasMore: computed(() => hasMoreJobs(jobs.value, shown.value)),
+      moreLabel: computed(() => moreJobsLabel(jobs.value, shown.value)),
+      loadMore() {
+        shown.value = nextShown(jobs.value, shown.value)
+      },
       onDemandPill,
       onDemandLabel,
       stubFor(node) {
@@ -139,6 +165,14 @@ export default {
 </script>
 
 <style scoped>
+.more {
+  margin: 0.9rem 0 0.2rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+}
+
 h2 {
   margin: 1.4rem 0 0.3rem;
 }
