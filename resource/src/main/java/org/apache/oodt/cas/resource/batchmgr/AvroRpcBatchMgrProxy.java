@@ -35,6 +35,8 @@ import org.apache.oodt.cas.resource.util.StructFactory;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Vector;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -60,6 +62,9 @@ public class AvroRpcBatchMgrProxy extends Thread implements Runnable {
             }
         }, "avro-batch-client-shutdown"));
     }
+
+    static final String ABANDONED_POLL_PROPERTY =
+            "org.apache.oodt.cas.resource.batchmgr.abandonedPollMillis";
 
     private JobSpec jobSpec;
 
@@ -154,13 +159,121 @@ public class AvroRpcBatchMgrProxy extends Thread implements Runnable {
             else
                 throw new Exception("batchstub.executeJob returned false");
         } catch (Exception e) {
-            LOG.log(Level.SEVERE, "Job execution failed for jobId '" + jobSpec.getJob().getId() + "' : " + e.getMessage(), e);
+            if (RequestTimeout.isExpired(e)) {
+                // Abandoning the call is not abandoning the work. Executing a
+                // job is a blocking call that returns when the job is done, so
+                // running out of time on it says nothing about the job: the
+                // node still has it. Falling straight through here, as every
+                // other failure does, let the finally below hand the node's
+                // capacity back while the task was still running on it -- so
+                // the scheduler placed another, and another every time the
+                // bound elapsed again. One machine reached thirty concurrent
+                // tasks against a capacity of eight, and jobs that finished
+                // perfectly were recorded as failures.
+                //
+                // So wait for the node to stop reporting the job before
+                // falling through. Its capacity is held until then, because
+                // until then it is genuinely in use.
+                awaitAbandonedJob(e);
+            } else {
+                LOG.log(Level.SEVERE, "Job execution failed for jobId '" + jobSpec.getJob().getId() + "' : " + e.getMessage(), e);
+            }
             parent.jobFailure(jobSpec);
         } finally {
             disconnect();
             parent.notifyMonitor(remoteHost, jobSpec);
         }
 
+    }
+
+    /**
+     * How long between asking the node whether it still has the job. Read on
+     * each poll rather than once at class load, so it can be turned down for a
+     * test and up on a large cluster without a restart.
+     */
+    static long abandonedPollMillis() {
+        long configured = Long.getLong(ABANDONED_POLL_PROPERTY, 30000L);
+        return configured > 0L ? configured : 30000L;
+    }
+
+    /**
+     * Wait until the node stops reporting a job whose call we gave up on.
+     *
+     * <p>
+     * There is no deadline here beyond the node answering. A node that still
+     * lists the job still has it, and its capacity is not free however long
+     * that takes; a node that has stopped answering has lost the job with it,
+     * and holding capacity for it would leak. Those are the only two outcomes,
+     * and asking is what tells them apart, so a deadline would only put back
+     * the guess this exists to remove.
+     * </p>
+     *
+     * <p>
+     * The poll goes through the same bounded client, so a stub wedged badly
+     * enough not to answer at all reads as unreachable rather than hanging
+     * this thread forever -- which is what the bound was added for.
+     * </p>
+     */
+    private void awaitAbandonedJob(Exception expired) {
+        String jobId = jobSpec.getJob().getId();
+        LOG.log(Level.WARNING, "Gave up waiting for job [" + jobId + "] on ["
+                + remoteHost.getNodeId() + "]: " + expired.getMessage()
+                + " The job is still the node's to finish, so its capacity is "
+                + "held until the node stops reporting it.");
+
+        long held = 0L;
+        while (true) {
+            List<String> running = jobsOnNode();
+            if (running == null) {
+                LOG.log(Level.WARNING, "Node [" + remoteHost.getNodeId()
+                        + "] stopped answering while job [" + jobId + "] was "
+                        + "outstanding; releasing its capacity after " + held
+                        + "ms, because a node we cannot reach is not running "
+                        + "anything for us.");
+                return;
+            }
+            if (!running.contains(jobId)) {
+                LOG.log(Level.INFO, "Node [" + remoteHost.getNodeId() + "] no "
+                        + "longer reports job [" + jobId + "] after " + held
+                        + "ms; releasing its capacity.");
+                return;
+            }
+            try {
+                Thread.sleep(abandonedPollMillis());
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                LOG.log(Level.WARNING, "Interrupted while waiting for job ["
+                        + jobId + "]; releasing the node's capacity.");
+                return;
+            }
+            held += abandonedPollMillis();
+        }
+    }
+
+    /**
+     * What the node says it is running, or null if it could not be asked. Null
+     * is "we cannot tell", never "nothing".
+     */
+    List<String> jobsOnNode() {
+        try {
+            connect();
+        } catch (IOException e) {
+            return null;
+        }
+        try {
+            List<String> running = new ArrayList<String>();
+            List<?> reported = proxy.getJobsOnNode(remoteHost.getNodeId());
+            if (reported != null) {
+                for (Object each : reported) {
+                    running.add(String.valueOf(each));
+                }
+            }
+            return running;
+        } catch (Exception e) {
+            return null;
+        } finally {
+            disconnect();
+        }
     }
 
 

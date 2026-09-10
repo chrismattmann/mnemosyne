@@ -125,6 +125,51 @@ public final class RequestTimeout {
     }
 
     /**
+     * A call that was abandoned because it ran out of time.
+     *
+     * <p>
+     * Its own type, because "no answer yet" and "the call failed" call for
+     * opposite responses and a caller must be able to tell them apart. The
+     * batch manager learned this the expensive way: it caught the timeout as
+     * an ordinary failure, recorded the job as failed and handed the node's
+     * capacity back, while the job carried on running. One machine reached
+     * thirty concurrent tasks against a capacity of eight.
+     * </p>
+     *
+     * <p>
+     * Two classes because the exception has to satisfy whatever the method
+     * declares, and Avro generated errors do not descend from
+     * AvroRemoteException. {@link #isExpired} is how a caller asks without
+     * caring which it got, and without reading the message.
+     * </p>
+     */
+    public static final class Expired extends IllegalStateException {
+        private Expired(String message) {
+            super(message);
+        }
+    }
+
+    /** {@link Expired}, for a method that declares AvroRemoteException. */
+    public static final class ExpiredRemote extends AvroRemoteException {
+        private ExpiredRemote(String message) {
+            super(message);
+        }
+    }
+
+    /** Whether this is a call that ran out of time rather than one that failed. */
+    public static boolean isExpired(Throwable thrown) {
+        for (Throwable t = thrown; t != null; t = t.getCause()) {
+            if (t instanceof Expired || t instanceof ExpiredRemote) {
+                return true;
+            }
+            if (t.getCause() == t) {
+                break;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Carries the exception a call threw across the executor boundary
      * without ExecutionException wrapping it a second time.
      */
@@ -201,10 +246,10 @@ public final class RequestTimeout {
 
             for (Class<?> declared : method.getExceptionTypes()) {
                 if (declared.isAssignableFrom(AvroRemoteException.class)) {
-                    return new AvroRemoteException(message);
+                    return new ExpiredRemote(message);
                 }
             }
-            return new IllegalStateException(message);
+            return new Expired(message);
         }
     }
 }
