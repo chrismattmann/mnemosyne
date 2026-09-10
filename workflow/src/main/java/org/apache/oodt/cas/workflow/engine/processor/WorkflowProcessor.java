@@ -346,6 +346,35 @@ public abstract class WorkflowProcessor implements WorkflowProcessorListener,
     }
   }
 
+  /**
+   * The same, for conditions attached as prerequisites rather than held in a
+   * pre-condition container.
+   *
+   * <p>
+   * Both forms exist and {@link #passedPreConditions()} consults both, but it
+   * is this one the engine actually builds: WorkflowProcessorQueue collects a
+   * task's gates and calls setPrerequisites with them. Requeueing only the
+   * container form therefore fixed nothing outside a unit test.
+   * </p>
+   *
+   * <p>
+   * A prerequisite list also carries the previous task of a sequential
+   * workflow, which is how ordering is enforced. That is not a condition and
+   * must never be requeued: a task that failed has failed, and putting it back
+   * in the queue would rerun a PGE because the one after it was waiting.
+   * </p>
+   */
+  private void requeueAnsweredPrerequisites() {
+    if (this.prerequisites == null) {
+      return;
+    }
+    for (WorkflowProcessor prerequisite : this.prerequisites) {
+      if (prerequisite instanceof ConditionProcessor && hasFailed(prerequisite)) {
+        requeue(prerequisite, "condition answered no; asking again");
+      }
+    }
+  }
+
   private boolean hasFailed(WorkflowProcessor processor) {
     WorkflowInstance instance = processor.getWorkflowInstance();
     if (instance == null || instance.getState() == null) {
@@ -370,6 +399,7 @@ public abstract class WorkflowProcessor implements WorkflowProcessorListener,
     // evaluate pre-conditions
     if (!this.passedPreConditions()) {
       requeueAnsweredConditions(this.getPreConditions());
+      requeueAnsweredPrerequisites();
       // Conditions can gate this processor without being held by it: they run
       // as instances of their own, discovered from the repository like any
       // other work. There is then nothing here to hand back, and asking for

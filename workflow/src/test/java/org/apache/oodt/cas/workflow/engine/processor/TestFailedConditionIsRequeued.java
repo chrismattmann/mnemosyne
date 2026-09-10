@@ -16,6 +16,7 @@
  */
 package org.apache.oodt.cas.workflow.engine.processor;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Vector;
 import java.util.logging.Level;
@@ -121,6 +122,61 @@ public class TestFailedConditionIsRequeued extends TestCase {
 
     assertEquals("only conditions are requeued", "Failure",
         conditionState(gated));
+  }
+
+  /**
+   * The form the engine actually builds. WorkflowProcessorQueue collects a
+   * task's gates and calls setPrerequisites with them, so a fix that only
+   * walked the pre-condition container passed its tests and changed nothing on
+   * a running manager.
+   */
+  public void testAConditionAttachedAsAPrerequisiteIsAskedAgain()
+      throws Exception {
+    TaskProcessor gated = taskProcessor("urn:oodt:gated");
+    ConditionProcessor condition =
+        new ConditionProcessor(manager, instance("urn:oodt:condition"));
+    condition.setState(state("Failure", "done"));
+    gated.setPrerequisites(Collections.<WorkflowProcessor>singletonList(
+        condition));
+
+    gated.getRunnableWorkflowProcessors();
+
+    assertEquals("a prerequisite condition that said no must be asked again",
+        "Queued", condition.getWorkflowInstance().getState().getName());
+  }
+
+  /**
+   * A prerequisite list also carries the previous task of a sequential
+   * workflow, which is how ordering is enforced. Requeueing that would rerun a
+   * PGE because the task after it was waiting.
+   */
+  public void testAFailedTaskPrerequisiteIsNotRequeued() throws Exception {
+    TaskProcessor gated = taskProcessor("urn:oodt:gated");
+    TaskProcessor previous = taskProcessor("urn:oodt:previous");
+    previous.setState(state("Failure", "done"));
+    gated.setPrerequisites(Collections.<WorkflowProcessor>singletonList(
+        previous));
+
+    gated.getRunnableWorkflowProcessors();
+
+    assertEquals("a failed predecessor task must stay failed", "Failure",
+        previous.getWorkflowInstance().getState().getName());
+  }
+
+  /** A prerequisite condition that passed is left alone. */
+  public void testAPassedPrerequisiteConditionIsNotDisturbed()
+      throws Exception {
+    TaskProcessor gated = taskProcessor("urn:oodt:gated");
+    ConditionProcessor condition =
+        new ConditionProcessor(manager, instance("urn:oodt:condition"));
+    condition.setState(state("Success", "done"));
+    gated.setPrerequisites(Collections.<WorkflowProcessor>singletonList(
+        condition));
+
+    gated.getRunnableWorkflowProcessors();
+
+    assertEquals("Success",
+        condition.getWorkflowInstance().getState().getName());
   }
 
   // --------------------------------------------------------------- setup ---
