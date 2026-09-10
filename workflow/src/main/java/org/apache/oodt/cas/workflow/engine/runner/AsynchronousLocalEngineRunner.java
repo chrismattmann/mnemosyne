@@ -110,8 +110,9 @@ public class AsynchronousLocalEngineRunner extends AbstractEngineRunnerBase {
           String msg = "Exception executing task: ["
               + workflowTask.getTaskName() + "]: Message: " + e.getMessage();
           LOG.log(Level.WARNING, msg);
-          WorkflowState state = lifecycle.createState("Failure", "done", msg);
-          taskProcessor.setState(state);
+          // As in ResourceRunner: a task with retries left goes back in the
+          // queue rather than ending here.
+          taskProcessor.setState(taskProcessor.failureOrRetry(msg));
           persist(taskProcessor.getWorkflowInstance());
         } finally {
           workerMap.remove(taskProcessor.getWorkflowInstance().getId());
