@@ -21,6 +21,7 @@ import org.apache.avro.AvroRemoteException;
 import org.apache.oodt.cas.resource.structs.avrotypes.OodtError;
 import org.apache.oodt.cas.resource.structs.avrotypes.OodtFailureKind;
 import org.apache.oodt.commons.rpc.FailureKinds;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import org.jboss.netty.channel.socket.nio.NioServerSocketChannelFactory;
 import org.jboss.netty.handler.execution.ExecutionHandler;
@@ -66,7 +67,13 @@ public class AvroRpcBatchStub implements AvroIntrBatchmgr {
     private static Logger LOG = Logger.getLogger(AvroRpcBatchStub.class
             .getName());
 
-    private static Map jobThreadMap = null;
+    // Concurrent, and typed. It is written by the thread handling a dispatch,
+    // read by getJobsOnNode answering a different caller, and was a raw
+    // HashMap whose keySet was iterated with no lock at all while other
+    // threads inserted -- a ConcurrentModificationException waiting for a busy
+    // enough node.
+    private static Map<String, Thread> jobThreadMap =
+            new ConcurrentHashMap<String, Thread>();
 
     public AvroRpcBatchStub(int port) throws Exception {
 
@@ -89,7 +96,7 @@ public class AvroRpcBatchStub implements AvroIntrBatchmgr {
                         HANDLER_THREADS, 0L, 0L)));
         server.start();
 
-        jobThreadMap = new HashMap();
+        jobThreadMap.clear();
 
         LOG.log(Level.INFO, "AvroRpc Batch Stub started by "
                 + System.getProperty("user.name", "unknown"));
@@ -97,15 +104,12 @@ public class AvroRpcBatchStub implements AvroIntrBatchmgr {
     
     @Override
     public List getJobsOnNode(String nodeId) {
-      Vector<String> jobIds = new Vector();
-      
-      if(this.jobThreadMap.size() > 0){
-            for (Object o : this.jobThreadMap.keySet()) {
-                String jobId = (String) o;
-                jobIds.addElement(jobId);
-            }
-      }
-      
+      // The jobs this stub is running, which is what a caller asking the
+      // question means. Until finished jobs were actually removed below, this
+      // answered with every job the stub had ever been given, so it grew
+      // without bound and told a caller that long finished work was still
+      // running.
+      Vector<String> jobIds = new Vector<String>(jobThreadMap.keySet());
       Collections.sort(jobIds); // sort the list to return as a courtesy to the user
       return jobIds;
     }
@@ -168,19 +172,16 @@ public class AvroRpcBatchStub implements AvroIntrBatchmgr {
             } catch (InterruptedException e) {
                 LOG.log(Level.INFO, "Current job: [" + job.getName()
                         + "]: killed: exiting gracefully");
-                synchronized (jobThreadMap) {
-                    Thread endThread = (Thread) jobThreadMap.get(job.getId());
-                    if (endThread != null)
-                        endThread = null;
-                }
+                // Removed, not nulled. This read the thread out of the map
+                // and assigned null to the local variable, which does nothing
+                // at all: the entry stayed, so the map grew by one Thread per
+                // job forever and getJobsOnNode reported finished jobs as
+                // running.
+                jobThreadMap.remove(job.getId());
                 return false;
             }
 
-            synchronized (jobThreadMap) {
-                Thread endThread = (Thread) jobThreadMap.get(job.getId());
-                if (endThread != null)
-                    endThread = null;
-            }
+            jobThreadMap.remove(job.getId());
 
             return runner.wasSuccessful();
         } catch (Exception e) {
