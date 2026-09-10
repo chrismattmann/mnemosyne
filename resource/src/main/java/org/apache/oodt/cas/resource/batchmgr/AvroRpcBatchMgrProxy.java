@@ -66,6 +66,9 @@ public class AvroRpcBatchMgrProxy extends Thread implements Runnable {
     static final String ABANDONED_POLL_PROPERTY =
             "org.apache.oodt.cas.resource.batchmgr.abandonedPollMillis";
 
+    static final String ABANDONED_MAX_HOLD_PROPERTY =
+            "org.apache.oodt.cas.resource.batchmgr.abandonedMaxHoldMillis";
+
     private JobSpec jobSpec;
 
     private ResourceNode remoteHost;
@@ -197,6 +200,25 @@ public class AvroRpcBatchMgrProxy extends Thread implements Runnable {
     }
 
     /**
+     * The longest a node may hold a slot for a job it keeps reporting.
+     *
+     * <p>
+     * A backstop, not a task deadline. The node's own answer decides when the
+     * slot comes back, and this exists only so that a node reporting a job
+     * that will never finish -- a wedged science process, a stub that has lost
+     * track of its own threads -- cannot pin a slot and a dispatch thread for
+     * the life of the process. Twenty-four hours is far longer than any task
+     * this schedules, so reaching it means something is wrong and the log says
+     * so rather than the slot quietly vanishing.
+     * </p>
+     */
+    static long abandonedMaxHoldMillis() {
+        long configured = Long.getLong(ABANDONED_MAX_HOLD_PROPERTY,
+                24L * 60L * 60L * 1000L);
+        return configured > 0L ? configured : 24L * 60L * 60L * 1000L;
+    }
+
+    /**
      * Wait until the node stops reporting a job whose call we gave up on.
      *
      * <p>
@@ -222,9 +244,10 @@ public class AvroRpcBatchMgrProxy extends Thread implements Runnable {
                 + "held until the node stops reporting it.");
 
         long held = 0L;
+        long maxHold = abandonedMaxHoldMillis();
         while (true) {
-            List<String> running = jobsOnNode();
-            if (running == null) {
+            NodeJobs running = jobsOnNode();
+            if (!running.known()) {
                 LOG.log(Level.WARNING, "Node [" + remoteHost.getNodeId()
                         + "] stopped answering while job [" + jobId + "] was "
                         + "outstanding; releasing its capacity after " + held
@@ -236,6 +259,20 @@ public class AvroRpcBatchMgrProxy extends Thread implements Runnable {
                 LOG.log(Level.INFO, "Node [" + remoteHost.getNodeId() + "] no "
                         + "longer reports job [" + jobId + "] after " + held
                         + "ms; releasing its capacity.");
+                return;
+            }
+            if (held >= maxHold) {
+                // Loudly, because this should not happen: the node says it is
+                // still running a job it has had for a day. Something is wrong
+                // on that node, and holding the slot for the life of the
+                // process would only hide it behind a cluster that slowly
+                // stops scheduling.
+                LOG.log(Level.SEVERE, "Node [" + remoteHost.getNodeId()
+                        + "] has reported job [" + jobId + "] as running for "
+                        + held + "ms, past the " + maxHold + "ms this will hold "
+                        + "a slot for. Releasing it: the node may still be "
+                        + "working, so this is worth looking at rather than "
+                        + "ignoring.");
                 return;
             }
             try {
@@ -250,15 +287,12 @@ public class AvroRpcBatchMgrProxy extends Thread implements Runnable {
         }
     }
 
-    /**
-     * What the node says it is running, or null if it could not be asked. Null
-     * is "we cannot tell", never "nothing".
-     */
-    List<String> jobsOnNode() {
+    /** What the node says it is running, or that it could not be asked. */
+    NodeJobs jobsOnNode() {
         try {
             connect();
         } catch (IOException e) {
-            return null;
+            return NodeJobs.unknown();
         }
         try {
             List<String> running = new ArrayList<String>();
@@ -268,11 +302,56 @@ public class AvroRpcBatchMgrProxy extends Thread implements Runnable {
                     running.add(String.valueOf(each));
                 }
             }
-            return running;
+            return NodeJobs.reported(running);
         } catch (Exception e) {
-            return null;
+            return NodeJobs.unknown();
         } finally {
             disconnect();
+        }
+    }
+
+    /**
+     * What a node said about the jobs it is running, or that it could not be
+     * asked at all.
+     *
+     * <p>
+     * A bare list cannot say "we could not tell", and the obvious stand-in --
+     * an empty list -- is the very mistake this class exists to prevent: empty
+     * reads as "the job has finished" and releases a slot on a node that may
+     * still be working. Returning null said it instead, in a convention no
+     * compiler checks and every reader has to be told about. Saying it in the
+     * type costs one small class and cannot be got wrong by accident.
+     * </p>
+     */
+    static final class NodeJobs {
+
+        private final List<String> jobs;
+
+        private NodeJobs(List<String> jobs) {
+            this.jobs = jobs;
+        }
+
+        /** The node could not be asked, so nothing is known either way. */
+        static NodeJobs unknown() {
+            return new NodeJobs(null);
+        }
+
+        static NodeJobs reported(List<String> jobs) {
+            return new NodeJobs(new ArrayList<String>(jobs));
+        }
+
+        /** Whether the node answered at all. */
+        boolean known() {
+            return jobs != null;
+        }
+
+        /**
+         * Whether the node reported this job. False when the node could not be
+         * asked, so callers must check {@link #known} first if the difference
+         * matters -- and for releasing capacity it always does.
+         */
+        boolean contains(String jobId) {
+            return jobs != null && jobs.contains(jobId);
         }
     }
 
