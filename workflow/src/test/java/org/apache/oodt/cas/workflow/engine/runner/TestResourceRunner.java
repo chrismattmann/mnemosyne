@@ -254,7 +254,7 @@ public class TestResourceRunner extends TestCase {
 
     TaskProcessor processor = newTaskProcessor();
     runner.execute(processor);
-    client.setJobStatus("job-1", JobStatus.SCHEDULED);
+    client.setJobStatus("job-1", JobStatus.EXECUTED);
 
     assertTrue("a task on a node should report Executing",
         waitForState(processor, "Executing"));
@@ -286,7 +286,7 @@ public class TestResourceRunner extends TestCase {
     runner = new ResourceRunner(client, null, FAST_POLL_SECONDS);
 
     runner.execute(newTaskProcessor());
-    client.setJobStatus("job-1", JobStatus.SCHEDULED);
+    client.setJobStatus("job-1", JobStatus.EXECUTED);
     client.setJobComplete("job-1", true);
 
     long deadline = System.currentTimeMillis() + 15000;
@@ -298,10 +298,20 @@ public class TestResourceRunner extends TestCase {
         0, runner.getOutstandingJobCount());
   }
 
-  /** Which statuses mean "the resource manager has put this on a node". */
-  public void testOnlyPlacedStatusesCountAsRunning() throws Exception {
-    assertTrue(ResourceRunner.isOnANode(JobStatus.SCHEDULED));
+  /**
+   * Which status means "a node is working on this".
+   *
+   * <p>
+   * EXECUTED only. SCHEDULED is set by the job queue when a job is taken off
+   * to be considered, and the scheduler puts it back when no node has room, so
+   * counting it reported 374 tasks executing against 16 processes actually
+   * running.
+   * </p>
+   */
+  public void testOnlyExecutedCountsAsRunning() throws Exception {
     assertTrue(ResourceRunner.isOnANode(JobStatus.EXECUTED));
+    assertFalse("SCHEDULED means dequeued for consideration, not running",
+        ResourceRunner.isOnANode(JobStatus.SCHEDULED));
     assertFalse(ResourceRunner.isOnANode(JobStatus.QUEUED));
     assertFalse(ResourceRunner.isOnANode(JobStatus.SUCCESS));
     assertFalse(ResourceRunner.isOnANode(JobStatus.FAILURE));
