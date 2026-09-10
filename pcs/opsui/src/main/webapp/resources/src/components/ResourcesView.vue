@@ -84,12 +84,12 @@
         <table v-else>
           <thead>
             <tr>
-              <th>Name</th>
-              <th>ID</th>
-              <th>Status</th>
-              <th>Queue</th>
-              <th>Load</th>
-              <th>Node</th>
+              <SortHead field="name" :sort="sort" :dir="dir" @sort="onSort">Name</SortHead>
+              <SortHead field="id" :sort="sort" :dir="dir" @sort="onSort">ID</SortHead>
+              <SortHead field="status" :sort="sort" :dir="dir" @sort="onSort">Status</SortHead>
+              <SortHead field="queue" :sort="sort" :dir="dir" @sort="onSort">Queue</SortHead>
+              <SortHead field="load" :sort="sort" :dir="dir" @sort="onSort">Load</SortHead>
+              <SortHead field="node" :sort="sort" :dir="dir" @sort="onSort">Node</SortHead>
             </tr>
           </thead>
           <tbody>
@@ -118,6 +118,8 @@
 
 <script>
 import { computed, ref } from 'vue'
+import SortHead from './SortHead.vue'
+import { sortRows, toggleSort } from '../sort.js'
 import { onDemandLabel, onDemandPill } from '../onDemandStatus.js'
 import { stubForNode } from '../resourceStubs.js'
 import {
@@ -130,6 +132,7 @@ import {
 
 export default {
   name: 'ResourcesView',
+  components: { SortHead },
   props: {
     payload: { type: Object, default: null },
     stubs: { type: Array, default: () => [] },
@@ -142,13 +145,38 @@ export default {
     // queue that collapsed back to one page every few seconds would be worse
     // than the long table this replaces.
     const shown = ref(JOB_PAGE_SIZE)
+
+    // Sorted before paging, so "Load more" reveals the next rows in the order
+    // being read rather than the next rows of the server's order re-sorted.
+    // A queue is looked at to answer "what is stuck" and "what is this node
+    // doing", and neither question survives an arbitrary order.
+    const sort = ref('')
+    const dir = ref('asc')
+    const sorted = computed(() => {
+      if (!sort.value) {
+        return jobs.value
+      }
+      const field = sort.value
+      return sortRows(jobs.value, (job) => {
+        const value = job ? job[field] : null
+        return field === 'load' && value != null ? Number(value) : value
+      }, dir.value)
+    })
+
     return {
       resource,
       error: computed(() => resource.value.error || ''),
       nodes: computed(() => resource.value.nodes || []),
       queues: computed(() => resource.value.queues || []),
       jobs,
-      shownJobs: computed(() => visibleJobs(jobs.value, shown.value)),
+      sort,
+      dir,
+      onSort(field) {
+        const next = toggleSort(field, sort.value, dir.value)
+        sort.value = next.field
+        dir.value = next.dir
+      },
+      shownJobs: computed(() => visibleJobs(sorted.value, shown.value)),
       hasMore: computed(() => hasMoreJobs(jobs.value, shown.value)),
       moreLabel: computed(() => moreJobsLabel(jobs.value, shown.value)),
       loadMore() {
