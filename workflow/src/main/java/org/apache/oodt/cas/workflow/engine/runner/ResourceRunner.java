@@ -392,9 +392,11 @@ public class ResourceRunner extends AbstractEngineRunnerBase implements CoreMetK
   private void failTask(TaskProcessor taskProcessor, WorkflowTask task,
       String msg) {
     LOG.log(Level.WARNING, msg);
-    WorkflowLifecycle lifecycle = getLifecycle(taskProcessor);
-    WorkflowState state = lifecycle.createState("Failure", "done", msg);
-    taskProcessor.setState(state);
+    // The task decides whether this is the end of it. A task with retries
+    // configured goes back in the queue instead, where the scheduler may well
+    // place it on a different node -- which is the whole point of retrying
+    // here rather than inside the task itself.
+    taskProcessor.setState(taskProcessor.failureOrRetry(msg));
     persist(taskProcessor.getWorkflowInstance());
   }
 
