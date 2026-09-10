@@ -191,9 +191,66 @@ public class TestCapacityIsHeldWhileAnAbandonedJobRuns {
         AvroRpcBatchMgrProxy proxy = new AvroRpcBatchMgrProxy(
                 longJob("whatever", 1), nodeAt(1), new RecordingBatchMgr());
 
-        assertEquals("an empty list would read as 'the job is finished' and "
-                + "release a slot on a node we simply cannot reach",
-                null, proxy.jobsOnNode());
+        AvroRpcBatchMgrProxy.NodeJobs answer = proxy.jobsOnNode();
+        assertFalse("a node that cannot be asked has told us nothing, and an "
+                + "empty answer would read as 'the job is finished' and "
+                + "release a slot on a node that may still be working",
+                answer.known());
+        assertFalse("nor does it contain anything", answer.contains("whatever"));
+    }
+
+    /** A node that answered, and is running nothing, is a different thing. */
+    @Test
+    public void testANodeRunningNothingIsKnownAndEmpty() throws Exception {
+        AvroRpcBatchMgrProxy proxy = new AvroRpcBatchMgrProxy(
+                longJob("not-submitted", 1), nodeAt(STUB_PORT),
+                new RecordingBatchMgr());
+
+        AvroRpcBatchMgrProxy.NodeJobs answer = proxy.jobsOnNode();
+        assertTrue("the stub answered, so this is known", answer.known());
+        assertFalse(answer.contains("not-submitted"));
+    }
+
+    /**
+     * The backstop. A node that keeps reporting a job forever must not pin a
+     * slot and a dispatch thread for the life of the process, however sure it
+     * sounds -- but reaching this means something is wrong on that node, so it
+     * is logged at SEVERE rather than passed over.
+     */
+    @Test
+    public void testASlotIsNotHeldForeverByANodeThatKeepsReportingAJob()
+            throws Exception {
+        // The stub never forgets a job it is still running, and this job runs
+        // far longer than the hold allowed, so the backstop is what ends it.
+        System.setProperty(AvroRpcBatchMgrProxy.ABANDONED_MAX_HOLD_PROPERTY,
+                "600");
+        try {
+            RecordingBatchMgr parent = new RecordingBatchMgr();
+            AvroRpcBatchMgrProxy proxy = new AvroRpcBatchMgrProxy(
+                    longJob("pinned-job", 30), nodeAt(STUB_PORT), parent);
+
+            long started = System.currentTimeMillis();
+            proxy.run();
+            long releasedAfter = System.currentTimeMillis() - started;
+
+            assertTrue("the slot was never released", parent.releasedAt.get() > 0);
+            assertTrue("the backstop should have ended the hold well before the "
+                    + "30s job did, took " + releasedAfter + "ms",
+                    releasedAfter < 20000L);
+        } finally {
+            System.clearProperty(
+                    AvroRpcBatchMgrProxy.ABANDONED_MAX_HOLD_PROPERTY);
+        }
+    }
+
+    /** And the backstop is far longer than any task by default. */
+    @Test
+    public void testTheBackstopIsNotATaskDeadline() throws Exception {
+        System.clearProperty(AvroRpcBatchMgrProxy.ABANDONED_MAX_HOLD_PROPERTY);
+        assertTrue("a default short enough to interrupt real work would make "
+                + "this a task deadline rather than a backstop",
+                AvroRpcBatchMgrProxy.abandonedMaxHoldMillis()
+                        >= 4L * 60L * 60L * 1000L);
     }
 
     // ----------------------------------------------------------- helpers ---
