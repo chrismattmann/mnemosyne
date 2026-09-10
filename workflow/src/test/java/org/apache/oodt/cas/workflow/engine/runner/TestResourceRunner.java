@@ -111,6 +111,7 @@ public class TestResourceRunner extends TestCase {
     runner.execute(newTaskProcessor());
     assertEquals(1, runner.getOutstandingJobCount());
 
+    client.setJobStatus("job-1", JobStatus.SUCCESS);
     client.setJobComplete("job-1", true);
 
     long deadline = System.currentTimeMillis() + 15000;
@@ -203,6 +204,7 @@ public class TestResourceRunner extends TestCase {
     processor.getWorkflowInstance().getSharedContext()
         .replaceMetadata(CoreMetKeys.PROCESSING_NODE, "ninja");
 
+    client.setJobStatus("job-1", JobStatus.SUCCESS);
     client.setJobComplete("job-1", true);
     long deadline = System.currentTimeMillis() + 15000;
     while (runner.getOutstandingJobCount() > 0
@@ -287,6 +289,7 @@ public class TestResourceRunner extends TestCase {
 
     runner.execute(newTaskProcessor());
     client.setJobStatus("job-1", JobStatus.EXECUTED);
+    client.setJobStatus("job-1", JobStatus.SUCCESS);
     client.setJobComplete("job-1", true);
 
     long deadline = System.currentTimeMillis() + 15000;
@@ -330,6 +333,99 @@ public class TestResourceRunner extends TestCase {
       Thread.sleep(100);
     }
     return false;
+  }
+
+  /**
+   * A job the resource manager recorded as failed must not become a task the
+   * workflow recorded as done.
+   *
+   * <p>
+   * The monitor asked only whether the job had finished, and the resource
+   * manager calls a job finished when it reaches either terminal state:
+   * {@code jobFinished == SUCCESS || FAILURE}. So a failure arrived at
+   * completeTask and the instance read Success.
+   * </p>
+   *
+   * <p>
+   * On a two node run that lost sixteen chunks of 458. They were translated
+   * on the compute node and failed to ingest while the manager was briefly
+   * unreachable from there; every one of the sixteen instances reported
+   * Success, nothing retried them, and the gathering stage waited for
+   * products that were never coming.
+   * </p>
+   */
+  public void testAFailedJobIsNotRecordedAsDone() throws Exception {
+    MockResourceManagerClient client = new MockResourceManagerClient();
+    client.setQueueCapacity(10);
+    client.setNextJobId("job-1");
+    runner = new ResourceRunner(client, null, FAST_POLL_SECONDS);
+
+    TaskProcessor processor = newTaskProcessor();
+    runner.execute(processor);
+    client.setJobStatus("job-1", JobStatus.FAILURE);
+    client.setJobComplete("job-1", true);
+    awaitRelease();
+
+    assertFalse("a job that failed must not leave the task looking complete, "
+        + "or nothing retries it and the run ends short with everything green",
+        "ExecutionComplete".equals(processor.getWorkflowInstance().getState().getName()));
+  }
+
+  /** And a job that did succeed still completes, unchanged. */
+  public void testASuccessfulJobStillCompletes() throws Exception {
+    MockResourceManagerClient client = new MockResourceManagerClient();
+    client.setQueueCapacity(10);
+    client.setNextJobId("job-1");
+    runner = new ResourceRunner(client, null, FAST_POLL_SECONDS);
+
+    TaskProcessor processor = newTaskProcessor();
+    runner.execute(processor);
+    client.setJobStatus("job-1", JobStatus.SUCCESS);
+    client.setJobComplete("job-1", true);
+    awaitRelease();
+
+    assertEquals("ExecutionComplete", processor.getWorkflowInstance().getState().getName());
+  }
+
+  /**
+   * A status that cannot be read is treated as a failure. The job is known to
+   * have finished; the only question is how. Guessing failure costs one
+   * bounded retry, guessing success loses the work with no trace.
+   */
+  public void testAnUnreadableStatusIsNotTakenForSuccess() throws Exception {
+    MockResourceManagerClient client = new MockResourceManagerClient();
+    client.setQueueCapacity(10);
+    client.setNextJobId("job-1");
+    runner = new ResourceRunner(client, null, FAST_POLL_SECONDS);
+
+    TaskProcessor processor = newTaskProcessor();
+    runner.execute(processor);
+    // No status set at all: getJobInfo answers nothing readable.
+    client.setJobComplete("job-1", true);
+    awaitReleaseSlowly();
+
+    assertFalse("ExecutionComplete".equals(processor.getWorkflowInstance().getState().getName()));
+  }
+
+  /** The unreadable case is deliberately patient, so allow for the polls. */
+  private void awaitReleaseSlowly() throws Exception {
+    long deadline = System.currentTimeMillis() + 40000;
+    while (runner.getOutstandingJobCount() > 0
+        && System.currentTimeMillis() < deadline) {
+      Thread.sleep(200);
+    }
+    assertEquals("the job must not stay tracked forever",
+        0, runner.getOutstandingJobCount());
+  }
+
+  private void awaitRelease() throws Exception {
+    long deadline = System.currentTimeMillis() + 15000;
+    while (runner.getOutstandingJobCount() > 0
+        && System.currentTimeMillis() < deadline) {
+      Thread.sleep(100);
+    }
+    assertEquals("the monitor should have stopped tracking the job",
+        0, runner.getOutstandingJobCount());
   }
 
   private TaskProcessor newTaskProcessor() throws Exception {

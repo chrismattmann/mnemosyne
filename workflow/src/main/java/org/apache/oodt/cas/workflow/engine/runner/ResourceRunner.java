@@ -91,6 +91,8 @@ public class ResourceRunner extends AbstractEngineRunnerBase implements CoreMetK
    * TaskRunner thread submits into it.
    */
   private final Map<String, TaskProcessor> outstandingJobs;
+  /** Polls spent waiting for a status the resource manager will not report. */
+  private final Map<String, Integer> unreadableStatusPolls;
 
   private final ScheduledExecutorService monitor;
 
@@ -124,6 +126,7 @@ public class ResourceRunner extends AbstractEngineRunnerBase implements CoreMetK
     this.rClient = rClient;
     this.instRep = instRep;
     this.outstandingJobs = new ConcurrentHashMap<String, TaskProcessor>();
+    this.unreadableStatusPolls = new ConcurrentHashMap<String, Integer>();
     this.monitor = Executors.newSingleThreadScheduledExecutor(runnable -> {
       Thread t = new Thread(runnable, "ResourceRunner-job-monitor");
       t.setDaemon(true);
@@ -403,6 +406,78 @@ public class ResourceRunner extends AbstractEngineRunnerBase implements CoreMetK
     }
   }
 
+  /**
+   * A finished job is not a job that worked.
+   *
+   * <p>
+   * This asked only whether the job was finished, and a finished job was
+   * handed straight to completeTask. The Resource Manager calls a job
+   * finished when it has reached either terminal state:
+   * </p>
+   *
+   * <pre>
+   *   jobFinished(spec) == status.equals(SUCCESS) || status.equals(FAILURE)
+   * </pre>
+   *
+   * <p>
+   * So a job the Resource Manager had recorded as FAILURE became a task the
+   * workflow recorded as complete. Nothing retried it, because as far as the
+   * instance was concerned it had worked, and MaxRetries never came into it.
+   * </p>
+   *
+   * <p>
+   * Measured on a two node run: sixteen chunks of 458 were translated on the
+   * compute node and then failed to ingest, because the manager was briefly
+   * unreachable from there:
+   * </p>
+   *
+   * <pre>
+   *   PGETask FAILED!!! : java.net.ConnectException: Connection timed out
+   *   JobInputException: Failed to run task
+   * </pre>
+   *
+   * <p>
+   * The node reported false, the Resource Manager marked the job FAILURE, and
+   * all sixteen instances read Success. The run ended sixteen chunks short
+   * with every task green and nothing in the workflow log, and the stage that
+   * gathers them waited for products that were never coming.
+   * </p>
+   *
+   * <p>
+   * An unreadable status is treated as a failure rather than a success. The
+   * job is known to have finished, so the only question is how, and a wrong
+   * guess of failure costs one bounded retry while a wrong guess of success
+   * loses the work silently.
+   * </p>
+   */
+  /**
+   * How many polls to spend waiting for a status we can read before treating
+   * the job as failed. The monitor runs every few seconds, so this is a
+   * minute or so of a resource manager that answers isJobComplete but not
+   * getJobInfo. Bounded, because a job that is never readable must not stay
+   * tracked forever and stall the instance.
+   */
+  private static final int UNREADABLE_STATUS_POLLS = 12;
+
+  private boolean givingUpOnStatus(String jobId) {
+    Integer seen = unreadableStatusPolls.get(jobId);
+    int next = (seen == null ? 0 : seen.intValue()) + 1;
+    unreadableStatusPolls.put(jobId, Integer.valueOf(next));
+    return next >= UNREADABLE_STATUS_POLLS;
+  }
+
+  private void finishTask(TaskProcessor taskProcessor, String jobId,
+      String status) {
+    if (JobStatus.SUCCESS.equals(status)) {
+      completeTask(taskProcessor, "Resource manager job: [" + jobId
+          + "] completed");
+      return;
+    }
+    failTask(taskProcessor, getTaskFromProcessor(taskProcessor),
+        "Resource manager job: [" + jobId + "] finished as ["
+            + (status == null ? "unreadable" : status) + "]");
+  }
+
   private void failTask(TaskProcessor taskProcessor, WorkflowTask task,
       String msg) {
     LOG.log(Level.WARNING, msg);
@@ -429,9 +504,17 @@ public class ResourceRunner extends AbstractEngineRunnerBase implements CoreMetK
         TaskProcessor taskProcessor = entry.getValue();
         try {
           if (safeCheckJobComplete(jobId)) {
+            String status = safeGetJobStatus(jobId);
+            if (status == null && !givingUpOnStatus(jobId)) {
+              // Finished, but we could not read how. Ask again next time
+              // round rather than guess: calling it a success loses the work
+              // silently, and calling it a failure re-runs a task that was
+              // fine because one RPC did not answer.
+              continue;
+            }
             outstandingJobs.remove(jobId);
-            completeTask(taskProcessor, "Resource manager job: [" + jobId
-                + "] completed");
+            unreadableStatusPolls.remove(jobId);
+            finishTask(taskProcessor, jobId, status);
           } else if (isOnANode(safeGetJobStatus(jobId))) {
             // Only for jobs that are not finished, and only until the state
             // has been recorded once. Completion is what this monitor is
