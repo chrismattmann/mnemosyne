@@ -66,32 +66,79 @@ public class AssignmentMonitor implements Monitor {
      * @see gov.nasa.jpl.oodt.cas.resource.monitor.Monitor#assignLoad(
      *      gov.nasa.jpl.oodt.cas.resource.structs.ResourceNode, int)
      */
+    /**
+     * Take capacity for a job, if the node has room.
+     *
+     * <p>
+     * Checking the room and taking it have to be one step. The map is
+     * concurrent, which makes each of get and put safe on its own and says
+     * nothing about the sequence: two callers can both read a load of seven
+     * against a capacity of eight, both find room, and both write eight, so
+     * nine jobs run where eight fit.
+     * </p>
+     */
     @Override
     public boolean assignLoad(ResourceNode node, int loadValue)
             throws MonitorException {
-        int loadCap = node.getCapacity();
-        int curLoad = loadMap.get(node.getNodeId());
+        synchronized (loadMap) {
+            int loadCap = node.getCapacity();
+            int curLoad = currentLoad(node.getNodeId());
 
-        if (loadValue <= (loadCap - curLoad)) {
-            loadMap.remove(node.getNodeId());
-            loadMap.put(node.getNodeId(), curLoad + loadValue);
-            return true;
-        } else {
-            return false;
+            if (loadValue <= (loadCap - curLoad)) {
+                loadMap.put(node.getNodeId(), curLoad + loadValue);
+                return true;
+            } else {
+                return false;
+            }
         }
     }
 
+    /**
+     * Give a job's capacity back.
+     *
+     * <p>
+     * The same read-then-write, and the one that leaks. A decrement lost to
+     * a concurrent update is never noticed and never recovered: the node
+     * carries the phantom load until the Resource Manager restarts.
+     * </p>
+     *
+     * <p>
+     * Seen on a two node run whose conditions node sat at a load of five for
+     * four and a half hours with nothing running on it. Four hundred
+     * conditions had been evaluated on that one node id inside three
+     * minutes, and five of the decrements went missing. The translate nodes
+     * were fine, having dispatched sixteen jobs across five hours, which is
+     * never two at once. The pool holds twenty, so a few runs of that leak
+     * fill it, and then every task gated by a condition waits forever with
+     * nothing logged to say why.
+     * </p>
+     */
     @Override
     public boolean reduceLoad(ResourceNode node, int loadValue)
             throws MonitorException {
-        int load = loadMap.get(node.getNodeId());
-        int newVal = load - loadValue;
-        if (newVal < 0) {
-            newVal = 0; // should not happen but just in case
+        synchronized (loadMap) {
+            int load = currentLoad(node.getNodeId());
+            int newVal = load - loadValue;
+            if (newVal < 0) {
+                newVal = 0; // should not happen but just in case
+            }
+            loadMap.put(node.getNodeId(), newVal);
+            return true;
         }
-        loadMap.remove(node.getNodeId());
-        loadMap.put(node.getNodeId(), newVal);
-        return true;
+    }
+
+    /**
+     * A node the map has never seen carries no load.
+     *
+     * <p>
+     * Unboxing a null here throws, and it threw from inside the scheduler's
+     * dispatch loop, where the node id comes from a job rather than from
+     * nodes.xml.
+     * </p>
+     */
+    private int currentLoad(String nodeId) {
+        Integer load = loadMap.get(nodeId);
+        return load == null ? 0 : load.intValue();
     }
 
     /*
@@ -99,10 +146,18 @@ public class AssignmentMonitor implements Monitor {
      * 
      * @see gov.nasa.jpl.oodt.cas.resource.monitor.Monitor#getLoad(gov.nasa.jpl.oodt.cas.resource.structs.ResourceNode)
      */
+    /**
+     * Note this returns the capacity <em>remaining</em>, not the load, which
+     * the name does not say. {@code AvroRpcResourceManager} undoes it with
+     * {@code getLoad(node) * -1 + capacity} to show what is in use. Left as
+     * it is because callers depend on the existing sense.
+     */
     public int getLoad(ResourceNode node) throws MonitorException {
-        ResourceNode resource = nodesMap.get(node.getNodeId());
-        int i = loadMap.get(node.getNodeId());
-        return (resource.getCapacity() - i);
+        synchronized (loadMap) {
+            ResourceNode resource = nodesMap.get(node.getNodeId());
+            int i = currentLoad(node.getNodeId());
+            return (resource.getCapacity() - i);
+        }
     }
 
     /*
