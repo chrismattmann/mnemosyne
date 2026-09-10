@@ -20,9 +20,14 @@ import { sortRows, toggleSort } from './sort.js'
 import { visibleJobs, JOB_PAGE_SIZE } from './jobPages.js'
 
 /*
- * A queue is read to answer "what is stuck" and "what is this node doing".
- * Neither question survives an arbitrary row order, and neither survives
- * paging that reveals rows in a different order from the one on screen.
+ * A queue is read to answer "what is stuck" and "what is waiting on which
+ * queue". Neither question survives an arbitrary row order, and neither
+ * survives paging that reveals rows in a different order from the one on
+ * screen.
+ *
+ * It cannot answer "what is this node running": a job in the queue has not
+ * been dispatched, so it has no node. That column was removed rather than
+ * left to render an em dash on every row.
  */
 
 const getter = (field) => (job) => {
@@ -30,12 +35,12 @@ const getter = (field) => (job) => {
   return field === 'load' && value != null ? Number(value) : value
 }
 
-test('a queue can be ordered by the node running it', () => {
+test('a queue can be ordered by the queue a job is waiting in', () => {
   const jobs = [
-    { id: 'c', node: 'gpu' }, { id: 'a', node: 'local' }, { id: 'b', node: 'gpu' }
+    { id: 'c', queue: 'gpu' }, { id: 'a', queue: 'local' }, { id: 'b', queue: 'gpu' }
   ]
-  const byNode = sortRows(jobs, getter('node'), 'asc')
-  assert.deepEqual(byNode.map((j) => j.id), ['c', 'b', 'a'])
+  const byQueue = sortRows(jobs, getter('queue'), 'asc')
+  assert.deepEqual(byQueue.map((j) => j.id), ['c', 'b', 'a'])
 })
 
 test('load sorts as a number, not as text', () => {
@@ -47,18 +52,18 @@ test('load sorts as a number, not as text', () => {
 })
 
 test('a second click reverses, a third field starts ascending', () => {
-  let s = toggleSort('node', '', 'asc')
-  assert.equal(s.field, 'node')
+  let s = toggleSort('queue', '', 'asc')
+  assert.equal(s.field, 'queue')
   const first = s.dir
-  s = toggleSort('node', s.field, s.dir)
+  s = toggleSort('queue', s.field, s.dir)
   assert.notEqual(s.dir, first, 'clicking the same column reverses it')
   s = toggleSort('status', s.field, s.dir)
   assert.equal(s.field, 'status')
 })
 
 test('missing values sort last rather than first', () => {
-  const jobs = [{ id: 'a', node: null }, { id: 'b', node: 'gpu' }]
-  assert.deepEqual(sortRows(jobs, getter('node'), 'asc').map((j) => j.id), ['b', 'a'])
+  const jobs = [{ id: 'a', queue: null }, { id: 'b', queue: 'gpu' }]
+  assert.deepEqual(sortRows(jobs, getter('queue'), 'asc').map((j) => j.id), ['b', 'a'])
 })
 
 /*

@@ -247,9 +247,11 @@ public class TestCatalogAndWorkflowJson extends TestCase {
       job.setName("Hello");
       job.setQueueName("quick");
       job.setLoadValue(Integer.valueOf(1));
-      Map<String, Object> jobRow = ResourceResource.encodeJob(job, "localhost");
+      Map<String, Object> jobRow = ResourceResource.encodeJob(job);
       assertEquals("Hello", jobRow.get("name"));
-      assertEquals("localhost", jobRow.get("node"));
+      assertEquals("quick", jobRow.get("queue"));
+      assertFalse("a queued job has not been dispatched, so a node field could "
+          + "only ever be empty", jobRow.containsKey("node"));
     } catch (java.net.MalformedURLException e) {
       fail(e.getMessage());
     }
