@@ -110,7 +110,19 @@ public class ResourceResource extends PCSService {
     return row;
   }
 
-  static Map<String, Object> encodeJob(Job job, String node) {
+  /**
+   * A queued job has no execution node, and asking for one is not free.
+   *
+   * <p>
+   * The batch manager records a job's node when it dispatches it, and this
+   * list is the jobs it has not dispatched yet, so the lookup returned null
+   * for every row -- an em dash in the UI and a warning in the Resource
+   * Manager log, once per job per poll. On a run of a few hundred queued
+   * chunks that was 93,666 warnings, 56% of the log by line and 18MB by size,
+   * plus a round trip per row on every refresh.
+   * </p>
+   */
+  static Map<String, Object> encodeJob(Job job) {
     Map<String, Object> row = new LinkedHashMap<String, Object>();
     if (job == null) {
       return row;
@@ -121,7 +133,6 @@ public class ResourceResource extends PCSService {
     row.put("queue", nullToEmpty(job.getQueueName()));
     row.put("load", job.getLoadValue());
     row.put("className", nullToEmpty(job.getJobInstanceClassName()));
-    row.put("node", node == null ? "" : node);
     return row;
   }
 
@@ -211,16 +222,7 @@ public class ResourceResource extends PCSService {
       if (!(item instanceof Job)) {
         continue;
       }
-      Job job = (Job) item;
-      String node = "";
-      try {
-        if (job.getId() != null) {
-          node = client.getExecutionNode(job.getId());
-        }
-      } catch (Exception e) {
-        LOG.fine("No execution node for job " + job.getId());
-      }
-      out.add(encodeJob(job, node));
+      out.add(encodeJob((Job) item));
     }
     return out;
   }

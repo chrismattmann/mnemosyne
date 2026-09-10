@@ -89,7 +89,6 @@
               <SortHead field="status" :sort="sort" :dir="dir" @sort="onSort">Status</SortHead>
               <SortHead field="queue" :sort="sort" :dir="dir" @sort="onSort">Queue</SortHead>
               <SortHead field="load" :sort="sort" :dir="dir" @sort="onSort">Load</SortHead>
-              <SortHead field="node" :sort="sort" :dir="dir" @sort="onSort">Node</SortHead>
             </tr>
           </thead>
           <tbody>
@@ -99,7 +98,6 @@
               <td>{{ job.status || '—' }}</td>
               <td>{{ job.queue || '—' }}</td>
               <td>{{ job.load != null ? job.load : '—' }}</td>
-              <td class="mono">{{ job.node || '—' }}</td>
             </tr>
           </tbody>
         </table>
