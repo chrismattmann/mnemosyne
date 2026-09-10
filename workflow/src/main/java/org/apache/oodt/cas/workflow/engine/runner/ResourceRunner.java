@@ -285,12 +285,26 @@ public class ResourceRunner extends AbstractEngineRunnerBase implements CoreMetK
   }
 
   /**
-   * Whether the Resource Manager has this job on a node, as opposed to still
-   * holding it in a queue.
+   * Whether the Resource Manager has this job running on a node.
+   *
+   * <p>
+   * EXECUTED only. SCHEDULED sounds like the same thing and is not: the job
+   * queue sets it when a job is taken off the queue to be considered, and the
+   * scheduler puts the job back if no node has room for it. EXECUTED is set by
+   * the batch manager immediately before the blocking call that runs the job,
+   * so it is the first moment a node is actually working on it.
+   * </p>
+   *
+   * <p>
+   * Counting SCHEDULED reported 374 tasks executing against 16 processes
+   * actually running, because the state is recorded once and never revised: a
+   * task briefly dequeued and put back kept the label for the rest of the run.
+   * A status that overstates what is happening is worse than the
+   * WaitingOnResources it replaced, which at least never claimed anything.
+   * </p>
    */
   static boolean isOnANode(String status) {
-    return JobStatus.SCHEDULED.equals(status)
-        || JobStatus.EXECUTED.equals(status);
+    return JobStatus.EXECUTED.equals(status);
   }
 
   /**
