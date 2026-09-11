@@ -368,11 +368,29 @@ public class DataSourceWorkflowInstanceRepository extends
             }
             update.setString(idParam, wInst.getId());
             update.execute();
-            conn.commit();
 
-            // now update its metadata
-            removeWorkflowInstanceMetadata(wInst.getId());
-            addWorkflowInstanceMetadata(wInst);
+            // The metadata goes in the same transaction as the row.
+            //
+            // This used to commit here, then delete the metadata in a
+            // transaction of its own, then insert it back one value at a
+            // time with a commit for each. An instance with forty keys was
+            // forty two transactions, and for the whole of that time a
+            // reader saw the instance with some or none of its metadata.
+            //
+            // Readers do notice. The services layer asks the workflow
+            // manager for every instance and filters them in Java, and an
+            // instance whose state it cannot resolve is dropped from the
+            // list rather than shown. So a running stage blinked out of the
+            // Executing page about once every fifteen seconds -- measured at
+            // 17:08:36, :55, 17:09:06, :25 on a four hundred and fifty eight
+            // instance run -- and it is the page you watch to find out
+            // whether the stage is moving.
+            //
+            // One commit also means one fsync rather than forty two, on a
+            // repository the engine writes to constantly.
+            removeWorkflowInstanceMetadata(conn, wInst.getId());
+            addWorkflowInstanceMetadata(conn, wInst);
+            conn.commit();
 
         } catch (Exception e) {
             LOG.log(Level.SEVERE, e.getMessage());
@@ -1173,6 +1191,84 @@ public class DataSourceWorkflowInstanceRepository extends
             }
         }
 
+    }
+
+    /**
+     * Delete an instance's metadata inside a transaction the caller owns.
+     *
+     * <p>
+     * No commit: the caller decides when the change becomes visible, which
+     * is the whole point of doing this alongside the row update.
+     * </p>
+     */
+    private void removeWorkflowInstanceMetadata(Connection conn,
+            String workflowInstId) throws InstanceRepositoryException {
+        Statement statement = null;
+        try {
+            statement = conn.createStatement();
+            String deleteSql = "DELETE FROM workflow_instance_metadata "
+                    + "WHERE workflow_instance_id = " + workflowInstId;
+            LOG.log(Level.FINE, "sql: Executing: " + deleteSql);
+            statement.execute(deleteSql);
+        } catch (Exception e) {
+            throw new InstanceRepositoryException(e.getMessage());
+        } finally {
+            if (statement != null) {
+                try {
+                    statement.close();
+                } catch (SQLException ignore) {
+                }
+            }
+        }
+    }
+
+    /**
+     * Insert an instance's metadata inside a transaction the caller owns.
+     *
+     * <p>
+     * One statement for the lot, rather than a connection and a commit per
+     * value as the standalone version does.
+     * </p>
+     */
+    private void addWorkflowInstanceMetadata(Connection conn,
+            WorkflowInstance inst) throws InstanceRepositoryException {
+        if (inst.getSharedContext() == null
+                || inst.getSharedContext().getMap().keySet().isEmpty()) {
+            return;
+        }
+        PreparedStatement insert = null;
+        try {
+            insert = conn.prepareStatement("INSERT INTO "
+                    + "workflow_instance_metadata "
+                    + "(workflow_instance_id, workflow_met_key, "
+                    + "workflow_met_val) VALUES (?, ?, ?)");
+            for (String key : inst.getSharedContext().getMap().keySet()) {
+                List vals = inst.getSharedContext().getAllMetadata(key);
+                if (vals == null) {
+                    continue;
+                }
+                for (Object each : vals) {
+                    String val = (String) each;
+                    if (val == null || val.equals("")) {
+                        continue;
+                    }
+                    insert.setString(1, inst.getId());
+                    insert.setString(2, key);
+                    insert.setString(3, val);
+                    insert.addBatch();
+                }
+            }
+            insert.executeBatch();
+        } catch (Exception e) {
+            throw new InstanceRepositoryException(e.getMessage());
+        } finally {
+            if (insert != null) {
+                try {
+                    insert.close();
+                } catch (SQLException ignore) {
+                }
+            }
+        }
     }
 
     private synchronized void removeWorkflowInstanceMetadata(
