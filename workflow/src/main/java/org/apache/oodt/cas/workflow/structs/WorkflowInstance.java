@@ -200,9 +200,38 @@ public class WorkflowInstance {
    * keeps it and a state written twice does not move it.
    * </p>
    */
+  /**
+   * An instance that is running again has not ended.
+   *
+   * <p>
+   * The end date was stamped on reaching the done stage and then left alone
+   * for good. An instance that goes back to work keeps it, so anything
+   * showing how long a task has been running subtracts a start from an end
+   * that has already happened and shows a duration frozen at the moment it
+   * first finished.
+   * </p>
+   *
+   * <p>
+   * Seen on a join that was recorded as finished at 16:16:25 and started its
+   * actual work at 16:36. It ran for the rest of the evening reporting five
+   * hours and fifteen minutes, unchanging, while four shard processes were
+   * busy -- and the instance is the one place you would look to find out
+   * whether the stage was moving.
+   * </p>
+   *
+   * <p>
+   * Clearing it on the way out of the done stage rather than refusing to
+   * re-stamp: the second run's end is the one that matters, and the first is
+   * only misleading once there is a second.
+   * </p>
+   */
   private void stampEndDateIfFinished(WorkflowState state) {
-    if (state == null || state.getCategory() == null
-        || !"done".equals(state.getCategory().getName())) {
+    if (state == null || state.getCategory() == null) {
+      return;
+    }
+    if (!"done".equals(state.getCategory().getName())) {
+      // Back at work. Whatever end it had belongs to a run that is over.
+      this.endDate = null;
       return;
     }
     if (this.endDate != null) {
