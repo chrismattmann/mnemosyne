@@ -171,7 +171,7 @@ public class AvroRpcResourceManagerClient implements ResourceManagerClient {
         try {
             return proxy.isJobComplete(jobId);
         } catch (AvroRemoteException e) {
-            throw new JobRepositoryException(e);
+            throw new JobRepositoryException(describe(e), e);
         }
     }
 
@@ -180,7 +180,7 @@ public class AvroRpcResourceManagerClient implements ResourceManagerClient {
         try {
             return AvroTypeFactory.getJob(proxy.getJobInfo(jobId));
         } catch (AvroRemoteException e) {
-            throw new JobRepositoryException(e);
+            throw new JobRepositoryException(describe(e), e);
         }
     }
 
@@ -189,7 +189,8 @@ public class AvroRpcResourceManagerClient implements ResourceManagerClient {
         try {
             return proxy.isAlive();
         } catch (AvroRemoteException e) {
-            e.printStackTrace();
+            LOG.log(Level.WARNING, "Resource manager at [" + resMgrUrl
+                    + "] did not answer: " + describe(e), e);
         }
         return false;
     }
@@ -199,7 +200,7 @@ public class AvroRpcResourceManagerClient implements ResourceManagerClient {
         try {
             return proxy.getJobQueueSize();
         } catch (AvroRemoteException e) {
-            throw new JobRepositoryException(e);
+            throw new JobRepositoryException(describe(e), e);
         }
     }
 
@@ -208,7 +209,7 @@ public class AvroRpcResourceManagerClient implements ResourceManagerClient {
         try {
             return proxy.getJobQueueCapacity();
         } catch (AvroRemoteException e) {
-            throw new JobRepositoryException(e);
+            throw new JobRepositoryException(describe(e), e);
         }
     }
 
@@ -217,8 +218,8 @@ public class AvroRpcResourceManagerClient implements ResourceManagerClient {
         try {
             return proxy.killJob(jobId);
         } catch (AvroRemoteException e) {
-            LOG.log(Level.SEVERE,
-                    "Server error!");
+            LOG.log(Level.SEVERE, "Unable to kill job: [" + jobId + "]: "
+                    + describe(e), e);
         }
         return false;
     }
@@ -228,8 +229,8 @@ public class AvroRpcResourceManagerClient implements ResourceManagerClient {
         try {
             return proxy.getExecutionNode(jobId);
         } catch (AvroRemoteException e) {
-            LOG.log(Level.SEVERE,
-                    "Server error!");
+            LOG.log(Level.SEVERE, "Unable to read the execution node for job: ["
+                    + jobId + "]: " + describe(e), e);
         }
         return null;
     }
@@ -239,9 +240,8 @@ public class AvroRpcResourceManagerClient implements ResourceManagerClient {
         try {
             return proxy.getNodeReport();
         } catch (AvroRemoteException e) {
-            LOG.log(Level.SEVERE, "Server error!");
+            throw new MonitorException(describe(e), e);
         }
-        return null;
     }
 
     @Override
@@ -249,9 +249,8 @@ public class AvroRpcResourceManagerClient implements ResourceManagerClient {
         try {
             return proxy.getExecReport();
         } catch (AvroRemoteException e) {
-            LOG.log(Level.SEVERE, "Server error!");
+            throw new JobRepositoryException(describe(e), e);
         }
-        return null;
     }
 
     @Override
@@ -259,7 +258,7 @@ public class AvroRpcResourceManagerClient implements ResourceManagerClient {
         try {
             return proxy.handleJob(AvroTypeFactory.getAvroJob(exec), AvroTypeFactory.getAvroJobInput(in));
         } catch (AvroRemoteException e) {
-            throw new JobExecutionException(e);
+            throw new JobExecutionException(describe(e), e);
         } catch (RuntimeException e) {
             throw new JobExecutionException(e);
         }
@@ -270,7 +269,7 @@ public class AvroRpcResourceManagerClient implements ResourceManagerClient {
         try {
             return proxy.handleJobWithUrl(AvroTypeFactory.getAvroJob(exec), AvroTypeFactory.getAvroJobInput(in), hostUrl.toString());
         } catch (AvroRemoteException e) {
-            throw new JobExecutionException(e);
+            throw new JobExecutionException(describe(e), e);
         }
     }
 
@@ -279,7 +278,7 @@ public class AvroRpcResourceManagerClient implements ResourceManagerClient {
         try {
             return AvroTypeFactory.getListResourceNode(proxy.getNodes());
         } catch (AvroRemoteException e) {
-            throw new MonitorException(e);
+            throw new MonitorException(describe(e), e);
         }
     }
 
@@ -288,7 +287,7 @@ public class AvroRpcResourceManagerClient implements ResourceManagerClient {
         try {
             return AvroTypeFactory.getResourceNode(proxy.getNodeById(nodeId));
         } catch (AvroRemoteException e) {
-            throw new MonitorException(e);
+            throw new MonitorException(describe(e), e);
         }
     }
 
@@ -307,7 +306,7 @@ public class AvroRpcResourceManagerClient implements ResourceManagerClient {
         try {
             proxy.addQueue(queueName);
         } catch (AvroRemoteException e) {
-            throw new QueueManagerException(e);
+            throw new QueueManagerException(describe(e), e);
         }
     }
 
@@ -316,7 +315,7 @@ public class AvroRpcResourceManagerClient implements ResourceManagerClient {
         try {
             proxy.removeQueue(queueName);
         } catch (AvroRemoteException e) {
-            throw new QueueManagerException(e);
+            throw new QueueManagerException(describe(e), e);
         }
 
     }
@@ -326,7 +325,7 @@ public class AvroRpcResourceManagerClient implements ResourceManagerClient {
         try {
             proxy.addNode(AvroTypeFactory.getAvroResourceNode(node));
         } catch (AvroRemoteException e) {
-            throw new MonitorException(e);
+            throw new MonitorException(describe(e), e);
         }
     }
 
@@ -335,7 +334,7 @@ public class AvroRpcResourceManagerClient implements ResourceManagerClient {
         try {
             proxy.removeNode(nodeId);
         } catch (AvroRemoteException e) {
-            throw new MonitorException(e);
+            throw new MonitorException(describe(e), e);
         }
     }
 
@@ -344,7 +343,7 @@ public class AvroRpcResourceManagerClient implements ResourceManagerClient {
         try {
             proxy.setNodeCapacity(nodeId, capacity);
         } catch (AvroRemoteException e) {
-            throw new MonitorException(e);
+            throw new MonitorException(describe(e), e);
         }
     }
 
@@ -353,7 +352,7 @@ public class AvroRpcResourceManagerClient implements ResourceManagerClient {
         try {
             proxy.addNodeToQueue(nodeId, queueName);
         } catch (AvroRemoteException e) {
-            throw new QueueManagerException(e);
+            throw new QueueManagerException(describe(e), e);
         }
     }
 
@@ -362,7 +361,7 @@ public class AvroRpcResourceManagerClient implements ResourceManagerClient {
         try {
             proxy.removeNodeFromQueue(nodeId, queueName);
         } catch (AvroRemoteException e) {
-            throw new QueueManagerException(e);
+            throw new QueueManagerException(describe(e), e);
         }
     }
 
@@ -371,7 +370,7 @@ public class AvroRpcResourceManagerClient implements ResourceManagerClient {
         try {
             return proxy.getQueues();
         } catch (AvroRemoteException e) {
-            throw new QueueManagerException(e);
+            throw new QueueManagerException(describe(e), e);
         }
     }
 
@@ -380,7 +379,7 @@ public class AvroRpcResourceManagerClient implements ResourceManagerClient {
         try {
             return proxy.getNodesInQueue(queueName);
         } catch (AvroRemoteException e) {
-            throw new QueueManagerException(e);
+            throw new QueueManagerException(describe(e), e);
         }
     }
 
@@ -389,7 +388,7 @@ public class AvroRpcResourceManagerClient implements ResourceManagerClient {
         try {
             return proxy.getQueuesWithNode(nodeId);
         } catch (AvroRemoteException e) {
-            throw new QueueManagerException(e);
+            throw new QueueManagerException(describe(e), e);
         }
     }
 
@@ -398,7 +397,7 @@ public class AvroRpcResourceManagerClient implements ResourceManagerClient {
         try {
             return proxy.getNodeLoad(nodeId);
         } catch (AvroRemoteException e) {
-            throw new MonitorException(e);
+            throw new MonitorException(describe(e), e);
         }
     }
 
@@ -407,7 +406,7 @@ public class AvroRpcResourceManagerClient implements ResourceManagerClient {
         try {
             return AvroTypeFactory.getListJob(proxy.getQueuedJobs());
         } catch (AvroRemoteException e) {
-            throw new JobQueueException(e);
+            throw new JobQueueException(describe(e), e);
         }
     }
 
