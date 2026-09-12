@@ -437,6 +437,82 @@ public class TestQueueBasedEngineEndToEnd extends TestCase {
         GateCondition.evaluations() > 0);
   }
 
+  /**
+   * A gate that says no and later says yes must let the task through.
+   *
+   * <p>
+   * This is what a gate is for. It is asked before the thing it waits for has
+   * happened, so the first answer is always no, and the question is whether
+   * anything asks again.
+   * </p>
+   *
+   * <p>
+   * Nothing did. A condition that answered no landed in Failure, which the
+   * lifecycle files under "done"; the parent workflow aggregates its children
+   * and went to Failure with it; a done instance is excluded from the
+   * querier's repository query, and requeueAnsweredConditions only runs when
+   * the querier asks the parent. So the gate's survival depended on the parent
+   * staying alive, and the parent died of the gate.
+   * </p>
+   *
+   * <p>
+   * Live: a join gated on "every chunk translated" was asked once, when the
+   * extract that fires its event finished and nought of 458 chunks were done.
+   * It was never asked again. Five hours later every chunk was translated,
+   * the answer had been yes for minutes, and the join had to be started by
+   * hand -- which is how every run of that pipeline has ever been finished.
+   * </p>
+   */
+  public void testAgateThatOpensLaterLetsTheTaskThrough() throws Exception {
+    GateCondition.open(false);
+
+    engine.startWorkflow(modelFor("urn:oodt:e2e:GuardedTaskWorkflow"),
+        new Metadata());
+
+    Thread.sleep(6000);
+    assertTrue("the engine should have consulted the closed gate",
+        GateCondition.evaluations() > 0);
+    assertEquals("a closed gate must stop the task",
+        java.util.Collections.emptyList(), RecordingTask.recorded());
+
+    int askedWhileClosed = GateCondition.evaluations();
+    // The thing the gate was waiting for happens.
+    GateCondition.open(true);
+
+    awaitRecorded(1);
+    assertTrue("the gate should have been asked again after it opened; "
+        + "asked " + askedWhileClosed + " times while closed and "
+        + GateCondition.evaluations() + " in total",
+        GateCondition.evaluations() > askedWhileClosed);
+  }
+
+  /**
+   * And the workflow holding it must not have been written off in the
+   * meantime, because a done instance is never offered again.
+   */
+  public void testAclosedGateDoesNotFinishTheWorkflow() throws Exception {
+    GateCondition.open(false);
+
+    WorkflowInstance inst = engine.startWorkflow(
+        modelFor("urn:oodt:e2e:GuardedTaskWorkflow"), new Metadata());
+
+    Thread.sleep(6000);
+
+    String category = categoryOf(inst.getId());
+    assertFalse("a workflow whose gate has not opened yet is not done; it "
+        + "settled in [" + category + "]", "done".equals(category));
+  }
+
+  /** The lifecycle category an instance is in right now. */
+  private String categoryOf(String id) throws Exception {
+    WorkflowInstance current = instanceRepo.getWorkflowInstanceById(id);
+    if (current == null || current.getState() == null
+        || current.getState().getCategory() == null) {
+      return null;
+    }
+    return current.getState().getCategory().getName();
+  }
+
   // ---- ordered phases ----------------------------------------------------
 
   /**
