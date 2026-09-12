@@ -352,7 +352,40 @@ public class WorkflowProcessorQueue {
    * @return The processor for that condition.
    */
   private WorkflowProcessor buildConditionProcessor(WorkflowInstance parent,
-      WorkflowCondition cond, String idPrefix) {
+      WorkflowCondition cond, String kind) {
+    return buildConditionProcessor(parent, cond, kind, parent
+        .getParentChildWorkflow().getId(), "Condition Workflow-");
+  }
+
+  /**
+   * Builds the processor for one condition of <code>parent</code>.
+   *
+   * <p>
+   * Every condition sub-workflow is built here, whatever it guards. There
+   * used to be four copies of this, one per place a condition can be
+   * attached, and the two under a task omitted {@link #shareContext} -- so a
+   * task-level condition was evaluated against an empty context and any
+   * condition that reads what the workflow is working on held forever. The
+   * copies were identical apart from the generated id and the name, which is
+   * why the omission was invisible; those two are parameters now and there is
+   * one copy.
+   * </p>
+   *
+   * @param parent
+   *          The instance the condition belongs to, whose context the
+   *          condition is evaluated against.
+   * @param cond
+   *          The condition to build a processor for.
+   * @param kind
+   *          The kind of generated workflow, for its id.
+   * @param ownerId
+   *          What the generated id names as the condition's owner.
+   * @param namePrefix
+   *          Prepended to the condition's name to name the workflow.
+   * @return The {@link WorkflowProcessor} for the condition.
+   */
+  private WorkflowProcessor buildConditionProcessor(WorkflowInstance parent,
+      WorkflowCondition cond, String kind, String ownerId, String namePrefix) {
     WorkflowInstance instance = new WorkflowInstance();
     instance.setState(lifecycle.getDefaultLifecycle().createState("Null",
         "initial", "Condition created for workflow instance: ["
@@ -367,9 +400,8 @@ public class WorkflowProcessorQueue {
     condGraph.setCond(cond);
     condGraph.setTask(conditionTask);
     ParentChildWorkflow workflow = new ParentChildWorkflow(condGraph);
-    workflow.setId(generatedId(idPrefix,
-        parent.getParentChildWorkflow().getId(), cond.getConditionId()));
-    workflow.setName("Condition Workflow-" + cond.getConditionName());
+    workflow.setId(generatedId(kind, ownerId, cond.getConditionId()));
+    workflow.setName(namePrefix + cond.getConditionName());
     workflow.getTasks().add(conditionTask);
     instance.setParentChildWorkflow(workflow);
     this.addToModelRepo(workflow);
@@ -521,32 +553,9 @@ public class WorkflowProcessorQueue {
             new Vector<WorkflowProcessor>();
         for (WorkflowCondition cond : inst.getParentChildWorkflow()
             .getPreConditions()) {
-          WorkflowInstance instance = new WorkflowInstance();
-          WorkflowState condWorkflowState = lifecycle
-              .getDefaultLifecycle()
-              .createState(
-                  "Null",
-                  "initial",
-                  "Sub Pre Condition Workflow created by Workflow Processor Queue for workflow instance: "
-                      + "[" + inst.getId() + "]");
-          instance.setState(condWorkflowState);
-          instance.setPriority(inst.getPriority());
-          shareContext(inst, instance);
-          WorkflowTask conditionTask = toConditionTask(cond);
-          instance.setCurrentTaskId(conditionTask.getTaskId());
-          Graph condGraph = new Graph();
-          condGraph.setExecutionType("condition");
-          condGraph.setCond(cond);
-          condGraph.setTask(conditionTask);
-          ParentChildWorkflow workflow = new ParentChildWorkflow(condGraph);
-          workflow.setId(generatedId(PRE_COND_WORKFLOW,
-              inst.getParentChildWorkflow().getId(), cond.getConditionId()));
-          workflow.setName("Pre Condition Workflow-" + cond.getConditionName());
-          workflow.getTasks().add(conditionTask);
-          instance.setParentChildWorkflow(workflow);
-          this.addToModelRepo(workflow);
-          persist(instance);
-          WorkflowProcessor subProcessor = fromWorkflowInstance(instance);
+          WorkflowProcessor subProcessor = buildConditionProcessor(inst, cond,
+              PRE_COND_WORKFLOW, inst.getParentChildWorkflow().getId(),
+              "Pre Condition Workflow-");
           // Every condition is persisted as an instance of its own and the
           // querier offers each non-done instance independently, so conditions
           // have always been evaluated all at once no matter what their block
@@ -567,9 +576,6 @@ public class WorkflowProcessorQueue {
           // recomputes from all its children when it reacts, so a lost
           // notification costs latency rather than correctness.
           subProcessor.getListeners().add(processor);
-          synchronized (processorCache) {
-            processorCache.put(instance.getId(), subProcessor);
-          }
         }
 
         // handle its tasks
@@ -618,7 +624,7 @@ public class WorkflowProcessorQueue {
           for (Object taskCondObj : task.getConditions()) {
             WorkflowCondition taskCond = (WorkflowCondition) taskCondObj;
             WorkflowProcessor condProcessor = buildConditionProcessor(inst,
-                taskCond, "task-cond-workflow-");
+                taskCond, "task-cond-workflow");
             processor.getSubProcessors().add(condProcessor);
             condProcessor.getListeners().add(processor);
             taskGates.add(condProcessor);
@@ -665,7 +671,7 @@ public class WorkflowProcessorQueue {
         for (WorkflowCondition cond : inst.getParentChildWorkflow()
             .getPostConditions()) {
           WorkflowProcessor condProcessor = buildConditionProcessor(inst, cond,
-              "post-cond-workflow-");
+              POST_COND_WORKFLOW);
           // The tasks, plus -- when the block asked to be sequential -- the
           // post-condition before this one. See the note on the pre-conditions.
           List<WorkflowProcessor> gates =
@@ -696,73 +702,19 @@ public class WorkflowProcessorQueue {
           // handle its pre-conditions
           for (WorkflowCondition cond : inst.getParentChildWorkflow()
               .getGraph().getTask().getPreConditions()) {
-            WorkflowInstance instance = new WorkflowInstance();
-            WorkflowState condWorkflowState = lifecycle
-                .getDefaultLifecycle()
-                .createState(
-                    "Null",
-                    "initial",
-                    "Sub Pre Condition Workflow for Task created by Workflow Processor Queue for workflow instance: "
-                        + "[" + inst.getId() + "]");
-            instance.setState(condWorkflowState);
-            instance.setPriority(inst.getPriority());
-            WorkflowTask conditionTask = toConditionTask(cond);
-            instance.setCurrentTaskId(conditionTask.getTaskId());
-            Graph condGraph = new Graph();
-            condGraph.setExecutionType("condition");
-            condGraph.setCond(cond);
-            condGraph.setTask(conditionTask);
-            ParentChildWorkflow workflow = new ParentChildWorkflow(condGraph);
-            workflow.setId(generatedId(PRE_COND_WORKFLOW,
-                inst.getParentChildWorkflow().getGraph().getTask().getTaskId(),
-                cond.getConditionId()));
-            workflow.setName("Task Pre Condition Workflow-"
-                + cond.getConditionName());
-            workflow.getTasks().add(conditionTask);
-            instance.setParentChildWorkflow(workflow);
-            this.addToModelRepo(workflow);
-            persist(instance);
-            WorkflowProcessor subProcessor = fromWorkflowInstance(instance);
-            processor.getSubProcessors().add(subProcessor);
-            synchronized (processorCache) {
-              processorCache.put(instance.getId(), subProcessor);
-            }
+            processor.getSubProcessors().add(
+                buildConditionProcessor(inst, cond, PRE_COND_WORKFLOW, inst
+                    .getParentChildWorkflow().getGraph().getTask().getTaskId(),
+                    "Task Pre Condition Workflow-"));
           }
 
           // handle its post-conditions
           for (WorkflowCondition cond : inst.getParentChildWorkflow()
               .getGraph().getTask().getPostConditions()) {
-            WorkflowInstance instance = new WorkflowInstance();
-            WorkflowState condWorkflowState = lifecycle
-                .getDefaultLifecycle()
-                .createState(
-                    "Null",
-                    "initial",
-                    "Sub Post Condition Workflow for Task created by Workflow Processor Queue for workflow instance: "
-                        + "[" + inst.getId() + "]");
-            instance.setState(condWorkflowState);
-            instance.setPriority(inst.getPriority());
-            WorkflowTask conditionTask = toConditionTask(cond);
-            instance.setCurrentTaskId(conditionTask.getTaskId());
-            Graph condGraph = new Graph();
-            condGraph.setExecutionType("condition");
-            condGraph.setCond(cond);
-            condGraph.setTask(conditionTask);
-            ParentChildWorkflow workflow = new ParentChildWorkflow(condGraph);
-            workflow.setId(generatedId(POST_COND_WORKFLOW,
-                inst.getParentChildWorkflow().getGraph().getTask().getTaskId(),
-                cond.getConditionId()));
-            workflow.setName("Task Post Condition Workflow-"
-                + cond.getConditionName());
-            workflow.getTasks().add(conditionTask);
-            instance.setParentChildWorkflow(workflow);
-            this.addToModelRepo(workflow);
-            persist(instance);
-            WorkflowProcessor subProcessor = fromWorkflowInstance(instance);
-            processor.getSubProcessors().add(subProcessor);
-            synchronized (processorCache) {
-              processorCache.put(instance.getId(), subProcessor);
-            }
+            processor.getSubProcessors().add(
+                buildConditionProcessor(inst, cond, POST_COND_WORKFLOW, inst
+                    .getParentChildWorkflow().getGraph().getTask().getTaskId(),
+                    "Task Post Condition Workflow-"));
           }
 
         } else if (inst.getParentChildWorkflow().getGraph().getExecutionType()
