@@ -234,6 +234,36 @@ public class TestAvroRpcResourceManagerClient {
         assertEquals("high", returned.getQueueName());
     }
 
+    /**
+     * What the server said has to reach the caller.
+     *
+     * The declared OodtError keeps its text in its own detail field, so the
+     * Throwable message is null and wrapping the exception alone renders as
+     * the error's class name. A workflow whose task named a queue the
+     * deployment does not define failed 2806 times with
+     *
+     *   Unable to submit task: [Split_Task] to the resource manager:
+     *   Message: org.apache.oodt.cas.resource.structs.avrotypes.OodtError
+     *
+     * while the resource manager's own log held the answer. describe() was
+     * written for this and the file manager client calls it at every catch;
+     * this client called it nowhere.
+     */
+    @Test
+    public void testTheServersReasonReachesTheCaller() {
+        // Rejected before anything is mapped, so the queue set these tests
+        // share is left as it was.
+        try {
+            rmc.addNodeToQueue("localhost", "no-such-queue");
+            fail("expected adding a node to an undeclared queue to fail");
+        } catch (Exception e) {
+            String rendered = String.valueOf(e.getMessage());
+            assertTrue("the caller got the error's class name instead of the"
+                            + " reason: " + rendered,
+                    rendered.contains("no-such-queue"));
+        }
+    }
+
     @Test
     public void testQueuesWithNode() throws MonitorException, QueueManagerException {
         List<ResourceNode> nodelist = rmc.getNodes();
