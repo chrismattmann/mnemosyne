@@ -20,7 +20,7 @@
   <parent>
     <groupId>ai.mattmann.mnemosyne</groupId>
     <artifactId>oodt-core</artifactId>
-    <version>1.12.0</version>
+    <version>1.13.0</version>
     <relativePath>../../../core</relativePath>
   </parent>
   <properties>
