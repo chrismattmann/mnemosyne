@@ -113,6 +113,30 @@ public class WorkflowInstanceSchemaTest extends TestCase {
     }
   }
 
+  public void testTheBundledSchemaIsUsedWhenNoFileIsGiven() throws Exception {
+    // What every deployment gets: bin/oodt names no .sql and the copy inside
+    // cas-workflow is applied. This is what lets an application repository
+    // ship no schema file of its own.
+    //
+    // Only the mechanism is asserted here, not which schema arrived. Under
+    // surefire, src/test/resources/workflow.sql shadows the main one on the
+    // classpath -- it is a fixture with DROP TABLE statements, used by
+    // TestWorkflowDataSourceRepository -- so the resource found in-test is
+    // deliberately not the shipped one. The shipped schema's content is
+    // covered by TestShippedSchemaAcceptsAnInstance, which reads it by path.
+    assertTrue(WorkflowInstanceSchema.ensure(propertiesFor("bundled"), null));
+    assertFalse("no statements were read from the bundled schema",
+        WorkflowInstanceSchema.statements(null).isEmpty());
+  }
+
+  public void testTheBundledSchemaIsOnTheClasspath() throws Exception {
+    // If this resource ever stops being packaged, the fallback above turns
+    // into an exception at deployment start rather than at build time.
+    assertNotNull("/workflow.sql is not in the jar",
+        WorkflowInstanceSchema.class.getResourceAsStream(
+            WorkflowInstanceSchema.BUNDLED_SQL));
+  }
+
   public void testALuceneRepositoryIsLeftAlone() throws Exception {
     File props = new File(dir, "lucene.properties");
     FileWriter out = new FileWriter(props);

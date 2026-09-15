@@ -53,6 +53,10 @@ the License.
         <include>workflow.properties</include>
         <include>logging.properties</include>
         <include>log4j2.xml</include>
+<!-- The instance schema, on disk as well as in the jar. The jar copy
+     is what WorkflowInstanceSchema loads by default; this one is for
+     a deployment that wants to read or adapt it. -->
+<include>workflow.sql</include>
       </includes>
     </fileSet>
     <fileSet>

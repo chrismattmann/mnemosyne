@@ -25,7 +25,7 @@ the License.
   -->
   <groupId>ai.mattmann.mnemosyne</groupId>
   <artifactId>oodt-core</artifactId>
-  <version>1.13.0</version>
+  <version>1.13.1</version>
   <packaging>pom</packaging>
   <name>Mnemosyne Core</name>
   <description>Shared build configuration and dependency management for

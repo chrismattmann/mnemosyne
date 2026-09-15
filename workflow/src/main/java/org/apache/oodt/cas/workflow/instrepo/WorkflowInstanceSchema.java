@@ -84,16 +84,23 @@ public class WorkflowInstanceSchema {
   private static final Pattern PLACEHOLDER =
       Pattern.compile("\\[([A-Za-z_][A-Za-z0-9_]*)\\]");
 
+  /** The schema shipped inside this jar, used when no file is named. */
+  static final String BUNDLED_SQL = "/workflow.sql";
+
   /**
-   * @param args workflow.properties, then the .sql file to apply
+   * @param args workflow.properties, and optionally the .sql file to apply.
+   *     Without the second argument the schema bundled in this jar is used,
+   *     which is what a deployment wants unless it has deliberately changed
+   *     the tables. Passing a file is how you override that.
    */
   public static void main(String[] args) throws Exception {
-    if (args.length < 2) {
+    if (args.length < 1) {
       System.err.println("usage: WorkflowInstanceSchema "
-          + "<workflow.properties> <workflow-instances.sql>");
+          + "<workflow.properties> [schema.sql]");
       System.exit(2);
     }
-    System.exit(ensure(new File(args[0]), new File(args[1])) ? 0 : 1);
+    File sql = args.length > 1 ? new File(args[1]) : null;
+    System.exit(ensure(new File(args[0]), sql) ? 0 : 1);
   }
 
   static boolean ensure(File propertiesFile, File sqlFile) {
@@ -216,8 +223,19 @@ public class WorkflowInstanceSchema {
    */
   static List<String> statements(File sqlFile) throws Exception {
     StringBuilder builder = new StringBuilder();
-    Reader reader = new InputStreamReader(new FileInputStream(sqlFile),
-        StandardCharsets.UTF_8);
+    InputStream in;
+    if (sqlFile == null) {
+      in = WorkflowInstanceSchema.class.getResourceAsStream(BUNDLED_SQL);
+      if (in == null) {
+        throw new IllegalStateException(
+            "No schema file given and " + BUNDLED_SQL + " is not on the "
+            + "classpath. It ships inside cas-workflow; a jar without it has "
+            + "been repacked.");
+      }
+    } else {
+      in = new FileInputStream(sqlFile);
+    }
+    Reader reader = new InputStreamReader(in, StandardCharsets.UTF_8);
     try {
       char[] buffer = new char[8192];
       int read;
