@@ -1131,12 +1131,18 @@ the License.
                   <goal>sign</goal>
                 </goals>
                 <configuration>
-                  <!-- Non-interactive signing; the passphrase comes from the
-                       gpg agent rather than a prompt or a stored property. -->
-                  <gpgArguments>
-                    <arg>--pinentry-mode</arg>
-                    <arg>loopback</arg>
-                  </gpgArguments>
+                  <!--
+                    Signing goes through pinentry and the gpg agent: one prompt at
+                    the first signed module, cached for the rest of the reactor.
+                  
+                    This used to pass the gpg flag 'pinentry-mode loopback', which
+                    is the mode that BYPASSES the agent. Loopback makes gpg read the
+                    passphrase from its caller, and nothing supplied one: no
+                    gpg.passphrase server or property in settings.xml, no environment
+                    variable. So gpg fell back to reading stdin and hung. Under
+                    'mvn deploy' that strands the release after every artifact is
+                    built, which is the worst possible moment to find out.
+                  -->
                 </configuration>
               </execution>
             </executions>
