@@ -40,12 +40,64 @@ public class SequentialProcessor extends WorkflowProcessor {
 
   @Override
   public List<WorkflowProcessor> getRunnableSubProcessors() {
+    trackCurrentTask();
     WorkflowProcessor nextWP = this.getNext();
     if (nextWP != null) {
       return Collections.singletonList(nextWP);
     } else {
       return new Vector<WorkflowProcessor>();
     }
+  }
+
+  /**
+   * Keep this workflow's currentTaskId on the task it is actually on.
+   *
+   * <p>
+   * The engine sets it once, to the first task, when the instance is created
+   * and never moves it. So a workflow of three tasks reported the first one
+   * for its whole life: an IndexCorpus instance showed IndexMetadataJaccard
+   * while the progress beside it came from the fg/bg stage two tasks later,
+   * which reads as Jaccard taking an hour when Jaccard had finished in
+   * seconds.
+   * </p>
+   *
+   * <p>
+   * W1 has never had this problem -- IterativeWorkflowProcessorThread sets it
+   * per task as it walks them. This gives the queue-based engine the same
+   * behaviour for the sequential case, where "the task it is on" is
+   * unambiguous.
+   * </p>
+   *
+   * <p>
+   * Nothing is persisted here. The querier writes this instance back as it
+   * polls, so the value it finds is the current one.
+   * </p>
+   */
+  private void trackCurrentTask() {
+    WorkflowProcessor current = this.getCurrent();
+    if (current == null) {
+      return;
+    }
+    String taskId = current.getWorkflowInstance().getCurrentTaskId();
+    if (taskId != null
+        && !taskId.equals(this.getWorkflowInstance().getCurrentTaskId())) {
+      this.getWorkflowInstance().setCurrentTaskId(taskId);
+    }
+  }
+
+  /**
+   * The child this workflow is on: the first that is not done, whether it is
+   * running or still waiting to be handed out.
+   */
+  private WorkflowProcessor getCurrent() {
+    for (WorkflowProcessor wp : this.getSubProcessors()) {
+      if (wp.getWorkflowInstance().getState().getCategory().getName()
+             .equals("done")) {
+        continue;
+      }
+      return wp;
+    }
+    return null;
   }
 
   @Override
@@ -77,17 +129,14 @@ public class SequentialProcessor extends WorkflowProcessor {
    * </p>
    */
   private WorkflowProcessor getNext() {
-    for (WorkflowProcessor wp : this.getSubProcessors()) {
-      if (wp.getWorkflowInstance().getState().getCategory().getName()
-             .equals("done")) {
-        continue;
-      }
-      if (wp.getWorkflowInstance().getState().getName().equals("Executing")) {
-        return null;
-      }
-      return wp;
+    WorkflowProcessor current = this.getCurrent();
+    if (current == null) {
+      return null;
     }
-    return null;
+    if (current.getWorkflowInstance().getState().getName().equals("Executing")) {
+      return null;
+    }
+    return current;
   }
 
 }

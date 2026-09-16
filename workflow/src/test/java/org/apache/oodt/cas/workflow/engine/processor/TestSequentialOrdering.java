@@ -78,6 +78,42 @@ public class TestSequentialOrdering extends TestCase {
     assertTrue(phase.getRunnableSubProcessors().isEmpty());
   }
 
+  public void testTheCurrentTaskIsTheRunningStep() throws Exception {
+    SequentialProcessor phase = phaseOf("Executing", "Queued");
+    phase.getRunnableSubProcessors();
+    assertEquals("urn:oodt:taskOne",
+        phase.getWorkflowInstance().getCurrentTaskId());
+  }
+
+  public void testTheCurrentTaskAdvancesWhenAStepFinishes() throws Exception {
+    // The bug: this reported the first task for the whole life of the
+    // workflow, so an IndexCorpus instance showed IndexMetadataJaccard while
+    // fg/bg, two tasks later, was the thing actually running.
+    SequentialProcessor phase = phaseOf("Success", "Executing");
+    phase.getRunnableSubProcessors();
+    assertEquals("urn:oodt:taskTwo",
+        phase.getWorkflowInstance().getCurrentTaskId());
+  }
+
+  public void testTheCurrentTaskAdvancesToAWaitingStepToo() throws Exception {
+    // Not only to a running one: the step that is next to be handed out is
+    // the one the workflow is on.
+    SequentialProcessor phase = phaseOf("Success", "Queued");
+    phase.getRunnableSubProcessors();
+    assertEquals("urn:oodt:taskTwo",
+        phase.getWorkflowInstance().getCurrentTaskId());
+  }
+
+  public void testTheCurrentTaskIsLeftAloneWhenEverythingIsDone()
+      throws Exception {
+    SequentialProcessor phase = phaseOf("Success", "Success");
+    phase.getRunnableSubProcessors();
+    // Nothing is current any more; the last thing it was on is the honest
+    // answer, and is what the finished instance should keep.
+    assertEquals("urn:oodt:taskOne",
+        phase.getWorkflowInstance().getCurrentTaskId());
+  }
+
   private SequentialProcessor phaseOf(String firstState, String secondState)
       throws Exception {
     WorkflowLifecycleManager manager = new WorkflowLifecycleManager(LIFECYCLE);
@@ -85,6 +121,11 @@ public class TestSequentialOrdering extends TestCase {
         instance("urn:oodt:phase"));
     TaskProcessor first = new TaskProcessor(manager, instance("urn:oodt:one"));
     TaskProcessor second = new TaskProcessor(manager, instance("urn:oodt:two"));
+    // The task each child is: what the parent should report while it is on it.
+    first.getWorkflowInstance().setCurrentTaskId("urn:oodt:taskOne");
+    second.getWorkflowInstance().setCurrentTaskId("urn:oodt:taskTwo");
+    // What the engine sets once, at creation, and never moves.
+    phase.getWorkflowInstance().setCurrentTaskId("urn:oodt:taskOne");
     setState(first, firstState);
     setState(second, secondState);
     phase.setSubProcessors(Arrays.asList((WorkflowProcessor) first,
