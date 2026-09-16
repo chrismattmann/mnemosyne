@@ -181,7 +181,11 @@ final class PgeProgressPeek {
   }
 
   private static File jobDir(Metadata met) {
-    String path = first(met, "JobDir", "JobOutputDir");
+    // PGETask_JobDir is what the PGE publishes now. JobDir and
+    // JobOutputDir are read after it for instances that were already
+    // running when this changed.
+    String path = first(met, "PGETask_JobDir", "PGETask_JobOutputDir",
+        "JobDir", "JobOutputDir");
     if (path.length() == 0) {
       return null;
     }
