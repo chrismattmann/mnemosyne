@@ -137,6 +137,60 @@ public class WorkflowInstanceSchemaTest extends TestCase {
             WorkflowInstanceSchema.BUNDLED_SQL));
   }
 
+  public void testAMissingUrlIsReportedAsFailure() throws Exception {
+    File props = new File(dir, "nourl.properties");
+    FileWriter out = new FileWriter(props);
+    out.write("workflow.engine.instanceRep.factory = "
+        + WorkflowInstanceSchema.DATASOURCE_FACTORY + "\n");
+    out.close();
+    assertFalse("a datasource repository with no url is a broken config",
+        WorkflowInstanceSchema.ensure(props, null));
+  }
+
+  public void testPlaceholdersResolveFromTheEnvironment() throws Exception {
+    // The url is written with the same [NAME] placeholders as the rest of the
+    // OODT policy.
+    String home = System.getenv("HOME");
+    assertTrue("this test needs HOME set", home != null && home.length() > 0);
+    assertEquals(home + "/data/winstdb/winst",
+        WorkflowInstanceSchema.resolve("[HOME]/data/winstdb/winst"));
+  }
+
+  public void testAnUnsetPlaceholderIsLeftAlone() throws Exception {
+    assertEquals("[NOT_A_REAL_VARIABLE_ANYWHERE]/x",
+        WorkflowInstanceSchema.resolve("[NOT_A_REAL_VARIABLE_ANYWHERE]/x"));
+  }
+
+  /**
+   * An unresolved placeholder is not a path, and carrying on with one is worse
+   * than stopping. HSQLDB opens
+   * {@code jdbc:hsqldb:file:[OODT_HOME]/data/winstdb/winst} without complaint,
+   * creating a directory called "[OODT_HOME]" next to wherever the process was
+   * started, and the run that follows finds an empty data/winstdb behind a
+   * message saying the tables were created.
+   */
+  public void testAUrlWithAnUnresolvedPlaceholderIsRefused() throws Exception {
+    File props = new File(dir, "placeholder.properties");
+    FileWriter out = new FileWriter(props);
+    out.write("workflow.engine.instanceRep.factory = "
+        + WorkflowInstanceSchema.DATASOURCE_FACTORY + "\n");
+    out.write("org.apache.oodt.cas.workflow.instanceRep.datasource.jdbc.url="
+        + "jdbc:hsqldb:file:[NOT_A_REAL_VARIABLE_ANYWHERE]/data/winstdb/winst\n");
+    out.close();
+    assertFalse("a url with a placeholder nothing answers is not a database",
+        WorkflowInstanceSchema.ensure(props, null));
+    assertFalse("it created the database under the literal placeholder",
+        new File("[NOT_A_REAL_VARIABLE_ANYWHERE]").exists());
+  }
+
+  public void testATrailingCommentIsNotAStatement() throws Exception {
+    java.util.List<String> statements = WorkflowInstanceSchema.statements(null);
+    assertFalse(statements.isEmpty());
+    for (String each : statements) {
+      assertFalse("an empty statement was parsed out", each.trim().isEmpty());
+    }
+  }
+
   public void testALuceneRepositoryIsLeftAlone() throws Exception {
     File props = new File(dir, "lucene.properties");
     FileWriter out = new FileWriter(props);
