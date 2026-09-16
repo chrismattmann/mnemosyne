@@ -21,7 +21,7 @@
     <parent>
         <groupId>ai.mattmann.mnemosyne</groupId>
         <artifactId>oodt-core</artifactId>
-        <version>1.13.2</version>
+        <version>1.13.3-SNAPSHOT</version>
         <relativePath>../../core/pom.xml</relativePath>
     </parent>
     <artifactId>oodt-webapps</artifactId>
