@@ -3,7 +3,7 @@
     <parent>
         <artifactId>oodt-core</artifactId>
         <groupId>ai.mattmann.mnemosyne</groupId>
-        <version>1.13.1</version>
+        <version>1.13.2</version>
         <relativePath>../core/pom.xml</relativePath>
     </parent>
     <modelVersion>4.0.0</modelVersion>
