@@ -20,6 +20,7 @@ import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -174,6 +175,129 @@ public class TestCatalogAndWorkflowJson extends TestCase {
     Map<String, Object> peeked = PgeProgressPeek.of(met);
     assertEquals(Integer.valueOf(653), peeked.get("done"));
     assertEquals("bg CLIP", peeked.get("message"));
+  }
+
+  /**
+   * The reported bug: a finished IndexImageSpace drawing IndexFGBG's bar.
+   *
+   * Every task writes its own JobDir into the one shared context, so after
+   * IndexFGBG starts, the JobDir reachable from the completed
+   * IndexImageSpace instance is IndexFGBG's, and the .progress in it is
+   * IndexFGBG counting to 686.
+   */
+  public void testAFinishedTaskDoesNotShowTheNextTasksProgress()
+      throws Exception {
+    File fgbg = File.createTempFile("jobdir", "fgbg");
+    fgbg.delete();
+    fgbg.mkdir();
+    File progress = new File(fgbg, ".progress");
+    Files.write(progress.toPath(),
+        "done=75\ntotal=686\nmsg=split\n".getBytes(StandardCharsets.UTF_8));
+
+    long now = System.currentTimeMillis();
+    // IndexImageSpace ran and finished ten minutes ago.
+    Date started = new Date(now - 900000L);
+    Date ended = new Date(now - 600000L);
+    // IndexFGBG is writing now, into the JobDir the shared context now holds.
+    progress.setLastModified(now);
+
+    Metadata met = new Metadata();
+    met.addMetadata("JobDir", fgbg.getAbsolutePath());
+
+    assertNotNull("the file is readable", PgeProgressPeek.of(met));
+    assertNull("a task that ended before the file was written did not write it",
+        PgeProgressPeek.of(met, started, ended));
+
+    WorkflowInstance inst = new WorkflowInstance();
+    inst.setId("urn:imagecat:IndexImageSpace");
+    inst.setStartDate(started);
+    inst.setEndDate(ended);
+    inst.setSharedContext(met);
+    Map<String, Object> row = WorkflowResource.encodeInstance(inst);
+    assertNull("no bar on the finished task", row.get("pgeProgress"));
+  }
+
+  /** The running task still shows its own bar. */
+  public void testARunningTaskKeepsItsProgress() throws Exception {
+    File dir = File.createTempFile("jobdir", "running");
+    dir.delete();
+    dir.mkdir();
+    File progress = new File(dir, ".progress");
+    Files.write(progress.toPath(),
+        "done=75\ntotal=686\nmsg=split\n".getBytes(StandardCharsets.UTF_8));
+    long now = System.currentTimeMillis();
+    progress.setLastModified(now);
+
+    Metadata met = new Metadata();
+    met.addMetadata("JobDir", dir.getAbsolutePath());
+    Map<String, Object> peeked =
+        PgeProgressPeek.of(met, new Date(now - 60000L), null);
+    assertEquals(Integer.valueOf(75), peeked.get("done"));
+    assertEquals("split", peeked.get("message"));
+  }
+
+  /** A task that finished normally keeps the bar it wrote itself. */
+  public void testATaskKeepsItsOwnFinishedProgress() throws Exception {
+    File dir = File.createTempFile("jobdir", "own");
+    dir.delete();
+    dir.mkdir();
+    File progress = new File(dir, ".progress");
+    Files.write(progress.toPath(),
+        "done=686\ntotal=686\nmsg=split\n".getBytes(StandardCharsets.UTF_8));
+    long now = System.currentTimeMillis();
+    progress.setLastModified(now - 60000L);
+
+    Metadata met = new Metadata();
+    met.addMetadata("JobDir", dir.getAbsolutePath());
+    Map<String, Object> peeked = PgeProgressPeek.of(met,
+        new Date(now - 120000L), new Date(now - 30000L));
+    assertEquals(Integer.valueOf(686), peeked.get("done"));
+  }
+
+  /** A file written before the task started belongs to the task before it. */
+  public void testAProgressFileOlderThanTheTaskIsNotItsOwn() throws Exception {
+    File dir = File.createTempFile("jobdir", "older");
+    dir.delete();
+    dir.mkdir();
+    File progress = new File(dir, ".progress");
+    Files.write(progress.toPath(),
+        "done=9\ntotal=10\nmsg=jaccard\n".getBytes(StandardCharsets.UTF_8));
+    long now = System.currentTimeMillis();
+    progress.setLastModified(now - 600000L);
+
+    Metadata met = new Metadata();
+    met.addMetadata("JobDir", dir.getAbsolutePath());
+    assertNull(PgeProgressPeek.of(met, new Date(now - 60000L), null));
+  }
+
+  /**
+   * Stale PGETask_* keys are the next task's for the same reason the file is,
+   * so a finished task with no file of its own reports nothing rather than
+   * falling back to them.
+   */
+  public void testFinishedWithNoFileDoesNotFallBackToSharedKeys() {
+    Metadata met = new Metadata();
+    met.addMetadata("PGETask_Done", "75");
+    met.addMetadata("PGETask_Total", "686");
+    met.addMetadata("PGETask_Progress", "split");
+    long now = System.currentTimeMillis();
+    assertNull(PgeProgressPeek.of(met, new Date(now - 900000L),
+        new Date(now - 600000L)));
+    assertNotNull("a running task may still use them",
+        PgeProgressPeek.of(met, new Date(now - 900000L), null));
+  }
+
+  /** Without a window, nothing is excluded: the behaviour before this. */
+  public void testNoWindowExcludesNothing() throws Exception {
+    File dir = File.createTempFile("jobdir", "nowindow");
+    dir.delete();
+    dir.mkdir();
+    Files.write(new File(dir, ".progress").toPath(),
+        "done=1\ntotal=2\nmsg=x\n".getBytes(StandardCharsets.UTF_8));
+    Metadata met = new Metadata();
+    met.addMetadata("JobDir", dir.getAbsolutePath());
+    assertNotNull(PgeProgressPeek.of(met, null, null));
+    assertEquals(Integer.valueOf(1), PgeProgressPeek.of(met).get("done"));
   }
 
   public void testEncodeInstanceProductsSkipsNulls() {

@@ -21,6 +21,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -31,6 +32,18 @@ import org.apache.oodt.cas.metadata.Metadata;
  * exists — it belongs to the current task. Metadata keys are a fallback
  * (watcher stamps, or a PGE whose JobDir was not persisted). A previous
  * task's {@code PGETask_*} keys otherwise hide a later task's bar.
+ *
+ * <p>Both sources come out of the instance's <em>shared</em> context, and
+ * every task in a workflow writes its own {@code JobDir} into it, so the
+ * value left there is the last task's, not the task being drawn. A finished
+ * task then shows the bar of whatever ran after it: a completed
+ * {@code IndexImageSpace} reporting {@code split 75 / 686}, which is
+ * {@code IndexFGBG} counting.
+ *
+ * <p>The window fixes it. A {@code .progress} file written after a task
+ * ended, or before it started, was not written by that task, and its
+ * modification time says so. When the window is not known nothing is
+ * excluded, which is the old behaviour.
  */
 final class PgeProgressPeek {
 
@@ -40,11 +53,54 @@ final class PgeProgressPeek {
   }
 
   static Map<String, Object> of(Metadata met) {
-    Map<String, Object> fromFile = fromFile(jobDir(met));
+    return of(met, null, null);
+  }
+
+  /**
+   * Progress for a task that ran between these two times.
+   *
+   * @param startedAt when the task began, or null if not known
+   * @param endedAt   when it finished, or null if it has not
+   */
+  static Map<String, Object> of(Metadata met, Date startedAt, Date endedAt) {
+    File dir = jobDir(met);
+    Map<String, Object> fromFile = fromFile(dir);
     if (fromFile != null) {
-      return fromFile;
+      // Written outside the task's window: it is another task's file, reached
+      // through a JobDir that task overwrote. Report nothing rather than
+      // somebody else's count.
+      return writtenWithin(dir, startedAt, endedAt) ? fromFile : null;
+    }
+    if (endedAt != null) {
+      // Finished, and no file of its own. The PGETask_* keys in the shared
+      // context are then the next task's for the same reason, so they are no
+      // safer than the file would have been.
+      return null;
     }
     return fromKeys(met);
+  }
+
+  /**
+   * Whether the {@code .progress} in this directory was written while the
+   * task was running.
+   *
+   * <p>The tolerance is one second, not more: the task that follows starts
+   * within moments of this one ending, and a generous window would let its
+   * first write count as this one's last.
+   */
+  static boolean writtenWithin(File dir, Date startedAt, Date endedAt) {
+    if (dir == null || (startedAt == null && endedAt == null)) {
+      return true;
+    }
+    long modified = new File(dir, FILE_NAME).lastModified();
+    if (modified <= 0L) {
+      return true;
+    }
+    long slack = 1000L;
+    if (startedAt != null && modified < startedAt.getTime() - slack) {
+      return false;
+    }
+    return endedAt == null || modified <= endedAt.getTime() + slack;
   }
 
   static Map<String, Object> fromKeys(Metadata met) {
@@ -125,7 +181,11 @@ final class PgeProgressPeek {
   }
 
   private static File jobDir(Metadata met) {
-    String path = first(met, "JobDir", "JobOutputDir");
+    // PGETask_JobDir is what the PGE publishes now. JobDir and
+    // JobOutputDir are read after it for instances that were already
+    // running when this changed.
+    String path = first(met, "PGETask_JobDir", "PGETask_JobOutputDir",
+        "JobDir", "JobOutputDir");
     if (path.length() == 0) {
       return null;
     }

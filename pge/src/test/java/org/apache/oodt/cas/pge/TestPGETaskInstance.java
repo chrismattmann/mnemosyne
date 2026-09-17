@@ -676,7 +676,8 @@ public class TestPGETaskInstance {
       Metadata sent = posted.getValue();
       assertEquals("bg CLIP", sent.getMetadata("PGETask_Progress"));
       assertEquals("653", sent.getMetadata("PGETask_Done"));
-      assertEquals(exe.getAbsolutePath(), sent.getMetadata("JobDir"));
+      assertEquals(exe.getAbsolutePath(),
+          sent.getMetadata(PGETaskInstance.PUBLISHED_JOB_DIR));
       verify(client);
 
       // The task thread picks it up once the watcher has been stopped.
@@ -684,7 +685,8 @@ public class TestPGETaskInstance {
       assertEquals("bg CLIP", taskMet.getMetadata("PGETask_Progress"));
       assertEquals("653", taskMet.getMetadata("PGETask_Done"));
       assertEquals("filelist_chunk_0.txt", taskMet.getMetadata("Filename"));
-      assertEquals(exe.getAbsolutePath(), taskMet.getMetadata("JobDir"));
+      assertEquals(exe.getAbsolutePath(),
+          taskMet.getMetadata(PGETaskInstance.PUBLISHED_JOB_DIR));
    }
 
    /**
@@ -773,7 +775,8 @@ public class TestPGETaskInstance {
       assertEquals("filelist_chunk_0.txt", taskMet.getMetadata("Filename"));
       Metadata sent = posted.getValue();
       assertNull(sent.getMetadata("PGETask_Progress"));
-      assertEquals(exe.getAbsolutePath(), sent.getMetadata("JobDir"));
+      assertEquals(exe.getAbsolutePath(),
+          sent.getMetadata(PGETaskInstance.PUBLISHED_JOB_DIR));
       verify(client);
    }
 
@@ -813,7 +816,8 @@ public class TestPGETaskInstance {
       assertEquals("bg CLIP", sent.getMetadata("PGETask_Progress"));
       assertEquals("653", sent.getMetadata("PGETask_Done"));
       assertEquals("filelist_chunk_0.txt", sent.getMetadata("Filename"));
-      assertEquals(exe.getAbsolutePath(), sent.getMetadata("JobDir"));
+      assertEquals(exe.getAbsolutePath(),
+          sent.getMetadata(PGETaskInstance.PUBLISHED_JOB_DIR));
       assertEquals("bg CLIP", incoming.getMetadata("PGETask_Progress"));
       verify(dynClient);
    }
@@ -862,4 +866,42 @@ public class TestPGETaskInstance {
       tmpDirs.add(tmpDir);
       return tmpDir;
    }
+  @Test
+   /**
+    * The published job directory must not be inheritable as a path.
+    *
+    * copyJobDir's output is persisted onto the workflow instance and
+    * inherited by the next task as DYNAMIC metadata, which outranks the
+    * STATIC value that task's own PgeConfig declares. Published as
+    * "JobDir" it made every later task run in the first task's directory:
+    * one .progress, one logs, one output, and three sciPgeExeScript_*
+    * files side by side in it.
+    */
+   public void testPublishedJobDirDoesNotShadowTheNextTasksOwn()
+         throws Exception {
+      assertFalse("the published key must not be a name PgeConfig substitutes",
+            "JobDir".equals(PGETaskInstance.PUBLISHED_JOB_DIR));
+      assertFalse("JobOutputDir".equals(
+            PGETaskInstance.PUBLISHED_JOB_OUTPUT_DIR));
+
+      File exe = File.createTempFile("jobdir", "published");
+      exe.delete();
+      exe.mkdir();
+      PGETaskInstance pgeTask = createTestInstance();
+      pgeTask.pgeMetadata.replaceMetadata("JobDir", exe.getAbsolutePath());
+      pgeTask.pgeMetadata.replaceMetadata("JobOutputDir",
+            new File(exe, "output").getAbsolutePath());
+
+      Metadata inherited = new Metadata();
+      pgeTask.copyJobDir(inherited);
+
+      assertEquals(exe.getAbsolutePath(),
+            inherited.getMetadata(PGETaskInstance.PUBLISHED_JOB_DIR));
+      // What the next task inherits carries no JobDir to resolve [JobDir]
+      // against, so its own config wins by default rather than by luck.
+      assertNull("a JobDir here is inherited into the next task's exe dir",
+            inherited.getMetadata("JobDir"));
+      assertNull(inherited.getMetadata("JobOutputDir"));
+   }
+
 }

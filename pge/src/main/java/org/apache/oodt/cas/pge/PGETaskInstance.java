@@ -407,17 +407,37 @@ public class PGETaskInstance implements WorkflowTaskInstance {
       }
    }
 
+   /**
+    * The key this task's job directory is published under, for OPSUI.
+    *
+    * <p>Deliberately not {@code JobDir}. What is written here is persisted
+    * onto the workflow instance and inherited by every task that follows,
+    * where it becomes DYNAMIC metadata -- and DYNAMIC outranks the STATIC
+    * value a task's own PgeConfig declares. Publishing it as {@code JobDir}
+    * therefore made {@code [JobDir]} in the next task's {@code <exe dir>}
+    * resolve to the previous task's directory, and the one after that, so a
+    * whole workflow ran in the first task's job directory: one
+    * {@code .progress}, one {@code logs}, one {@code output}, three
+    * {@code sciPgeExeScript_*} files side by side.
+    *
+    * <p>A name nothing substitutes cannot be inherited into a path.
+    */
+   public static final String PUBLISHED_JOB_DIR = "PGETask_JobDir";
+
+   /** As {@link #PUBLISHED_JOB_DIR}, for the output directory. */
+   public static final String PUBLISHED_JOB_OUTPUT_DIR = "PGETask_JobOutputDir";
+
    protected void copyJobDir(Metadata met) {
       if (met == null || pgeMetadata == null) {
          return;
       }
       String jobDir = pgeMetadata.getMetadata("JobDir");
       if (jobDir != null && jobDir.length() > 0) {
-         met.replaceMetadata("JobDir", jobDir);
+         met.replaceMetadata(PUBLISHED_JOB_DIR, jobDir);
       }
       String outputDir = pgeMetadata.getMetadata("JobOutputDir");
       if (outputDir != null && outputDir.length() > 0) {
-         met.replaceMetadata("JobOutputDir", outputDir);
+         met.replaceMetadata(PUBLISHED_JOB_OUTPUT_DIR, outputDir);
       }
    }
 
