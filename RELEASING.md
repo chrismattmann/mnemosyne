@@ -18,7 +18,11 @@ git commit -am "Mnemosyne 1.13.3" && open a PR
 # 2. after it merges, prime the gpg agent from a shell you can type into.
 #    A cold agent cannot launch pinentry from a backgrounded mvn and fails
 #    with "No pinentry" rather than prompting.
+printf prime > /tmp/x && rm -f /tmp/x.sig
 gpg --detach-sign --local-user 3A05BD3E7BCE0893 -o /tmp/x.sig /tmp/x
+#    There has to be something to sign: without the first line this fails
+#    with "can't open '/tmp/x'" and the agent is not primed. rm -f because
+#    gpg will not overwrite an existing signature without asking.
 
 # 3. deploy: builds, signs, uploads, and stops
 mvn -B clean deploy -Prelease
