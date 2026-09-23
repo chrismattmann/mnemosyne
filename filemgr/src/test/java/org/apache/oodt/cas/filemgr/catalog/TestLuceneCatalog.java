@@ -67,7 +67,7 @@ public class TestLuceneCatalog extends TestCase {
     private Properties initialProperties = new Properties(
       System.getProperties());
 
-    public void setUpProperties() {
+    public void setUpProperties() throws Exception {
 
         Properties properties = new Properties(System.getProperties());
 
@@ -134,7 +134,7 @@ public class TestLuceneCatalog extends TestCase {
         URL examplesCoreUrl = this.getClass().getResource(
             "/examples/core");
         System.setProperty("org.apache.oodt.cas.filemgr.validation.dirs",
-            "file://" + new File(examplesCoreUrl.getFile()).getAbsolutePath());
+            new File(examplesCoreUrl.toURI()).toURI().toString());
 
         //System.setProperties(properties);
     }

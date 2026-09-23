@@ -69,7 +69,7 @@ public class TestDataSourceCatalog extends TestCase {
     private Properties initialProperties = new Properties(
       System.getProperties());
 
-    public void setUpProperties() {
+    public void setUpProperties() throws Exception {
 
         Properties properties = new Properties(System.getProperties());
 
@@ -143,7 +143,7 @@ public class TestDataSourceCatalog extends TestCase {
         URL structFactoryUrl = this.getClass().getResource(
             "/xmlrpc-struct-factory");
         properties.setProperty("org.apache.oodt.cas.filemgr.validation.dirs",
-            "file://" + new File(structFactoryUrl.getFile()).getAbsolutePath());
+            new File(structFactoryUrl.toURI()).toURI().toString());
 
         // override quote fields
         properties.setProperty(
@@ -495,7 +495,7 @@ public class TestDataSourceCatalog extends TestCase {
         assertEquals("[24, 23]", productIds.toString());
     }
 
-    public void testNullValidationLayer(){
+    public void testNullValidationLayer() throws Exception {
 
         setUpProperties();
         System.setProperty(
