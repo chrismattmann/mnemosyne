@@ -27,6 +27,7 @@ import org.apache.oodt.commons.exec.ExecHelper;
 
 //JDK imports
 import java.io.File;
+import java.nio.charset.StandardCharsets;
 import java.net.URLEncoder;
 import java.util.Locale;
 
@@ -129,20 +130,20 @@ public class TestExternMetExtractor extends MetadataTestCase {
     // replace the FileLocation met field in the sample met file
     // with the actual file location of the extractFile
     File sampleMetFile = super.getTestDataFile(sampleMetFilename);
-    String sampleMetFileContents = FileUtils.readFileToString(sampleMetFile);
+    String sampleMetFileContents = FileUtils.readFileToString(sampleMetFile, StandardCharsets.UTF_8);
     String extractFileLocKey = "[EXTRACT_FILE_LOC]";
     sampleMetFileContents = sampleMetFileContents.replace(extractFileLocKey, URLEncoder.encode(extractFile.getParent(), "UTF-8"));
-    FileUtils.writeStringToFile(sampleMetFile, sampleMetFileContents, "UTF-8");
+    FileUtils.writeStringToFile(sampleMetFile, sampleMetFileContents, StandardCharsets.UTF_8);
     
     // replace the path to the sample met file inside of testExtractor
-    String extractorFileContents = FileUtils.readFileToString(extractorFile);
+    String extractorFileContents = FileUtils.readFileToString(extractorFile, StandardCharsets.UTF_8);
     String sampleMetFilePathKey = "<TEST_SAMPLE_MET_PATH>";
     extractorFileContents = extractorFileContents.replace(sampleMetFilePathKey, sampleMetFile.getAbsolutePath());
-    FileUtils.writeStringToFile(extractorFile, extractorFileContents);
+    FileUtils.writeStringToFile(extractorFile, extractorFileContents, StandardCharsets.UTF_8);
     
     // Use cmd.exe to launch the batch fixture on Windows. Unix can execute the
     // staged shell script directly, preserving the behavior covered before.
-    String confFileContents = FileUtils.readFileToString(this.confFile);
+    String confFileContents = FileUtils.readFileToString(this.confFile, StandardCharsets.UTF_8);
     String extractorCommand = extractorFile.getAbsolutePath();
     String launcherArgs = "";
     if (isWindows) {
@@ -157,7 +158,7 @@ public class TestExternMetExtractor extends MetadataTestCase {
     replaceMet.addMetadata("TEST_EXTRACTOR", extractorCommand);
     confFileContents = PathUtils.replaceEnvVariables(confFileContents, replaceMet)
         .replace("<!-- TEST_LAUNCH_ARGS -->", launcherArgs);
-    FileUtils.writeStringToFile(this.confFile, confFileContents);
+    FileUtils.writeStringToFile(this.confFile, confFileContents, StandardCharsets.UTF_8);
 
 
     try {

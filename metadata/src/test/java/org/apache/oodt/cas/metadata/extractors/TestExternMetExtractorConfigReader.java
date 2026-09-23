@@ -26,6 +26,7 @@ import org.apache.oodt.cas.metadata.util.PathUtils;
 
 //JDK imports
 import java.io.File;
+import java.nio.charset.StandardCharsets;
 
 //Junit imports
 
@@ -102,11 +103,11 @@ public class TestExternMetExtractorConfigReader extends MetadataTestCase {
       
       // replace the external extractor command placeholder
       String extractorKey = "TEST_EXTRACTOR";
-      String confFileContents = FileUtils.readFileToString(this.confFile);
+      String confFileContents = FileUtils.readFileToString(this.confFile, StandardCharsets.UTF_8);
       Metadata replaceMet = new Metadata();
       replaceMet.addMetadata(extractorKey,
           new File(this.confFile.getParent(), expectedBinName).getAbsolutePath());
       confFileContents = PathUtils.replaceEnvVariables(confFileContents, replaceMet);
-      FileUtils.writeStringToFile(this.confFile, confFileContents);
+      FileUtils.writeStringToFile(this.confFile, confFileContents, StandardCharsets.UTF_8);
     }
 }
