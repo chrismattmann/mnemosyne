@@ -61,7 +61,13 @@ public class SolrClient {
 		this.productSerializer = productSerializer;
 		try {
 			new URI(url).toURL();
-			this.server = new HttpJdkSolrClient.Builder(url).build();
+			// Solr's h2c transport can reset update requests on native Windows
+			// (JDK HttpClient reports RST_STREAM / protocol error). File Manager
+			// traffic does not benefit from multiplexing, so use the portable
+			// HTTP/1.1 path on every platform.
+			this.server = new HttpJdkSolrClient.Builder(url)
+					.useHttp1_1(true)
+					.build();
 		} catch (MalformedURLException | URISyntaxException
 				| IllegalArgumentException e) {
 			throw new IllegalArgumentException(
