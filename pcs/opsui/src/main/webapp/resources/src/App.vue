@@ -102,6 +102,7 @@ import {
   getCondition, getConfig, getHealth, getInstance, getInstances, getPedigree, getProduct,
   getResources, getStatuses, getTask, getTypeProducts, getTypes, getWorkflow, getWorkflows, queryCatalog
 } from './api.js'
+import { loadResourceOverview, runSecondary } from './resourceLoad.js'
 import { catalogSqlError } from './sqlQuery.js'
 import { productRoute } from './productRef.js'
 import { instancesRequest } from './instancesRequest.js'
@@ -510,9 +511,13 @@ export default {
             searchPayload.value = await queryCatalog(sql)
           }
         } else if (r.view === 'resources') {
-          const [res, healthBody] = await Promise.all([getResources(), getHealth()])
-          resourcePayload.value = res
-          health.value = healthBody.report || healthBody
+          await loadResourceOverview({
+            getResources,
+            getHealth,
+            current: () => seq === loadSeq,
+            resource: res => { resourcePayload.value = res },
+            health: healthBody => { health.value = healthBody.report || healthBody }
+          })
         } else if (r.view === 'type') {
           typePayload.value = await loadTypePages({
             name: r.name,
@@ -530,22 +535,25 @@ export default {
             productPayload.value = body.product || body
             pedigree.value = null
             const name = (body.product && body.product.name) || r.id
-            try {
-              pedigree.value = await getPedigree(name)
-            } catch (e) {
-              pedigree.value = { error: e.message }
-            }
+            runSecondary(
+              () => getPedigree(name),
+              () => seq === loadSeq,
+              value => { pedigree.value = value },
+              e => { pedigree.value = { error: e.message } }
+            )
           }
         } else if (r.view === 'instances') {
-          // Ask the deployment what its lifecycle declares, once. Falls back
-          // to the built-in list if this manager cannot answer.
+          // Status vocabulary and workflow definitions support the filters,
+          // but neither is required to show the instance page itself. During
+          // a busy manager they must not hold an available page behind a
+          // spinner.
           if (!lifecycleStatuses.value.length) {
-            try {
-              const body = await getStatuses()
-              lifecycleStatuses.value = body.statuses || []
-            } catch (ignored) {
-              lifecycleStatuses.value = []
-            }
+            runSecondary(
+              getStatuses,
+              () => seq === loadSeq,
+              body => { lifecycleStatuses.value = body.statuses || [] },
+              () => { lifecycleStatuses.value = [] }
+            )
           }
           // Filter where the instances are, not after a page of them has
           // arrived. Filtering the page meant paging still walked every
@@ -553,26 +561,34 @@ export default {
           // pages in, behind pages that looked empty because everything on
           // them belonged to some other workflow.
           const ask = instancesRequest(r)
-          const [page, defs] = await Promise.all([
-            getInstances(ask.status, ask.page, ask.workflow, ask.sort, ask.dir),
-            getWorkflows()
-          ])
-          instancePayload.value = page
-          workflows.value = defs.workflows || []
+          instancePayload.value = await getInstances(
+            ask.status, ask.page, ask.workflow, ask.sort, ask.dir)
+          runSecondary(
+            getWorkflows,
+            () => seq === loadSeq,
+            defs => { workflows.value = defs.workflows || [] }
+          )
         } else if (r.view === 'instance') {
           instanceDetail.value = await getInstance(r.id)
         } else if (r.view === 'workflows') {
           const body = await getWorkflows()
           workflows.value = body.workflows || []
         } else if (r.view === 'workflow') {
-          const [def, insts] = await Promise.all([
-            getWorkflow(r.id),
-            getInstances('ALL', 1, r.id)
-          ])
+          const def = await getWorkflow(r.id)
           workflowPayload.value = {
             workflow: def.workflow || def,
-            page: (insts && insts.page) || { instances: [] }
+            page: { instances: [] }
           }
+          runSecondary(
+            () => getInstances('ALL', 1, r.id),
+            () => seq === loadSeq,
+            insts => {
+              workflowPayload.value = {
+                workflow: def.workflow || def,
+                page: (insts && insts.page) || { instances: [] }
+              }
+            }
+          )
         } else if (r.view === 'task') {
           taskPayload.value = await getTask(r.id)
         } else if (r.view === 'condition') {
