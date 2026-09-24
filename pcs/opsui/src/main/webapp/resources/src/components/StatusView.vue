@@ -21,7 +21,6 @@
       <p class="muted">
         <span v-if="generated">Report {{ generated }}</span>
         <span v-if="ago"> · refreshed {{ ago }}</span>
-        <span v-if="refreshing" class="pill warn">refreshing</span>
         <span v-if="stale" class="pill warn">stale</span>
       </p>
     </div>
@@ -170,7 +169,6 @@ export default {
       const value = (props.report && props.report.generated) || ''
       return value === 'pending' ? '' : value
     })
-    const refreshing = computed(() => Boolean(props.report && props.report.refreshing))
     const now = ref(Date.now())
     let tick = null
     const ago = computed(() => formatAgo(props.refreshedAt, now.value))
@@ -265,7 +263,7 @@ export default {
     })
 
     return {
-      up, onDemandPill, onDemandLabel, crawlCount, avgTime, generated, refreshing, ago, daemons, stubs, jobs, jobsKnown, sortedJobs,
+      up, onDemandPill, onDemandLabel, crawlCount, avgTime, generated, ago, daemons, stubs, jobs, jobsKnown, sortedJobs,
       jobSort, jobDir, sortJobs, crawlers, files, filesEmpty
     }
   }
