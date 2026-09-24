@@ -89,9 +89,18 @@ the License.
   -->
   <dependencyManagement>
     <dependencies>
+      <!--
+        aws-java-sdk-s3, not aws-java-sdk. The umbrella artifact depends
+        on every service SDK Amazon publishes: 140 jars and 88.8MB of
+        alexaforbusiness, cloud9, workmail, transcribe, macie, eks and the
+        rest. The only one this platform calls is S3, from
+        S3DataTransferer. Those jars shipped inside every published war;
+        cas-product, pcs-opsui and pcs-services are 128MB each and two
+        thirds of that is AWS services nothing here imports.
+      -->
       <dependency>
         <groupId>com.amazonaws</groupId>
-        <artifactId>aws-java-sdk</artifactId>
+        <artifactId>aws-java-sdk-s3</artifactId>
         <version>1.11.396</version>
       </dependency>
       <dependency>
