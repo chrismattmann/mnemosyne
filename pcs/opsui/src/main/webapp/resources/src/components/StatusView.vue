@@ -21,10 +21,14 @@
       <p class="muted">
         <span v-if="generated">Report {{ generated }}</span>
         <span v-if="ago"> · refreshed {{ ago }}</span>
+        <span v-if="refreshing" class="pill warn">refreshing</span>
         <span v-if="stale" class="pill warn">stale</span>
       </p>
     </div>
     <p v-if="loading && !report" class="empty">Loading health report…</p>
+    <p v-else-if="report && report.available === false" class="empty">
+      Collecting the first health snapshot…
+    </p>
     <template v-else-if="report">
       <div class="grid">
         <article v-for="daemon in daemons" :key="daemon.key" class="card daemon">
@@ -162,7 +166,11 @@ export default {
       return missingStat(crawler.avgCrawlTime) ? 'N/A' : crawler.avgCrawlTime
     }
 
-    const generated = computed(() => (props.report && props.report.generated) || '')
+    const generated = computed(() => {
+      const value = (props.report && props.report.generated) || ''
+      return value === 'pending' ? '' : value
+    })
+    const refreshing = computed(() => Boolean(props.report && props.report.refreshing))
     const now = ref(Date.now())
     let tick = null
     const ago = computed(() => formatAgo(props.refreshedAt, now.value))
@@ -257,7 +265,7 @@ export default {
     })
 
     return {
-      up, onDemandPill, onDemandLabel, crawlCount, avgTime, generated, ago, daemons, stubs, jobs, jobsKnown, sortedJobs,
+      up, onDemandPill, onDemandLabel, crawlCount, avgTime, generated, refreshing, ago, daemons, stubs, jobs, jobsKnown, sortedJobs,
       jobSort, jobDir, sortJobs, crawlers, files, filesEmpty
     }
   }
