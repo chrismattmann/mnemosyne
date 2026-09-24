@@ -147,7 +147,9 @@ public class SolrIndexer {
 			new URI(this.solrUrl).toURL();
 			// HttpJdkSolrClient speaks over the JDK's own HTTP client, so the
 			// Solr route no longer brings an HTTP stack of its own.
-			server = new HttpJdkSolrClient.Builder(this.solrUrl).build();
+			server = new HttpJdkSolrClient.Builder(this.solrUrl)
+					.useHttp1_1(true)
+					.build();
 		} catch (MalformedURLException | URISyntaxException
 				| IllegalArgumentException e) {
 			LOG.severe("Could not connect to Solr server " + this.solrUrl);
