@@ -143,7 +143,7 @@ public class TestIngestProductCliAction extends TestCase {
       assertEquals(Product.STRUCTURE_FLAT, clientSetProduct.getProductStructure());
       assertEquals(PRODUCT_TYPE_NAME, clientSetProduct.getProductType().getName());
       assertEquals(1, clientSetProduct.getProductReferences().size());
-      assertEquals("file:" + flatRefFile.getAbsolutePath(), clientSetProduct.getProductReferences().get(0).getOrigReference());
+      assertEquals(flatRefFile.toURI().toString(), clientSetProduct.getProductReferences().get(0).getOrigReference());
       assertEquals(DATA_TRANSFERER, clientSetDataTransferer.getClass().getCanonicalName());
       assertEquals(2, clientSetMetadata.getAllKeys().size());
       assertEquals(FILENAME_MET_VAL, clientSetMetadata.getMetadata(FILENAME_MET_KEY));
@@ -166,7 +166,7 @@ public class TestIngestProductCliAction extends TestCase {
       assertEquals(Product.STRUCTURE_FLAT, clientSetProduct.getProductStructure());
       assertEquals(PRODUCT_TYPE_NAME, clientSetProduct.getProductType().getName());
       assertEquals(1, clientSetProduct.getProductReferences().size());
-      assertEquals("file:" + flatRefFile.getAbsolutePath(), clientSetProduct.getProductReferences().get(0).getOrigReference());
+      assertEquals(flatRefFile.toURI().toString(), clientSetProduct.getProductReferences().get(0).getOrigReference());
       assertNull(clientSetDataTransferer);
       assertEquals(2, clientSetMetadata.getAllKeys().size());
       assertEquals(FILENAME_MET_VAL, clientSetMetadata.getMetadata(FILENAME_MET_KEY));
@@ -196,9 +196,9 @@ public class TestIngestProductCliAction extends TestCase {
             return ref1.getOrigReference().compareTo(ref2.getOrigReference());
          }
       });
-      assertEquals("file:" + hierRefFile.getAbsolutePath() + "/", clientSetProduct.getProductReferences().get(0).getOrigReference());
-      assertEquals("file:" + new File(hierRefFile, SUB_REF_1).getAbsolutePath(), clientSetProduct.getProductReferences().get(1).getOrigReference());
-      assertEquals("file:" + new File(hierRefFile, SUB_REF_2).getAbsolutePath(), clientSetProduct.getProductReferences().get(2).getOrigReference());
+      assertEquals(hierRefFile.toURI().toString(), clientSetProduct.getProductReferences().get(0).getOrigReference());
+      assertEquals(new File(hierRefFile, SUB_REF_1).toURI().toString(), clientSetProduct.getProductReferences().get(1).getOrigReference());
+      assertEquals(new File(hierRefFile, SUB_REF_2).toURI().toString(), clientSetProduct.getProductReferences().get(2).getOrigReference());
       assertEquals(DATA_TRANSFERER, clientSetDataTransferer.getClass().getCanonicalName());
       assertEquals(2, clientSetMetadata.getAllKeys().size());
       assertEquals(FILENAME_MET_VAL, clientSetMetadata.getMetadata(FILENAME_MET_KEY));
@@ -227,9 +227,9 @@ public class TestIngestProductCliAction extends TestCase {
             return ref1.getOrigReference().compareTo(ref2.getOrigReference());
          }
       });
-      assertEquals("file:" + hierRefFile.getAbsolutePath() + "/", clientSetProduct.getProductReferences().get(0).getOrigReference());
-      assertEquals("file:" + new File(hierRefFile, SUB_REF_1).getAbsolutePath(), clientSetProduct.getProductReferences().get(1).getOrigReference());
-      assertEquals("file:" + new File(hierRefFile, SUB_REF_2).getAbsolutePath(), clientSetProduct.getProductReferences().get(2).getOrigReference());
+      assertEquals(hierRefFile.toURI().toString(), clientSetProduct.getProductReferences().get(0).getOrigReference());
+      assertEquals(new File(hierRefFile, SUB_REF_1).toURI().toString(), clientSetProduct.getProductReferences().get(1).getOrigReference());
+      assertEquals(new File(hierRefFile, SUB_REF_2).toURI().toString(), clientSetProduct.getProductReferences().get(2).getOrigReference());
       assertNull(clientSetDataTransferer);
       assertEquals(2, clientSetMetadata.getAllKeys().size());
       assertEquals(FILENAME_MET_VAL, clientSetMetadata.getMetadata(FILENAME_MET_KEY));

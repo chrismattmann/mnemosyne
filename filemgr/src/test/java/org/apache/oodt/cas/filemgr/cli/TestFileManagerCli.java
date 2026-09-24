@@ -310,8 +310,9 @@ public class TestFileManagerCli extends TestCase {
       assertEquals(productTypeName,
             ((Product) methodCallDetails.getArgs().get(0)).getProductType()
                   .getName());
-      assertTrue(((Product) methodCallDetails.getArgs().get(0))
-            .getProductReferences().get(0).getOrigReference().endsWith(ref));
+      assertEquals(new File(ref).toURI().toString(),
+            ((Product) methodCallDetails.getArgs().get(0))
+                  .getProductReferences().get(0).getOrigReference());
 
       assertEquals("test.txt",
             ((Metadata) methodCallDetails.getArgs().get(1))

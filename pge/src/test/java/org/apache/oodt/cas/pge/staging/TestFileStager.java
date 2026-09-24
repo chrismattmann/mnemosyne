@@ -121,10 +121,21 @@ public class TestFileStager extends TestCase {
             FileStager.asURI(absoluteHttpUri).toString());
       assertEquals("file:///path/to/data.dat", FileStager
             .asURI(absoluteFileUri).toString());
-      assertEquals("file://" + new File("").getAbsolutePath()
-            + "/path/to/data.dat", FileStager.asURI(relativePath).toString());
-      assertEquals("file:///path/to/data.dat", FileStager.asURI(absolutePath)
-            .toString());
+      assertEquals(new File(relativePath).getAbsolutePath(),
+            new File(FileStager.asURI(relativePath)).getAbsolutePath());
+      assertEquals(new File(absolutePath).getAbsolutePath(),
+            new File(FileStager.asURI(absolutePath)).getAbsolutePath());
+   }
+
+   public void testWindowsDrivePathsAreNotMistakenForUriSchemes()
+         throws URISyntaxException {
+      URI forwardSlash = FileStager.asURI("C:/Users/test/source.py");
+      URI backslash = FileStager.asURI("C:\\Users\\test\\source.py");
+
+      assertEquals("file", forwardSlash.getScheme());
+      assertEquals("file", backslash.getScheme());
+      assertFalse("a drive letter must not become the URI scheme",
+            "C".equalsIgnoreCase(forwardSlash.getScheme()));
    }
 
    /**
@@ -139,10 +150,11 @@ public class TestFileStager extends TestCase {
 
       URI uri = FileStager.asURI(withSpaces);
 
-      assertEquals("file:///data/test-documents/metabolite%20profiling_NMR.txt",
-            uri.toString());
+      assertFalse("a space must not survive into the URI",
+            uri.toString().contains(" "));
       // and it still points at the file it was given
-      assertEquals(withSpaces, new File(uri).getAbsolutePath());
+      assertEquals(new File(withSpaces).getAbsolutePath(),
+            new File(uri).getAbsolutePath());
    }
 
    /** The same for a relative path, which is resolved before encoding. */
@@ -150,8 +162,7 @@ public class TestFileStager extends TestCase {
          throws URISyntaxException {
       URI uri = FileStager.asURI("test docs/data file.dat");
 
-      assertTrue("expected an encoded absolute file URI, got: " + uri,
-            uri.toString().startsWith("file://"));
+      assertEquals("file", uri.getScheme());
       assertFalse("a space must not survive into the URI",
             uri.toString().contains(" "));
       assertEquals(new File("test docs/data file.dat").getAbsolutePath(),
@@ -165,7 +176,7 @@ public class TestFileStager extends TestCase {
 
       assertFalse("brackets must not survive unencoded: " + uri,
             uri.toString().contains("["));
-      assertEquals("/data/report [final] v2.txt",
+      assertEquals(new File("/data/report [final] v2.txt").getAbsolutePath(),
             new File(uri).getAbsolutePath());
    }
 

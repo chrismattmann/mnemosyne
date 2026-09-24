@@ -24,6 +24,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Vector;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -39,6 +43,7 @@ import net.sf.json.JSONObject;
 //OODT imports
 import org.apache.oodt.cas.filemgr.metadata.CoreMetKeys;
 import org.apache.oodt.cas.filemgr.structs.Product;
+import org.apache.oodt.cas.filemgr.util.RpcCommunicationFactory;
 import org.apache.oodt.cas.metadata.Metadata;
 import org.apache.oodt.pcs.health.CrawlerHealth;
 import org.apache.oodt.pcs.health.CrawlerStatus;
@@ -68,6 +73,24 @@ public class HealthResource extends PCSService {
 
   private static PCSHealthMonitor mon;
 
+  /*
+   * A health report crosses three services and enriches the latest products.
+   * Never make a Tomcat request thread wait for all of that work: under ingest
+   * pressure a perfectly healthy File Manager can take longer than the UI's
+   * request timeout.  One daemon worker refreshes the shared snapshot while
+   * every caller receives the last completed snapshot immediately.
+   */
+  private static volatile Map<String, Object> cachedHealthReport;
+  private static final AtomicBoolean healthRefreshRunning = new AtomicBoolean();
+  private static final ExecutorService healthRefreshExecutor =
+      Executors.newSingleThreadExecutor(new ThreadFactory() {
+        public Thread newThread(Runnable task) {
+          Thread thread = new Thread(task, "pcs-health-report-refresh");
+          thread.setDaemon(true);
+          return thread;
+        }
+      });
+
   public HealthResource() throws MalformedURLException, InstantiationException {
     super();
   }
@@ -76,17 +99,59 @@ public class HealthResource extends PCSService {
   @Path("report")
   @Produces("text/plain")
   public String healthReport() {
+    refreshHealthReport();
+    Map<String, Object> snapshot = cachedHealthReport;
+    Map<String, Object> output = snapshot == null
+        ? emptyHealthReport() : new LinkedHashMap<String, Object>(snapshot);
+    output.put("refreshing", Boolean.valueOf(healthRefreshRunning.get()));
+    output.put("available", Boolean.valueOf(snapshot != null));
+    return this.encodeReportAsJson(output);
+  }
+
+  private void refreshHealthReport() {
+    if (!healthRefreshRunning.compareAndSet(false, true)) {
+      return;
+    }
+    healthRefreshExecutor.execute(new Runnable() {
+      public void run() {
+        try {
+          cachedHealthReport = buildHealthReport();
+        } catch (RuntimeException e) {
+          LOG.log(Level.WARNING, "Unable to refresh PCS health report", e);
+        } finally {
+          healthRefreshRunning.set(false);
+        }
+      }
+    });
+  }
+
+  private Map<String, Object> buildHealthReport() {
     PCSHealthMonitorReport report = getMonitor().getReport();
     Map<String, Object> output = new ConcurrentHashMap<String, Object>();
     output.put("generated", report.getCreateDateIsoFormat());
-    output.put("daemonStatus", this.encodeDaemonOutput(report));
-    output.put("crawlerStatus", this.encodeCrawlerHealthReportOutput(report));
-    output.put("latestFiles", this.encodeLatestFilesOutput(report));
-    output.put("jobHealth", this.encodeJobHealthStatusList(report));
+    output.put("daemonStatus", encodeDaemonOutput(report));
+    output.put("crawlerStatus", encodeCrawlerHealthReportOutput(report));
+    output.put("latestFiles", encodeLatestFilesOutput(report));
+    output.put("jobHealth", encodeJobHealthStatusList(report));
     output.put("jobHealthAvailable",
         Boolean.valueOf(workflowManagerReachable(report)));
-    output.put("ingestHealth", this.encodeIngestHealthList(report));
-    return this.encodeReportAsJson(output);
+    output.put("ingestHealth", encodeIngestHealthList(report));
+    return output;
+  }
+
+  private static Map<String, Object> emptyHealthReport() {
+    Map<String, Object> output = new LinkedHashMap<String, Object>();
+    output.put("generated", "pending");
+    output.put("daemonStatus", new LinkedHashMap<String, Object>());
+    output.put("crawlerStatus", new Vector<Object>());
+    Map<String, Object> latestFiles = new LinkedHashMap<String, Object>();
+    latestFiles.put("topN", PCSHealthMonitor.TOP_N_PRODUCTS);
+    latestFiles.put("files", new Vector<Object>());
+    output.put("latestFiles", latestFiles);
+    output.put("jobHealth", new Vector<Object>());
+    output.put("jobHealthAvailable", Boolean.FALSE);
+    output.put("ingestHealth", new Vector<Object>());
+    return output;
   }
 
   @GET
@@ -239,9 +304,9 @@ public class HealthResource extends PCSService {
     return output;
   }
 
-  private void encodeLatestFile(List<Object> latestFilesOutput, Product p) {
+  private void encodeLatestFile(List<Object> latestFilesOutput,
+      FileManagerUtils fm, Product p) {
     try {
-      FileManagerUtils fm = new FileManagerUtils(PCSService.conf.getFmUrl());
       if (p.getProductType() != null && p.getProductType().getProductTypeId() != null) {
         p.setProductType(fm.safeGetProductTypeById(p.getProductType()
             .getProductTypeId()));
@@ -340,9 +405,14 @@ public class HealthResource extends PCSService {
     if (report != null && 
         report.getLatestProductsIngested() != null && 
         report.getLatestProductsIngested().size() > 0){
-      for (Product prod : (List<Product>) (List<?>) report
-          .getLatestProductsIngested()) {
-        this.encodeLatestFile(latestFilesList, prod);
+      try (FileManagerUtils fm = new FileManagerUtils(PCSService.conf.getFmUrl(),
+          RpcCommunicationFactory.createDedicatedClient(PCSService.conf.getFmUrl()))) {
+        for (Product prod : (List<Product>) (List<?>) report
+            .getLatestProductsIngested()) {
+          this.encodeLatestFile(latestFilesList, fm, prod);
+        }
+      } catch (Exception e) {
+        LOG.log(Level.WARNING, "Unable to enrich latest files: " + e.getMessage());
       }
     }
     latestFilesOutput.put("files", latestFilesList);

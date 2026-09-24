@@ -99,7 +99,8 @@ public final class XmlStructFactory {
                     productTypeElem, true);
         }
 
-        repositoryPath = PathUtils.replaceEnvVariables(repositoryPath);
+        repositoryPath = normalizeRepositoryPath(
+                PathUtils.replaceEnvVariables(repositoryPath));
 
         // grab metadata
         Metadata met = new Metadata();
@@ -214,6 +215,15 @@ public final class XmlStructFactory {
         productType.setHandlers(handlers);
 
         return productType;
+    }
+
+    static String normalizeRepositoryPath(String repositoryPath) {
+        if (repositoryPath != null
+                && repositoryPath.matches("^file://[A-Za-z]:[\\\\/].*")) {
+            return "file:///" + repositoryPath.substring("file://".length())
+                    .replace('\\', '/');
+        }
+        return repositoryPath;
     }
 
     public static void writeProductTypeMapXmLDocument(ConcurrentHashMap<String, List<org.apache.oodt.cas.filemgr.structs.Element>> productTypeMap,

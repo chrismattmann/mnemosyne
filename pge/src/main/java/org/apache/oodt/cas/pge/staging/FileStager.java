@@ -124,22 +124,15 @@ public abstract class FileStager {
 
       try {
          URI uri = new URI(path);
-         if (uri.getScheme() != null) {
+         if (uri.getScheme() != null
+               && !path.matches("^[A-Za-z]:[\\\\/].*")) {
             return uri;
          }
       } catch (URISyntaxException e) {
          // Not a URI, so it is a path. Fall through and encode it.
       }
 
-      try {
-         // The empty authority keeps the file:/// form that callers and the
-         // existing behaviour expect; the constructor encodes the path.
-         return new URI("file", "", new File(path).getAbsolutePath(), null,
-               null);
-      } catch (URISyntaxException e) {
-         throw new IllegalArgumentException(
-               "Unable to express as a URI: [" + path + "]", e);
-      }
+      return new File(path).toURI();
    }
 
    protected abstract void stageFile(URI stageFile, File destDir,
