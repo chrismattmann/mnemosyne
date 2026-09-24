@@ -1,0 +1,11 @@
+# Batch files are parsed by cmd.exe, which reads them line by line and is not
+# reliable on LF-only input: a label or a multi-line block can be mis-parsed,
+# and the failure is silent. Check them out with CRLF on every platform so a
+# fixture that works today cannot break when someone adds a goto to it.
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Shell scripts are the mirror image: CRLF in a #! script makes the kernel
+# look for an interpreter with a trailing carriage return and report the
+# file as not found.
+*.sh text eol=lf

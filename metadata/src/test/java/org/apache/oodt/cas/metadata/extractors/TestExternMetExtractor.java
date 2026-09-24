@@ -27,7 +27,9 @@ import org.apache.oodt.commons.exec.ExecHelper;
 
 //JDK imports
 import java.io.File;
+import java.nio.charset.StandardCharsets;
 import java.net.URLEncoder;
+import java.util.Locale;
 
 /**
  * 
@@ -108,7 +110,9 @@ public class TestExternMetExtractor extends MetadataTestCase {
     super.setUp();
     String configFilename = "/extern-config.xml";
     String extractFilename = "/testfile.txt";
-    String extractorFilename = "/testExtractor";
+    boolean isWindows = System.getProperty("os.name").toLowerCase(Locale.ROOT)
+        .contains("win");
+    String extractorFilename = isWindows ? "/testExtractor.cmd" : "/testExtractor";
     String sampleMetFilename = "/samplemet.xml";
     
     this.confFile = super.getTestDataFile(configFilename);
@@ -118,32 +122,43 @@ public class TestExternMetExtractor extends MetadataTestCase {
     
     File extractorFile = super.getTestDataFile(extractorFilename);
     
-    // make it executable
-    // yes this is ghetto
-    String chmodCmd = "chmod +x "+extractorFile.getAbsolutePath();
-    ExecHelper.execUsingShell(chmodCmd);
+    if (!isWindows) {
+      String chmodCmd = "chmod +x " + extractorFile.getAbsolutePath();
+      ExecHelper.execUsingShell(chmodCmd);
+    }
     
     // replace the FileLocation met field in the sample met file
     // with the actual file location of the extractFile
     File sampleMetFile = super.getTestDataFile(sampleMetFilename);
-    String sampleMetFileContents = FileUtils.readFileToString(sampleMetFile);
+    String sampleMetFileContents = FileUtils.readFileToString(sampleMetFile, StandardCharsets.UTF_8);
     String extractFileLocKey = "[EXTRACT_FILE_LOC]";
     sampleMetFileContents = sampleMetFileContents.replace(extractFileLocKey, URLEncoder.encode(extractFile.getParent(), "UTF-8"));
-    FileUtils.writeStringToFile(sampleMetFile, sampleMetFileContents, "UTF-8");
+    FileUtils.writeStringToFile(sampleMetFile, sampleMetFileContents, StandardCharsets.UTF_8);
     
     // replace the path to the sample met file inside of testExtractor
-    String extractorFileContents = FileUtils.readFileToString(extractorFile);
+    String extractorFileContents = FileUtils.readFileToString(extractorFile, StandardCharsets.UTF_8);
     String sampleMetFilePathKey = "<TEST_SAMPLE_MET_PATH>";
     extractorFileContents = extractorFileContents.replace(sampleMetFilePathKey, sampleMetFile.getAbsolutePath());
-    FileUtils.writeStringToFile(extractorFile, extractorFileContents);
+    FileUtils.writeStringToFile(extractorFile, extractorFileContents, StandardCharsets.UTF_8);
     
-    // replace path in confFile named TEST_PATH
-    String testPathKey = "TEST_PATH";
-    String confFileContents = FileUtils.readFileToString(this.confFile);
+    // Use cmd.exe to launch the batch fixture on Windows. Unix can execute the
+    // staged shell script directly, preserving the behavior covered before.
+    String confFileContents = FileUtils.readFileToString(this.confFile, StandardCharsets.UTF_8);
+    String extractorCommand = extractorFile.getAbsolutePath();
+    String launcherArgs = "";
+    if (isWindows) {
+      extractorCommand = System.getenv("ComSpec");
+      if (extractorCommand == null || extractorCommand.isEmpty()) {
+        extractorCommand = "cmd.exe";
+      }
+      launcherArgs = "<arg>/c</arg><arg>" + extractorFile.getAbsolutePath()
+          + "</arg>";
+    }
     Metadata replaceMet = new Metadata();
-    replaceMet.addMetadata(testPathKey, extractorFile.getParent());
-    confFileContents = PathUtils.replaceEnvVariables(confFileContents, replaceMet);
-    FileUtils.writeStringToFile(this.confFile, confFileContents);
+    replaceMet.addMetadata("TEST_EXTRACTOR", extractorCommand);
+    confFileContents = PathUtils.replaceEnvVariables(confFileContents, replaceMet)
+        .replace("<!-- TEST_LAUNCH_ARGS -->", launcherArgs);
+    FileUtils.writeStringToFile(this.confFile, confFileContents, StandardCharsets.UTF_8);
 
 
     try {

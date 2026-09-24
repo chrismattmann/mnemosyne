@@ -26,6 +26,7 @@ import org.apache.oodt.cas.metadata.util.PathUtils;
 
 //JDK imports
 import java.io.File;
+import java.nio.charset.StandardCharsets;
 
 //Junit imports
 
@@ -51,7 +52,7 @@ public class TestExternMetExtractorConfigReader extends MetadataTestCase {
     
     private static final String configFilePath = "/extern-config.xml";
 
-    private static final String expectedBinPathEnding = "/testExtractor";
+    private static final String expectedBinName = "testExtractor";
 
     private static final String arg1 = ExternMetExtractorMetKeys.DATA_FILE_PLACE_HOLDER;
 
@@ -78,7 +79,7 @@ public class TestExternMetExtractorConfigReader extends MetadataTestCase {
         assertNotNull(config);
         assertNotNull(config.getWorkingDirPath());
         assertEquals("", config.getWorkingDirPath());
-        assertTrue(config.getExtractorBinPath().endsWith(expectedBinPathEnding));
+        assertEquals(expectedBinName, new File(config.getExtractorBinPath()).getName());
         assertTrue(config.getExtractorBinPath().indexOf("[") == -1);
         assertTrue(config.getExtractorBinPath().indexOf("]") == -1);
         assertNotNull(config.getArgList());
@@ -100,12 +101,13 @@ public class TestExternMetExtractorConfigReader extends MetadataTestCase {
       super.setUp();
       this.confFile = getTestDataFile(configFilePath);
       
-      // replace path in confFile named TEST_PATH
-      String testPathKey = "TEST_PATH";
-      String confFileContents = FileUtils.readFileToString(this.confFile);
+      // replace the external extractor command placeholder
+      String extractorKey = "TEST_EXTRACTOR";
+      String confFileContents = FileUtils.readFileToString(this.confFile, StandardCharsets.UTF_8);
       Metadata replaceMet = new Metadata();
-      replaceMet.addMetadata(testPathKey, this.confFile.getParent());
+      replaceMet.addMetadata(extractorKey,
+          new File(this.confFile.getParent(), expectedBinName).getAbsolutePath());
       confFileContents = PathUtils.replaceEnvVariables(confFileContents, replaceMet);
-      FileUtils.writeStringToFile(this.confFile, confFileContents);
+      FileUtils.writeStringToFile(this.confFile, confFileContents, StandardCharsets.UTF_8);
     }
 }

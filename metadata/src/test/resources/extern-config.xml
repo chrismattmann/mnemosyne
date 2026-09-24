@@ -33,7 +33,7 @@ the License.
 		<!--  you can optionally specify envReplace tag (=true) 
 		      to turn on environment variable replacement
 		-->
-		<extractorBinPath>[TEST_PATH]/testExtractor</extractorBinPath>
+		<extractorBinPath>[TEST_EXTRACTOR]</extractorBinPath>
 
 		<!--  make sure to use character entities if there are any weird
 			parameters here that would screw up the XML.
@@ -46,6 +46,7 @@ the License.
 			met extractor.
 		-->
 		<args>
+			<!-- TEST_LAUNCH_ARGS -->
 			<arg isDataFile="true"/>
 			<arg isMetFile="true"/>
 			<arg>-Dtrue=always</arg>

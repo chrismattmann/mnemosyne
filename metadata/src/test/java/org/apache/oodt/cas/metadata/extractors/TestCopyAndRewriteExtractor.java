@@ -117,9 +117,13 @@ public class TestCopyAndRewriteExtractor extends MetadataTestCase {
     
     // we need to compute and override orig.met.file.path
     Properties confProps = new Properties();
-    confProps.load(new FileInputStream(confFile));
+    try (FileInputStream input = new FileInputStream(confFile)) {
+      confProps.load(input);
+    }
     confProps.setProperty(origMetFilePath, sampleMetFile.getAbsolutePath());
-    confProps.store(new FileOutputStream(confFile), null);
+    try (FileOutputStream output = new FileOutputStream(confFile)) {
+      confProps.store(output, null);
+    }
     
 
     try {
@@ -130,8 +134,8 @@ public class TestCopyAndRewriteExtractor extends MetadataTestCase {
     
     
     CopyAndRewriteConfig config = new CopyAndRewriteConfig();
-    try {
-      config.load(new FileInputStream(this.confFile));
+    try (FileInputStream input = new FileInputStream(this.confFile)) {
+      config.load(input);
     } catch (Exception e) {
       fail(e.getMessage());
     }
