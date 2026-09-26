@@ -93,6 +93,23 @@ public class TestLocalDataTransferer extends TestCase {
             FileUtils.contentEquals(origFile, destFile));
    }
 
+   /** Remote transfer asks the server to remove a native destination path. */
+   public void testDeleteProductAcceptsNativePath()
+         throws DataTransferException, IOException {
+      File existing = new File(repoDir, "delete me.txt");
+      assertTrue(existing.createNewFile());
+
+      Product product = Product.getDefaultFlatProduct("delete me",
+            "urn:oodt:GenericFile");
+      product.getProductReferences().add(new Reference(
+            origFile.toURI().toString(), existing.getAbsolutePath(),
+            existing.length()));
+
+      transfer.deleteProduct(product);
+
+      assertFalse("Native-path product was not deleted", existing.exists());
+   }
+
    private Product createDummyProduct() {
       Product testProduct = Product.getDefaultFlatProduct("test",
             "urn:oodt:GenericFile");

@@ -182,16 +182,22 @@ public class LocalDataTransferer implements DataTransfer {
    @Override
    public void deleteProduct(Product product) throws DataTransferException, IOException {
      for (Reference ref : product.getProductReferences()) {
-       String u;
+       File dataFile;
+       String reference = ref.getDataStoreReference();
        try {
-          u = URI.create(ref.getDataStoreReference()).toURL().getPath();
+          URI uri = URI.create(reference);
+          dataFile = uri.getScheme() == null ? new File(reference) : new File(uri);
        }
        catch (IllegalArgumentException e) {
-         u = URI.create("file://"+ref.getDataStoreReference()).toURL().getPath();
+         // RemoteDataTransferer deliberately sends a native destination
+         // path to removeFile before overwriting it. A Windows drive is not
+         // a file URI: prefixing it with "file://" produces file://C:\\...
+         // and makes C the URI authority. Treat a non-URI as the native path
+         // it already is.
+         dataFile = new File(reference);
        }
-       File dataFile = new File(u);
        if (!dataFile.exists()) {
-         LOG.warning("Couldn't file file to be deleted: " + dataFile.getAbsolutePath());
+         LOG.warning("Couldn't find file to be deleted: " + dataFile.getAbsolutePath());
          return;
        }
        if (!dataFile.delete()) {
