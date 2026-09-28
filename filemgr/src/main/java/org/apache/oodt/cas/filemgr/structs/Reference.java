@@ -137,7 +137,7 @@ public class Reference implements Serializable {
         // org.apache.oodt.cas.filemgr.mime.type.repository was bypassed for
         // the detection half.
         try {
-            this.mimeType = mimeTypeRepository.getMimeType(origRef);
+            this.mimeType = ReferenceMimeTypeDetectors.configured().detect(origRef, mimeTypeRepository);
         } catch (Exception e) {
             LOG.log(Level.WARNING, "Unable to determine a mime type for ["
                     + origRef + "]: " + e.getMessage());
