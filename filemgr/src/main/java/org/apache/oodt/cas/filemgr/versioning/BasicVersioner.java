@@ -21,11 +21,11 @@ package org.apache.oodt.cas.filemgr.versioning;
 import org.apache.oodt.cas.filemgr.structs.Product;
 import org.apache.oodt.cas.filemgr.structs.Reference;
 import org.apache.oodt.cas.filemgr.structs.exceptions.VersioningException;
+import org.apache.oodt.cas.filemgr.util.FileRefs;
 import org.apache.oodt.cas.metadata.Metadata;
 
 import java.io.File;
 import java.io.UnsupportedEncodingException;
-import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URLEncoder;
@@ -84,13 +84,14 @@ public class BasicVersioner implements Versioner {
             String dataStoreRef;
 
             try {
-                dataStoreRef = new File(new URI(productRepoPath)).toURI().toURL()
-                        .toExternalForm();
-                if(!dataStoreRef.endsWith("/")){
-                  dataStoreRef+="/";
-                }
-                
-                dataStoreRef+= URLEncoder.encode(productName, "UTF-8") + "/";
+                // URI arithmetic, not a round trip through the local
+                // filesystem: see FileRefs. A client on Windows resolved the
+                // repository's leading "/" against its own current drive and
+                // stamped the drive into a reference that names a directory on
+                // the File Manager, not on itself.
+                dataStoreRef = FileRefs.child(
+                        FileRefs.directoryReference(productRepoPath),
+                        URLEncoder.encode(productName, "UTF-8")) + "/";
                 LOG.log(Level.INFO, "BasicVersioner: generated DataStore ref: "
                         + dataStoreRef + " from origRef: "
                         + r.getOrigReference());
@@ -100,12 +101,6 @@ public class BasicVersioner implements Versioner {
             } catch (URISyntaxException e) {
                 LOG.log(Level.WARNING,
                         "BasicVersioner: URISyntaxException while generating initial "
-                                + "data store ref for origRef: "
-                                + r.getOrigReference());
-                throw new VersioningException(e);
-            } catch (MalformedURLException e) {
-                LOG.log(Level.WARNING,
-                        "BasicVersioner: MalformedURLException while generating initial "
                                 + "data store ref for origRef: "
                                 + r.getOrigReference());
                 throw new VersioningException(e);

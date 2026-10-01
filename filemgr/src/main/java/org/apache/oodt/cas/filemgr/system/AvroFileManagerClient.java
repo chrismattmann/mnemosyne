@@ -512,7 +512,18 @@ public class AvroFileManagerClient implements FileManagerClient {
     @Override
     public void transferFile(String filePath, byte[] fileData, int offset, int numBytes) throws DataTransferException {
         try {
-            this.proxy.transferFile(filePath, ByteBuffer.wrap(fileData), offset, numBytes);
+            // The server returns false when it will not accept the
+            // destination -- a path it cannot resolve on its own filesystem,
+            // for instance one that is absolute on this machine and relative
+            // on that one. FileManagerClient declares this void, so that
+            // answer had nowhere to go and a refusal was indistinguishable
+            // from a transfer. It is an exception now.
+            if (!this.proxy.transferFile(filePath, ByteBuffer.wrap(fileData), offset, numBytes)) {
+                throw new DataTransferException("The file manager refused "
+                        + numBytes + " bytes at offset " + offset
+                        + " destined for [" + filePath + "]; see its log for "
+                        + "the reason");
+            }
         } catch (AvroRemoteException e) {
             throw new DataTransferException(describe(e), e);
         }

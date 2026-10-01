@@ -23,6 +23,7 @@ import org.apache.oodt.cas.filemgr.structs.Product;
 import org.apache.oodt.cas.filemgr.structs.Reference;
 import org.apache.oodt.cas.filemgr.structs.exceptions.ConnectionException;
 import org.apache.oodt.cas.filemgr.structs.exceptions.DataTransferException;
+import org.apache.oodt.cas.filemgr.util.FileRefs;
 import org.apache.oodt.cas.filemgr.system.FileManagerClient;
 import org.apache.oodt.cas.filemgr.util.RpcCommunicationFactory;
 import org.apache.oodt.cas.filemgr.versioning.VersioningUtils;
@@ -182,20 +183,16 @@ public class LocalDataTransferer implements DataTransfer {
    @Override
    public void deleteProduct(Product product) throws DataTransferException, IOException {
      for (Reference ref : product.getProductReferences()) {
-       File dataFile;
-       String reference = ref.getDataStoreReference();
-       try {
-          URI uri = URI.create(reference);
-          dataFile = uri.getScheme() == null ? new File(reference) : new File(uri);
-       }
-       catch (IllegalArgumentException e) {
-         // RemoteDataTransferer deliberately sends a native destination
-         // path to removeFile before overwriting it. A Windows drive is not
-         // a file URI: prefixing it with "file://" produces file://C:\\...
-         // and makes C the URI authority. Treat a non-URI as the native path
-         // it already is.
-         dataFile = new File(reference);
-       }
+       // The rule this improvised is now the contract: FileRefs decides
+       // whether a value is a reference or a native path, and refuses a native
+       // path that is absolute somewhere else and relative here.
+       //
+       // RemoteDataTransferer used to send a native destination path to
+       // removeFile before overwriting it, and a Windows drive is not a file
+       // URI -- prefixing it with "file://" makes C the authority. It sends the
+       // reference now, and this still accepts a path from a client that
+       // predates that.
+       File dataFile = FileRefs.toFile(ref.getDataStoreReference());
        if (!dataFile.exists()) {
          LOG.warning("Couldn't find file to be deleted: " + dataFile.getAbsolutePath());
          return;

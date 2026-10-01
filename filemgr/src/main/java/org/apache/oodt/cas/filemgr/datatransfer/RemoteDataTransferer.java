@@ -22,6 +22,7 @@ import org.apache.oodt.cas.filemgr.structs.Product;
 import org.apache.oodt.cas.filemgr.structs.Reference;
 import org.apache.oodt.cas.filemgr.structs.exceptions.ConnectionException;
 import org.apache.oodt.cas.filemgr.structs.exceptions.DataTransferException;
+import org.apache.oodt.cas.filemgr.util.FileRefs;
 import org.apache.oodt.cas.filemgr.system.FileManagerClient;
 import org.apache.oodt.cas.filemgr.util.RpcCommunicationFactory;
 
@@ -183,20 +184,23 @@ public class RemoteDataTransferer implements DataTransfer {
       for (Reference reference : product.getProductReferences()) {
          FileOutputStream fOut = null;
          try {
-            File dataStoreFile = new File(new URI(
-                  reference.getDataStoreReference()));
-            File dest = new File(directory, dataStoreFile.getName());
+            // The data store reference goes to the File Manager as it is.
+            // Turning it into a local path here asked this machine where the
+            // File Manager keeps its archive.
+            String dataStoreRef = reference.getDataStoreReference();
+            File dest = new File(directory,
+                  FileRefs.finalSegment(dataStoreRef));
             fOut = new FileOutputStream(dest, false);
             LOG.log(
                   Level.INFO,
                   "RemoteDataTransfer: Copying File: " + "fmp:"
-                        + dataStoreFile.getAbsolutePath() + " to " + "file:"
+                        + dataStoreRef + " to " + "file:"
                         + dest.getAbsolutePath());
             byte[] fileData;
             int offset = 0;
             while (true) {
                fileData = (byte[]) client.retrieveFile(
-                     dataStoreFile.getAbsolutePath(), offset, NUM_BYTES);
+                     dataStoreRef, offset, NUM_BYTES);
                if (fileData.length <= 0) {
                  break;
                }
@@ -220,7 +224,11 @@ public class RemoteDataTransferer implements DataTransfer {
    @Override
    public void deleteProduct(Product product) throws DataTransferException, IOException {
      for (Reference ref : product.getProductReferences()) {
-       File dataFile = new File(URI.create(ref.getDataStoreReference()).toURL().getPath());
+       // Resolved here only because this delete runs on the machine that
+       // holds the data store. URL.getPath() also left the value
+       // percent-encoded, so a product whose name contained a space could
+       // not be deleted at all.
+       File dataFile = FileRefs.toFile(ref.getDataStoreReference());
        if (!dataFile.delete()) {
         throw new IOException(String.format("Failed to delete file %s - delete returned false",
             dataFile));
@@ -230,11 +238,19 @@ public class RemoteDataTransferer implements DataTransfer {
    
    private void remoteTransfer(Reference reference, Product product)
          throws URISyntaxException, DataTransferException {
-      // get the file path
-      File origFile = new File(new URI(reference.getOrigReference()));
-      File destFile = new File(new URI(reference.getDataStoreReference()));
+      // The source is ours, so it is resolved here. The destination belongs
+      // to the File Manager, so it travels as the reference it already is.
+      //
+      // It used to be sent as destFile.getAbsolutePath(): a path in this
+      // machine's syntax, meaningful only if both ends agree on syntax and
+      // on layout. From a Windows node to a POSIX File Manager that produced
+      // C:\Users\...\chunk-00001.json, which is not absolute on the
+      // receiver -- so it resolved against the File Manager's working
+      // directory and created a file named after the whole foreign path,
+      // 231485 bytes of it, under filemgr/bin. Nothing failed.
+      File origFile = FileRefs.toFile(reference.getOrigReference());
       String origFilePath = origFile.getAbsolutePath();
-      String destFilePath = destFile.getAbsolutePath();
+      String destRef = reference.getDataStoreReference();
 
       // read the file in chunk by chunk
 
@@ -249,14 +265,19 @@ public class RemoteDataTransferer implements DataTransfer {
 
          // remove the file if it already exists: this operation
          // is an overwrite
-         if (!client.removeFile(destFilePath)) {
-            LOG.log(Level.WARNING,
-                  "RemoteDataTransfer: attempt to perform overwrite of dest file: ["
-                        + destFilePath + "] failed");
+         if (!client.removeFile(destRef)) {
+            LOG.log(Level.FINE,
+                  "RemoteDataTransfer: nothing to overwrite at dest: ["
+                        + destRef + "]");
          }
 
          while ((numBytes = is.read(buf, offset, chunkSize)) != -1) {
-            client.transferFile(destFilePath, buf, offset, numBytes);
+            // A refusal by the File Manager arrives as a DataTransferException
+            // from the client, not as a return value: FileManagerClient
+            // declares this void, so the server's boolean used to be dropped
+            // on the floor and a refused destination read as a completed
+            // transfer. See AvroFileManagerClient.transferFile.
+            client.transferFile(destRef, buf, offset, numBytes);
          }
       } catch (IOException e) {
          // Raised, not logged. A transfer that could not read its source
@@ -264,7 +285,7 @@ public class RemoteDataTransferer implements DataTransfer {
          // then declared the product transferred: the catalog gained an
          // entry for bytes that never moved.
          throw new DataTransferException("Unable to read [" + origFilePath
-               + "] to transfer it to [" + destFilePath + "]: "
+               + "] to transfer it to [" + destRef + "]: "
                + e.getMessage(), e);
       } finally {
          if (is != null) {
