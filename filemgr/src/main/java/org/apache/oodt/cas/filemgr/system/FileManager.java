@@ -33,6 +33,7 @@ import org.apache.oodt.cas.filemgr.structs.query.QueryResultComparator;
 import org.apache.oodt.cas.filemgr.structs.query.filter.ObjectTimeEvent;
 import org.apache.oodt.cas.filemgr.structs.query.filter.TimeEvent;
 import org.apache.oodt.cas.filemgr.structs.type.TypeHandler;
+import org.apache.oodt.cas.filemgr.util.FileRefs;
 import org.apache.oodt.cas.filemgr.util.GenericFileManagerObjectFactory;
 import org.apache.oodt.cas.filemgr.versioning.Versioner;
 import org.apache.oodt.cas.filemgr.versioning.VersioningUtils;
@@ -675,7 +676,11 @@ public class FileManager {
         FileInputStream is = null;
         try {
             byte[] fileData = new byte[numBytes];
-            (is = new FileInputStream(filePath)).skip(offset);
+            // Resolved here, by the machine that holds the file. A caller sends
+            // the data store reference; a native path from a caller whose
+            // syntax differs from ours is refused by FileRefs rather than
+            // silently read from somewhere under the working directory.
+            (is = new FileInputStream(FileRefs.toFile(filePath))).skip(offset);
             int bytesRead = is.read(fileData);
             if (bytesRead != -1) {
                 byte[] fileDataTruncated = new byte[bytesRead];
@@ -698,7 +703,21 @@ public class FileManager {
 
     public boolean transferFile(String filePath, byte[] fileData, int offset,
                                 int numBytes) {
-        File outFile = new File(filePath);
+        // Resolved here, by the machine that owns the data store, and refused
+        // if it cannot name a file here. See FileRefs: a destination that is
+        // absolute on the sender and relative on this machine used to be
+        // resolved against the working directory, which wrote 231485 bytes
+        // into filemgr/bin under the name
+        // "C:\Users\...\chunk-00001.json\chunk-00001.json" and reported
+        // success.
+        File outFile;
+        try {
+            outFile = FileRefs.toFile(filePath);
+        } catch (IllegalArgumentException e) {
+            LOG.log(Level.SEVERE, "Refusing a transfer to [" + filePath
+                    + "]: " + e.getMessage());
+            return false;
+        }
         boolean success = true;
 
         FileOutputStream fOut = null;
@@ -714,12 +733,21 @@ public class FileManager {
                 success = false;
             }
         } else {
-            // create the output directory
-            String outFileDirPath = outFile.getAbsolutePath().substring(0,
-                    outFile.getAbsolutePath().lastIndexOf("/"));
-            LOG.log(Level.INFO, "Outfile directory: " + outFileDirPath);
-            File outFileDir = new File(outFileDirPath);
-            outFileDir.mkdirs();
+            // The parent, asked of the file rather than cut out of its path.
+            //
+            // This was substring(0, getAbsolutePath().lastIndexOf("/")), which
+            // has two faults. A File Manager running on Windows has no "/" in
+            // an absolute path at all, so lastIndexOf returns -1 and
+            // substring(0, -1) throws on every remote transfer -- which is why
+            // the File Manager could not be the Windows end of a cluster. And
+            // when the incoming path was a foreign one this machine reads as
+            // relative, the cut landed inside the working directory and the
+            // whole foreign path became a single filename.
+            File outFileDir = outFile.getAbsoluteFile().getParentFile();
+            LOG.log(Level.INFO, "Outfile directory: " + outFileDir);
+            if (outFileDir != null) {
+                outFileDir.mkdirs();
+            }
 
             try {
                 fOut = new FileOutputStream(outFile, false);
@@ -772,8 +800,13 @@ public class FileManager {
             // okay, it's fine to move it
             // first, we need to update the data store ref
             Reference r = (Reference) p.getProductReferences().get(0);
-            if (r.getDataStoreReference().equals(
-                    new File(newPath).toURI().toString())) {
+            // The destination is in this machine's data store, so a native
+            // path is resolved here and a reference is taken as given. Both
+            // forms are accepted: a caller that knows the archive's layout
+            // sends a path, and one holding a reference should not have to
+            // render it in our syntax to move a product.
+            String newRef = FileRefs.toReference(FileRefs.toFile(newPath));
+            if (r.getDataStoreReference().equals(newRef)) {
                 throw new DataTransferException("cannot move product: ["
                         + p.getProductName() + "] to same location: ["
                         + r.getDataStoreReference() + "]");
@@ -786,7 +819,7 @@ public class FileManager {
             // update the copyRef to have the data store ref as the orig ref
             // the the newLoc as the new ref
             copyRef.setOrigReference(r.getDataStoreReference());
-            copyRef.setDataStoreReference(new File(newPath).toURI().toString());
+            copyRef.setDataStoreReference(newRef);
 
             p.getProductReferences().clear();
             p.getProductReferences().add(copyRef);

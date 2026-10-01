@@ -59,6 +59,16 @@ public class TestRemoteDataTransferer {
   private ByteArrayOutputStream received;
   private FileManagerClient client;
   private RemoteDataTransferer transferer;
+  /** Every destination string handed to the far end, in order. */
+  private Vector<String> destinationsGiven;
+  /** What the overwrite was told to remove. */
+  private String removedPath;
+
+  private String firstDestinationGiven() {
+    assertTrue("nothing was sent to the far end at all",
+        !destinationsGiven.isEmpty());
+    return destinationsGiven.get(0);
+  }
 
   /** What the far end ended up with, assembled as the server would. */
   private byte[] delivered() {
@@ -93,12 +103,20 @@ public class TestRemoteDataTransferer {
   @Before
   public void setUp() throws Exception {
     received = new ByteArrayOutputStream();
+    destinationsGiven = new Vector<String>();
+    removedPath = null;
     client = mock(FileManagerClient.class);
-    when(client.removeFile(anyString())).thenReturn(true);
+    doAnswer(new Answer<Boolean>() {
+      public Boolean answer(InvocationOnMock call) {
+        removedPath = (String) call.getArguments()[0];
+        return Boolean.TRUE;
+      }
+    }).when(client).removeFile(anyString());
     // The server appends what it is given, which is what the real one does
     // when the destination already exists.
     doAnswer(new Answer<Void>() {
       public Void answer(InvocationOnMock call) {
+        destinationsGiven.add((String) call.getArguments()[0]);
         byte[] data = (byte[]) call.getArguments()[1];
         int offset = (Integer) call.getArguments()[2];
         int numBytes = (Integer) call.getArguments()[3];
@@ -117,6 +135,71 @@ public class TestRemoteDataTransferer {
   public void tearDown() {
     if (source != null) {
       source.delete();
+    }
+  }
+
+  /**
+   * What travels as the destination.
+   *
+   * <p>A Windows node sent the destination as destFile.getAbsolutePath(), a
+   * path in its own syntax, to a File Manager on macOS. On the receiver
+   * "C:\\Users\\...\\chunk-00001.json" is not absolute, so it resolved against
+   * the File Manager's working directory and 231485 bytes landed in a file
+   * named after the whole foreign path, under filemgr/bin. Every check in the
+   * sequence passed and the product was catalogued RECEIVED.</p>
+   *
+   * <p>The destination belongs to the File Manager, so it travels as the
+   * reference it already is and only the File Manager resolves it.</p>
+   */
+  @Test
+  public void testTheDestinationTravelsAsAReferenceNotANativePath()
+      throws Exception {
+    writeSource(400);
+    Product product = productFor(source);
+    String expected = product.getProductReferences().get(0)
+        .getDataStoreReference();
+
+    transferer.transferProduct(product);
+
+    assertEquals("the data store reference is what the far end is given",
+        expected, firstDestinationGiven());
+    assertTrue("a reference, not a path: it carries its scheme",
+        firstDestinationGiven().startsWith("file:"));
+  }
+
+  @Test
+  public void testTheOverwriteTargetsTheSameReference() throws Exception {
+    writeSource(400);
+    Product product = productFor(source);
+    String expected = product.getProductReferences().get(0)
+        .getDataStoreReference();
+
+    transferer.transferProduct(product);
+
+    // removeFile is the overwrite, and it has to name the same thing the
+    // write names. Sent as a native path it named a different file on a
+    // receiver whose syntax differed.
+    assertEquals(expected, removedPath);
+  }
+
+  /**
+   * A refused destination is not a completed transfer.
+   *
+   * <p>FileManagerClient declares transferFile void, so the server's boolean
+   * had nowhere to go: RemoteDataTransferer could not see a refusal and
+   * reported the product transferred. The client raises now, and the raise has
+   * to reach the caller rather than being logged and swallowed.</p>
+   */
+  @Test
+  public void testARefusalByTheFarEndIsNotSwallowed() throws Exception {
+    writeSource(400);
+    doThrow(new DataTransferException("refused")).when(client)
+        .transferFile(anyString(), any(byte[].class), anyInt(), anyInt());
+    try {
+      transferer.transferProduct(productFor(source));
+      fail("a refused transfer was reported as a successful one");
+    } catch (DataTransferException expected) {
+      // what the caller needs: the product did not transfer
     }
   }
 

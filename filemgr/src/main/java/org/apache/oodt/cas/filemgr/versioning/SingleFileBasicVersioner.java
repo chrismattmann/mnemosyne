@@ -21,9 +21,11 @@ package org.apache.oodt.cas.filemgr.versioning;
 import org.apache.oodt.cas.filemgr.structs.Product;
 import org.apache.oodt.cas.filemgr.structs.Reference;
 import org.apache.oodt.cas.filemgr.structs.exceptions.VersioningException;
+import org.apache.oodt.cas.filemgr.util.FileRefs;
 import org.apache.oodt.cas.metadata.Metadata;
 
 import java.io.File;
+import java.net.URLEncoder;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -87,18 +89,22 @@ public class SingleFileBasicVersioner implements Versioner {
         // now we need the product type repo path
         String productTypeRepoPathUri = product.getProductType()
                 .getProductRepositoryPath();
-        String productTypeRepoPath = VersioningUtils
-                .getAbsolutePathFromUri(productTypeRepoPathUri);
-
-        if (!productTypeRepoPath.endsWith("/")) {
-            productTypeRepoPath += "/";
+        // Built from the repository URI rather than from an absolute path
+        // derived from it. getAbsolutePathFromUri goes through
+        // new File(URI).getAbsolutePath(), which on Windows resolves the
+        // repository's leading "/" against the current drive, and
+        // new File(path).toURI() then stamped that drive into a reference
+        // naming a directory on the File Manager. See FileRefs.
+        String dataStoreRef;
+        try {
+            dataStoreRef = FileRefs.child(
+                FileRefs.directoryReference(productTypeRepoPathUri),
+                URLEncoder.encode(filename, "UTF-8"));
+        } catch (Exception e) {
+            throw new VersioningException("Could not build a data store "
+                + "reference from repository [" + productTypeRepoPathUri
+                + "] and filename [" + filename + "]: " + e.getMessage(), e);
         }
-
-        // final file location is:
-        // /productTypeRepoPath/Filename
-
-        String dataStorePath = productTypeRepoPath + filename;
-        String dataStoreRef = new File(dataStorePath).toURI().toString();
 
         // get the first reference back
         // set its data store ref

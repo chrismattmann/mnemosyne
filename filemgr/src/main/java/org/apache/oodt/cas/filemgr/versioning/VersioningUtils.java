@@ -21,6 +21,7 @@ package org.apache.oodt.cas.filemgr.versioning;
 import org.apache.commons.lang.StringUtils;
 import org.apache.oodt.cas.filemgr.structs.Reference;
 import org.apache.oodt.cas.filemgr.structs.Product;
+import org.apache.oodt.cas.filemgr.util.FileRefs;
 
 //JDK imports
 import java.io.File;
@@ -240,11 +241,7 @@ public final class VersioningUtils {
      * LocalDataTransferer can resolve.
      */
     private static String encodedFinalSegment(String reference) {
-        String trimmed = reference.endsWith("/")
-            ? reference.substring(0, reference.length() - 1)
-            : reference;
-        int lastSlash = trimmed.lastIndexOf('/');
-        return lastSlash >= 0 ? trimmed.substring(lastSlash + 1) : trimmed;
+        return FileRefs.finalSegment(reference);
     }
 
     public static void createBasicDataStoreRefsFlat(String productName,
@@ -254,12 +251,16 @@ public final class VersioningUtils {
             String productRepoPathRef;
 
             try {
-                productRepoPathRef = new File(new URI(productRepoPath)).toURI().toURL()
-                                                                       .toExternalForm();
-
-                if (!productRepoPathRef.endsWith("/")) {
-                    productRepoPathRef += "/";
-                }
+                // Arithmetic on the URI, not a round trip through the local
+                // filesystem. new File(new URI(productRepoPath)) resolved the
+                // leading "/" against the running machine's current drive, so
+                // a client on Windows produced
+                // file:/C:/Users/.../translated-catalog/ for a repository the
+                // File Manager had told it was /Users/.../translated-catalog.
+                // The repository path comes from the ProductType, which comes
+                // from the server: it is already in the right namespace and
+                // needed no resolving at all.
+                productRepoPathRef = FileRefs.directoryReference(productRepoPath);
 
                 // The final segment is taken in the encoded form it already
                 // has, rather than decoded out of the URI and concatenated
@@ -273,9 +274,10 @@ public final class VersioningUtils {
                 // "#" was worse: it parsed, but everything after it became a
                 // fragment, so the transferer wrote to a different path than
                 // the one recorded.
-                dataStoreRef = productRepoPathRef
-                               + URLEncoder.encode(productName, "UTF-8") + "/"
-                               + encodedFinalSegment(r.getOrigReference());
+                dataStoreRef = FileRefs.child(
+                    FileRefs.child(productRepoPathRef,
+                        URLEncoder.encode(productName, "UTF-8")),
+                    FileRefs.finalSegment(r.getOrigReference()));
             } catch (IOException e) {
                 LOG.log(Level.WARNING,
                     "VersioningUtils: Error generating dataStoreRef for "

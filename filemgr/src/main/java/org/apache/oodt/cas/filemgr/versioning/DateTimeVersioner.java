@@ -19,6 +19,7 @@ package org.apache.oodt.cas.filemgr.versioning;
 
 //OODT imports
 import org.apache.oodt.cas.filemgr.structs.exceptions.VersioningException;
+import org.apache.oodt.cas.filemgr.util.FileRefs;
 import org.apache.oodt.cas.filemgr.structs.Product;
 import org.apache.oodt.cas.filemgr.structs.Reference;
 import org.apache.oodt.cas.metadata.Metadata;
@@ -35,19 +36,18 @@ import java.io.File;
 import java.io.UnsupportedEncodingException;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.net.MalformedURLException;
 import java.net.URLEncoder;
 
 /**
  * @author mattmann
  * @author bfoster
  * @version $Revision$
- * 
+ *
  * <p>
  * A simple versioning scheme that versions {@link Product}s with their
  * production date time.
  * </p>
- * 
+ *
  */
 public class DateTimeVersioner implements Versioner {
 
@@ -66,7 +66,7 @@ public class DateTimeVersioner implements Versioner {
 
     /*
      * (non-Javadoc)
-     * 
+     *
      * @see org.apache.oodt.cas.versioning.Versioner#createDataStoreReferences(org.apache.
      *      oodt.cas.data.structs.Product)
      */
@@ -108,13 +108,18 @@ public class DateTimeVersioner implements Versioner {
             String dataStoreRef;
 
             try {
-              dataStoreRef = new File(new URI(product.getProductType()
-                                                     .getProductRepositoryPath())).toURI().toURL()
-                                                                                  .toExternalForm()
-                             + "/"
-                             + product.getProductName()
-                             + "/"
-                             + new File(new URI(r.getOrigReference())).getName()
+              // URI arithmetic, and the original's final segment taken as
+              // text. new File(URI).getName() decodes, so a product named
+              // "%25" came back as "%" and the reference built from it would
+              // no longer parse; and the repository round trip drive-stamped
+              // the whole reference on a Windows client. See FileRefs.
+              dataStoreRef = FileRefs.child(
+                                 FileRefs.child(
+                                     FileRefs.directoryReference(
+                                         product.getProductType()
+                                                .getProductRepositoryPath()),
+                                     product.getProductName()),
+                                 FileRefs.finalSegment(r.getOrigReference()))
                              + "." + productionDateTime;
               LOG.log(Level.FINER,
                   "DateTimeVersioner: Generated dataStoreRef: "
@@ -129,13 +134,6 @@ public class DateTimeVersioner implements Versioner {
                       + "of original ref while generating data store ref for orig ref: "
                       + r.getOrigReference()
                       + ": Message: " + e.getMessage());
-              // try and keep generating
-            } catch (MalformedURLException e) {
-              LOG.log(Level.WARNING,
-                  "DateTimeVersioner: Error getting URL for product repository path "
-                  + product.getProductType()
-                           .getProductRepositoryPath()
-                  + ": Message: " + e.getMessage());
               // try and keep generating
             }
 
@@ -153,21 +151,16 @@ public class DateTimeVersioner implements Versioner {
                     .get(0);
 
             try {
-                String dataStoreRef = new File(new URI(product.getProductType()
-                        .getProductRepositoryPath())).toURI().toURL().toExternalForm()
-                        + URLEncoder.encode(product.getProductName(), "UTF-8")
+                String dataStoreRef = FileRefs.child(
+                        FileRefs.directoryReference(product.getProductType()
+                                .getProductRepositoryPath()),
+                        URLEncoder.encode(product.getProductName(), "UTF-8"))
                         + "/";
                 LOG.log(Level.INFO,
                         "DateTimeVersioner: generated DataStore ref: "
                                 + dataStoreRef + " from origDirRef: "
                                 + origDirRef.getOrigReference());
                 origDirRef.setDataStoreReference(dataStoreRef);
-            } catch (MalformedURLException e) {
-                LOG.log(Level.WARNING,
-                        "DateTimeVersioner: MalformedURLException while generating "
-                                + "initial data store ref for origRef: "
-                                + origDirRef.getOrigReference());
-                throw new VersioningException(e);
             } catch (URISyntaxException e) {
                 LOG.log(Level.WARNING,
                         "DateTimeVersioner: Error creating File reference from original dir URI: "
