@@ -34,6 +34,8 @@ import net.sf.json.JSONObject;
 
 import org.apache.oodt.cas.resource.structs.Job;
 import org.apache.oodt.cas.resource.structs.ResourceNode;
+import java.io.IOException;
+
 import org.apache.oodt.cas.resource.system.ResourceManagerClient;
 import org.apache.oodt.cas.resource.system.rpc.ResourceManagerFactory;
 
@@ -70,12 +72,29 @@ public class ResourceResource extends PCSService {
       return resourceJson(emptyOverview(body));
     }
     try {
+      // Closed, which it was not. The Resource Manager client holds an Avro
+      // RPC connection, and this endpoint is the one a dashboard polls: a
+      // browser on another machine asking for it every 8 seconds left 16,314
+      // established sockets from Tomcat to the Resource Manager after about 36
+      // hours, which is every one of the 16,384 ephemeral ports this host has.
+      //
+      // The machine then could not open a TCP connection to anything -- not the
+      // internet, not another node over the LAN -- while ICMP still worked,
+      // because ping needs no port. Every connect failed with
+      // "Can't assign requested address", and even Tomcat's own shutdown.sh
+      // could not run: it needs a socket to reach the shutdown port.
+      //
+      // The sibling endpoints already do this. WorkflowResource calls
+      // closeQuietly in a finally on all seven of its methods, CatalogResource
+      // closes its FileManagerUtils, HealthResource uses try-with-resources.
+      // This one was simply missed.
       ResourceManagerClient client = ResourceManagerFactory.getResourceManagerClient(url);
       try {
-        body.put("alive", Boolean.valueOf(client.isAlive()));
-      } catch (Exception e) {
-        body.put("alive", Boolean.FALSE);
-      }
+        try {
+          body.put("alive", Boolean.valueOf(client.isAlive()));
+        } catch (Exception e) {
+          body.put("alive", Boolean.FALSE);
+        }
       try {
         body.put("queueSize", Integer.valueOf(client.getJobQueueSize()));
       } catch (Exception e) {
@@ -86,14 +105,33 @@ public class ResourceResource extends PCSService {
       } catch (Exception e) {
         LOG.fine("No job queue capacity: " + e.getLocalizedMessage());
       }
-      body.put("nodes", encodeNodes(client));
-      body.put("queues", encodeQueues(client));
-      body.put("jobs", encodeJobs(client));
-      return resourceJson(body);
+        body.put("nodes", encodeNodes(client));
+        body.put("queues", encodeQueues(client));
+        body.put("jobs", encodeJobs(client));
+        return resourceJson(body);
+      } finally {
+        closeQuietly(client);
+      }
     } catch (Exception e) {
       LOG.warning("Resource Manager overview failed: " + e.getLocalizedMessage());
       body.put("error", e.getMessage() == null ? "Resource Manager query failed" : e.getMessage());
       return resourceJson(emptyOverview(body));
+    }
+  }
+
+  /**
+   * Named the same as WorkflowResource's, and for the same reason: a client
+   * that cannot be closed must not turn a successful request into a failed one.
+   */
+  private static void closeQuietly(ResourceManagerClient client) {
+    if (client == null) {
+      return;
+    }
+    try {
+      client.close();
+    } catch (IOException e) {
+      LOG.fine("Unable to close resource manager client: "
+          + e.getLocalizedMessage());
     }
   }
 
