@@ -27,6 +27,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.fail;
 
 /** Contract tests for the selectable once-per-reference MIME decision. */
 public class TestReferenceMimeTypeDetector {
@@ -47,6 +48,19 @@ public class TestReferenceMimeTypeDetector {
             byte[] response = ("{\"mime_type\":\"" + mime + "\",\"confidence\":0.99}")
                     .getBytes(StandardCharsets.UTF_8);
             exchange.sendResponseHeaders(200, response.length);
+            exchange.getResponseBody().write(response);
+            exchange.close();
+        });
+        server.start();
+        System.setProperty(BytewiseServiceMimeTypeDetector.URL_PROPERTY,
+                "http://127.0.0.1:" + server.getAddress().getPort());
+    }
+
+    private void serveBody(String body, int status) throws Exception {
+        server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/detect/", exchange -> {
+            byte[] response = body.getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(status, response.length);
             exchange.getResponseBody().write(response);
             exchange.close();
         });
@@ -85,5 +99,34 @@ public class TestReferenceMimeTypeDetector {
         Reference reference = new Reference("file:/tmp/example.txt", "file:/archive/example.txt", 4L);
         assertEquals("text/plain", reference.getMimeType().getName());
         assertEquals(1L, BytewiseServiceMimeTypeDetector.getFallbackCount());
+    }
+
+    @Test
+    public void testMalformedBytewiseResponseFallsBackToTika() throws Exception {
+        serveBody("{\"confidence\":0.99}", 200);
+        System.setProperty(ReferenceMimeTypeDetectors.DETECTOR_PROPERTY, "bytewise");
+        Reference reference = new Reference("file:/tmp/example.txt", "file:/archive/example.txt", 4L);
+        assertEquals("text/plain", reference.getMimeType().getName());
+        assertEquals(1L, BytewiseServiceMimeTypeDetector.getFallbackCount());
+    }
+
+    @Test
+    public void testHttpErrorFallsBackToTika() throws Exception {
+        serveBody("unavailable", 503);
+        System.setProperty(ReferenceMimeTypeDetectors.DETECTOR_PROPERTY, "bytewise");
+        Reference reference = new Reference("file:/tmp/example.txt", "file:/archive/example.txt", 4L);
+        assertEquals("text/plain", reference.getMimeType().getName());
+        assertEquals(1L, BytewiseServiceMimeTypeDetector.getFallbackCount());
+    }
+
+    @Test
+    public void testUnknownDetectorFailsAtConfigurationBoundary() {
+        System.setProperty(ReferenceMimeTypeDetectors.DETECTOR_PROPERTY, "unknown");
+        try {
+            ReferenceMimeTypeDetectors.configured();
+            fail("unknown detector should fail configuration");
+        } catch (IllegalArgumentException expected) {
+            assertEquals("Unknown MIME detector: unknown", expected.getMessage());
+        }
     }
 }
