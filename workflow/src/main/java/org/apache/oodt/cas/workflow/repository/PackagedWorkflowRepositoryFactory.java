@@ -19,6 +19,8 @@ package org.apache.oodt.cas.workflow.repository;
 
 //JDK imports
 import java.io.File;
+
+import org.apache.oodt.cas.workflow.util.ConfiguredPaths;
 import java.util.Arrays;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -39,15 +41,31 @@ public class PackagedWorkflowRepositoryFactory implements
   private static final Logger LOG = Logger
       .getLogger(PackagedWorkflowRepositoryFactory.class.getName());
 
+  static final String DIR_PATH_PROPERTY =
+      "org.apache.oodt.cas.workflow.wengine.packagedRepo.dir.path";
+
   public PackagedWorkflowRepositoryFactory() throws InstantiationException {
-    this.wDirPath = System
-        .getProperty("org.apache.oodt.cas.workflow.wengine.packagedRepo.dir.path");
+    // Substituted, which it never was.
+    //
+    // XMLWorkflowRepositoryFactory has always run its directory list through
+    // PathUtils. This one -- the wengine repository the W2 engine uses -- did
+    // not, so a policy path written the ordinary way,
+    // [DRAT_HOME]/workflow/policy-wengine, reached the filesystem verbatim and
+    // could not resolve however DRAT_HOME was set. W1 worked and W2 could not,
+    // for a reason nothing in the output named.
+    try {
+      this.wDirPath = ConfiguredPaths.resolve(DIR_PATH_PROPERTY,
+          System.getProperty(DIR_PATH_PROPERTY));
+    } catch (IllegalStateException unresolved) {
+      // Said here, rather than left to become a null repository and then a
+      // "Null engine" several frames away.
+      throw new InstantiationException(unresolved.getMessage());
+    }
     if (this.wDirPath == null || (!new File(wDirPath).isDirectory())) {
       throw new InstantiationException("Must specify valid directory path "
           + "containing wengine-style workflow xml files! path specified: ["
           + this.wDirPath + "]");
     }
-
   }
 
   /*

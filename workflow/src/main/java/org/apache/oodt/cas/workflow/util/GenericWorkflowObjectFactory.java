@@ -66,9 +66,15 @@ public final class GenericWorkflowObjectFactory {
                + "loading workflow engine factory class "
                + engineFactory + " Message: " + e.getMessage());
       } catch (InstantiationException e) {
-         LOG.log(Level.WARNING, "InstantiationException when "
+         // SEVERE, because returning null from here is fatal: the caller
+         // reports "Null engine" and then "Unable to create server", neither
+         // of which names a cause. This message is the only place the real
+         // reason appears, and at WARNING it sat below the threshold while
+         // the symptom was logged at SEVERE.
+         LOG.log(Level.SEVERE, "InstantiationException when "
                + "loading workflow engine factory class "
-               + engineFactory + " Message: " + e.getMessage());
+               + engineFactory + "; the workflow manager cannot start. Message: "
+               + e.getMessage());
       } catch (IllegalAccessException e) {
          LOG.log(Level.WARNING, "IllegalAccessException when loading "
                + "workflow engine factory class "
