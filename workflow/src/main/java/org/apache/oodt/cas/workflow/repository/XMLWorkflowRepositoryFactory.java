@@ -29,6 +29,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.apache.oodt.cas.metadata.util.PathUtils;
+import org.apache.oodt.cas.workflow.util.ConfiguredPaths;
 import org.apache.oodt.commons.io.DirectorySelector;
 
 
@@ -61,6 +62,13 @@ public class XMLWorkflowRepositoryFactory implements WorkflowRepositoryFactory {
 		if(workflowDirUris != null){
 			/* do env var replacement */
 			workflowDirUris = PathUtils.replaceEnvVariables(workflowDirUris);
+			// And refuse a name that was never set. PathUtils leaves the token
+			// as written on purpose, which keeps the failure readable -- but
+			// only if somebody reads it. Unnoticed, the directory simply does
+			// not exist and the repository comes back empty, which looks like
+			// a policy problem rather than an unset variable.
+			ConfiguredPaths.refuseUnsubstituted(
+					"org.apache.oodt.cas.workflow.repo.dirs", workflowDirUris);
 			String [] dirUris = workflowDirUris.split(",");
 			
 			// recursive directory listing
