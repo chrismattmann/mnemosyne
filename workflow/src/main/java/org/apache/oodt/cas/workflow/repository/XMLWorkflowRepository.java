@@ -20,7 +20,7 @@ package org.apache.oodt.cas.workflow.repository;
 
 //OODT imports
 
-import org.apache.oodt.cas.workflow.examples.NoOpTask;
+import org.apache.oodt.cas.workflow.tasks.NoOpTask;
 import org.apache.oodt.cas.workflow.structs.Workflow;
 import org.apache.oodt.cas.workflow.structs.WorkflowCondition;
 import org.apache.oodt.cas.workflow.structs.WorkflowTask;

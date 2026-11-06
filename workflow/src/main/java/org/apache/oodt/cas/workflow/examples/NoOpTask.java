@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -14,37 +14,33 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.oodt.cas.workflow.examples;
 
-//OODT imports
-import org.apache.oodt.cas.metadata.Metadata;
-import org.apache.oodt.cas.workflow.structs.WorkflowTaskConfiguration;
-import org.apache.oodt.cas.workflow.structs.WorkflowTaskInstance;
-import org.apache.oodt.cas.workflow.structs.exceptions.WorkflowTaskInstanceException;
-
 /**
- * 
- * Performs no action, an is a no-op.
- * 
- * @author mattmann
- * @version $Revision$
- * 
+ * Where this class used to live.
+ *
+ * <p>It moved to {@link org.apache.oodt.cas.workflow.tasks.NoOpTask}, for the
+ * same reason {@code BranchRedirector} did: all three workflow repositories
+ * generate one for every workflow carrying global conditions, so it is
+ * mechanism rather than illustration, and a package named "examples" said
+ * otherwise.</p>
+ *
+ * <p>This subclass stays because this name is already written down in places
+ * this release cannot reach. It is more exposed than the redirector was: the
+ * three repositories persist it by name into generated task definitions, so
+ * every workflow instance a previous release stored with global conditions
+ * names <em>this</em> package in a catalog that outlives the upgrade. Policy
+ * written by hand names it too. Renaming the class would fail all of those at
+ * load time. It carries no behaviour of its own.</p>
+ *
+ * @deprecated use {@link org.apache.oodt.cas.workflow.tasks.NoOpTask}. Kept so
+ *     existing configuration and stored instances keep working; scheduled for
+ *     removal once no deployment names this package.
  */
-public class NoOpTask implements WorkflowTaskInstance {
+@Deprecated
+public class NoOpTask extends org.apache.oodt.cas.workflow.tasks.NoOpTask {
 
-  /*
-   * (non-Javadoc)
-   * 
-   * @see
-   * org.apache.oodt.cas.workflow.structs.WorkflowTaskInstance#run(org.apache
-   * .oodt.cas.metadata.Metadata,
-   * org.apache.oodt.cas.workflow.structs.WorkflowTaskConfiguration)
-   */
-  @Override
-  public void run(Metadata metadata, WorkflowTaskConfiguration config)
-      throws WorkflowTaskInstanceException {
-
-  }
-
+    public NoOpTask() {
+        super();
+    }
 }

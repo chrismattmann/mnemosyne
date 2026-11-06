@@ -42,6 +42,16 @@
     <task id-ref="urn:oodt:e2e:StepThree"/>
   </workflow>
 
+  <!--
+    These three deliberately name org.apache.oodt.cas.workflow.examples.NoOpTask,
+    which moved to org.apache.oodt.cas.workflow.tasks.NoOpTask and is retained
+    there as a deprecated subclass. This file is the fixture that proves policy
+    written against the old name still loads: ten tests run this workflow
+    through the engine, so the deprecated name is exercised on the real load
+    path rather than by a reflective lookup. Do not "fix" these to the new
+    name; that is what removes the coverage. The new name is exercised
+    everywhere else.
+  -->
   <task id="urn:oodt:e2e:StepOne" name="Step One"
         class="org.apache.oodt.cas.workflow.examples.NoOpTask">
     <conditions/>
