@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.oodt.cas.workflow.examples;
+package org.apache.oodt.cas.workflow.tasks;
 
 //JDK imports
 import java.net.MalformedURLException;
@@ -290,9 +290,18 @@ public class TestRedirectorSurvivesATransientRead {
    */
   @Test
   public void testTheReadIsPagedNotTheWholeRepository() throws Exception {
-    String source = new String(java.nio.file.Files.readAllBytes(
-        java.nio.file.Paths.get("src/main/java/org/apache/oodt/cas/workflow"
-            + "/examples/BranchRedirector.java")), "UTF-8");
+    // Located from the class rather than a written-out path. The first
+    // version hardcoded ".../examples/BranchRedirector.java" and went on
+    // passing after the class moved here, because that path still holds the
+    // deprecated shim -- which pages nothing. The assertion was reading the
+    // wrong file and reporting confidently about it.
+    Class<?> subject = BranchRedirector.class;
+    java.nio.file.Path file = java.nio.file.Paths.get("src/main/java")
+        .resolve(subject.getName().replace('.', '/') + ".java");
+    assertTrue("cannot find the source of " + subject.getName() + " at "
+        + file, java.nio.file.Files.isRegularFile(file));
+    String source = new String(
+        java.nio.file.Files.readAllBytes(file), "UTF-8");
     StringBuilder code = new StringBuilder();
     for (String line : source.split("\n")) {
       if (!line.trim().startsWith("//") && !line.trim().startsWith("*")) {
