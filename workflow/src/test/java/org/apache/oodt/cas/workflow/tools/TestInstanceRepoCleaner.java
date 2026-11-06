@@ -111,7 +111,7 @@ public class TestInstanceRepoCleaner extends TestCase {
     task.setTaskId("urn:oodt:TestTask");
     task.setTaskName("Test Task");
     task.setTaskInstanceClassName(
-        "org.apache.oodt.cas.workflow.examples.NoOpTask");
+        "org.apache.oodt.cas.workflow.tasks.NoOpTask");
     task.setTaskConfig(new WorkflowTaskConfiguration());
     workflow.getTasks().add(task);
     inst.setWorkflow(workflow);

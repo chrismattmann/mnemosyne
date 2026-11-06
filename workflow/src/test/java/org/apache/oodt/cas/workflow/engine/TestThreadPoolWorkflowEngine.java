@@ -240,7 +240,7 @@ public class TestThreadPoolWorkflowEngine extends TestCase {
         WorkflowTask task = new WorkflowTask();
         task.setTaskId("urn:oodt:testTask");
         task.setTaskName("test");
-        task.setTaskInstanceClassName("org.apache.oodt.cas.workflow.examples.NoOpTask");
+        task.setTaskInstanceClassName("org.apache.oodt.cas.workflow.tasks.NoOpTask");
         workflow.getTasks().add(task);
         inst.setParentChildWorkflow(workflow);
         inst.setCurrentTaskId(task.getTaskId());

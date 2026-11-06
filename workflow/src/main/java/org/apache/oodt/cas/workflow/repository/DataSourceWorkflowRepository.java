@@ -17,7 +17,7 @@
 
 package org.apache.oodt.cas.workflow.repository;
 
-import org.apache.oodt.cas.workflow.examples.NoOpTask;
+import org.apache.oodt.cas.workflow.tasks.NoOpTask;
 import org.apache.oodt.cas.workflow.structs.*;
 import org.apache.oodt.cas.workflow.structs.exceptions.RepositoryException;
 import org.apache.oodt.cas.workflow.util.DbStructFactory;

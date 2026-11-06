@@ -100,7 +100,7 @@ public class TestLuceneWaitingOn extends TestCase {
     task.setTaskId("urn:oodt:t");
     task.setTaskName("test task");
     task.setTaskInstanceClassName(
-        "org.apache.oodt.cas.workflow.examples.NoOpTask");
+        "org.apache.oodt.cas.workflow.tasks.NoOpTask");
     task.setTaskConfig(new org.apache.oodt.cas.workflow.structs.WorkflowTaskConfiguration());
     workflow.getTasks().add(task);
     inst.setWorkflow(workflow);

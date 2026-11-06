@@ -121,7 +121,7 @@ public class TestClearWorkflowInstances extends TestCase {
     task.setTaskId("urn:oodt:t");
     task.setTaskName("t");
     task.setTaskInstanceClassName(
-        "org.apache.oodt.cas.workflow.examples.NoOpTask");
+        "org.apache.oodt.cas.workflow.tasks.NoOpTask");
     task.setTaskConfig(
         new org.apache.oodt.cas.workflow.structs.WorkflowTaskConfiguration());
     workflow.getTasks().add(task);

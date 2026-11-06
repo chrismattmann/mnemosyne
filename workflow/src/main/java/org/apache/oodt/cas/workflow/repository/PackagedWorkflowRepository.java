@@ -21,7 +21,7 @@ package org.apache.oodt.cas.workflow.repository;
 import org.apache.oodt.cas.metadata.Metadata;
 import org.apache.oodt.cas.metadata.exceptions.CasMetadataException;
 import org.apache.oodt.cas.workflow.tasks.BranchRedirector;
-import org.apache.oodt.cas.workflow.examples.NoOpTask;
+import org.apache.oodt.cas.workflow.tasks.NoOpTask;
 import org.apache.oodt.cas.workflow.exceptions.WorkflowException;
 import org.apache.oodt.cas.workflow.structs.Graph;
 import org.apache.oodt.cas.workflow.structs.ParentChildWorkflow;
